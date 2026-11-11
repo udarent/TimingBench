@@ -14,20 +14,14 @@ textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;o
 svg{display:block;font-family:var(--sans)}
 .errdot{position:absolute;right:10px;top:10px;width:8px;height:8px;border-radius:50%;background:var(--err);cursor:help;z-index:5}
 [hidden]{display:none!important}
-/* 极简 HUD：图标与状态圆点都是时序图自身的 SVG 图元，无常驻文字 */
-.hudBtn,.rowDrag,.nodeAnchor,.charChip{cursor:pointer}
-.hudBtn text,.colhead text,.colActBtn text,.charChip text,.rowDrag text,.nodeAnchor text{pointer-events:none}
+/* 极简 HUD：撤销 / 重做 / 连线三个图标；无常驻文字，画布内无状态圆点 */
+.hudBtn,.rowDrag,.charChip{cursor:pointer}
+.hudBtn text,.colhead text,.colActBtn text,.charChip text,.rowDrag text{pointer-events:none}
 .hudBtn:hover rect{fill:var(--accent-bg);stroke:var(--accent)}
 .cellSel{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:3 2;pointer-events:none}
 .rowDrag{opacity:.3}
 .laneGrp:hover .rowDrag,.laneGrp.sel .rowDrag{opacity:.9}
 .dropLine{stroke:var(--accent);stroke-width:2;pointer-events:none}
-/* 节点锚点：连线对象；空锚点平时淡显，悬停 / 连线态加强 */
-.nodeAnchor.has{opacity:.95}
-.nodeAnchor.empty{opacity:.26}
-.nodeAnchor.empty:hover,.connecting .nodeAnchor.empty{opacity:.7}
-.nodeAnchor:hover,.nodeAnchor.picked{opacity:1}
-.nodeAnchor.picked circle{stroke-width:2}
 /* 数据标签徽标：只在悬停该行时淡显，单击就地编辑该数据块的 data 标签 */
 .cellLabel{cursor:pointer}
 .cellLabel .badge{opacity:0;pointer-events:none;transition:opacity .12s}
@@ -99,7 +93,6 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .svgwrap{touch-action:manipulation;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* hover 才显现的细小控件在触摸端全部撤下，改由操作栏承担 */
 .is-touch .rowCtl,.is-touch .rowHint,.is-touch .rowDrag,.is-touch .colAct,.is-touch .cellLabel{display:none}
-.is-touch .nodeAnchor.empty{opacity:.85}
 .is-touch .cellSel{stroke-width:2.4}
 .is-touch .touchbar{display:flex;flex:0 0 60px;align-items:center;gap:5px;padding:5px 6px;
   background:var(--panel);border-top:1px solid var(--line);overflow-x:auto;user-select:none;touch-action:manipulation}

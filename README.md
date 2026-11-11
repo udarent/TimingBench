@@ -42,9 +42,9 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 |---|---|
 | Bidirectional sync | Diagram → source via a minimal patch; source → diagram redraws ~320 ms after you stop typing; non-equivalent results roll back |
 | Waveform editing | Select a cell, then type a character / click the character bar / drag across cells to paint; each chip in the bar shows the waveform it will write |
-| Inline editing | Double-click to edit a cell, signal name, data label, node marker, arc, a whole `wave` / `data` / `node` row, or `phase` / `period` |
+| Inline editing | Double-click to edit a cell, signal name, data label, arc, a whole `wave` / `data` / `node` row, or `phase` / `period`; `Shift+Enter` edits the node marker of the selected cell |
 | Structure editing | Add / remove rows and cycles, phase gaps, row reordering, append a trailing cycle, `group` / `spacer` |
-| Nodes and arcs | Click two anchors to connect them; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
+| Nodes and arcs | Click **◇ Link** in the HUD (or the bottom bar on touch), then click two waveform cells; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
 | Undo / redo | `Ctrl+Z` / `Ctrl+Y`; one paint drag, one row reorder and one arc each count as a single undo step |
 | Tolerant parsing | While the source is incomplete, the last valid diagram stays on screen and a red dot shows the error and offset |
 | Desktop / touch | Two stacked panes on desktop; coarse-pointer devices get tabs + a bottom action bar instead |
@@ -56,7 +56,7 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 |---|---|---|
 | Write a waveform | Click a cell → type / click the character bar; hold and drag horizontally to paint | Tap a cell → tap the character bar (wraps into multiple rows of large chips, no horizontal scrolling) |
 | Inline edit | Double-click the target (or `Enter` on a selected cell) | Double-tap the same target within 330 ms, or long-press for 480 ms |
-| Connect an arc | Click anchor A → dashed preview follows the pointer → click anchor B | Tap the two anchors in turn; the first one stays highlighted |
+| Connect an arc | Click ◇ Link → click two waveform cells (dashed preview follows the pointer) → the mode exits once the arc is drawn | Tap ◇ Link in the bottom bar → tap two waveform cells (a toast confirms the first tap) |
 | Rows / cycles / phase gaps | Hover the right edge of a row or a column number for `+` `−` `\|` | 14 always-visible buttons in the "Object" panel + 4 in the "Column" panel |
 | Reorder rows | Drag the ⠿ handle at the row start | `↑ Move up` / `↓ Move down` |
 | Undo / redo | Top ↶ ↷ or `Ctrl+Z` / `Ctrl+Y` | `↶ Undo` / `↷ Redo` in the bottom bar |
@@ -70,10 +70,11 @@ Touch hit targets follow the 44 CSS px guideline (cells 46×50, character chips 
 | Key | Action |
 |---|---|
 | `0 1 x z u d p P n N h l H L = 2…9` `.` `\|` | Write to the current cell and move right (see the table below) |
-| `Enter` | Inline-edit the current cell |
+| `Enter` | Inline-edit the current cell (waveform character) |
+| `Shift+Enter` | Inline-edit the node marker of the current cell |
 | `←` `→` `↑` `↓` | Move the selected cell |
 | `Ctrl/⌘ + Z` · `Ctrl/⌘ + Y` / `Ctrl+Shift+Z` | Undo · redo |
-| `Esc` | Cancel an arc / drag, or clear the selection |
+| `Esc` | Exit link mode, cancel a drag, or clear the selection |
 
 Shortcuts apply only while the canvas has focus.
 
@@ -91,6 +92,7 @@ Missing trailing cycles are drawn repeater-style with the last state (slightly d
 
 ## FAQ and limitations
 
+- **Where did the node markers / little circles go?** They are gone, so the waveform looks like WaveDrom's own rendering. The cells themselves are the connection targets: click ◇ Link, then pick two cells. While link mode is on nothing else responds — character chips, keyboard writing, double-click editing and selection are suspended until the arc is drawn or `Esc` is pressed.
 - **Nothing happens when I double-click the HTML file?** ES modules are blocked by CORS under `file://`. Use `npm start` or any static server; a GitHub Pages deployment works out of the box.
 - **Are my diagrams uploaded anywhere?** No. Everything is computed in the browser — no requests, no storage, no account.
 - **Does it support all of WaveDrom?** It covers the common subset: `wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer` and repeater-style fill-in. It is not a full WaveDrom implementation and contains none of its code.

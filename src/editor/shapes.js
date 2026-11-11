@@ -1,4 +1,4 @@
-// 时序图 SVG 结构：HUD / 列头 / 行工具 / 节点锚点 / 数据标签徽标 / 弧线 /
+// 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
@@ -23,9 +23,10 @@ export function createShapes(ctx){
   function hudSVG(W){
     var o=[], x=PAD;
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
-    function cmd(c,t,title,dim){ o.push(hudBtn(x,c,t,title,false,dim)); x+=T?50:31; }
+    function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
     cmd('undo','↶','撤销（Ctrl+Z）',!state.undo.length);
     cmd('redo','↷','重做（Ctrl+Y）',!state.redo.length);
+    cmd('link','◇',state.linkMode?'连线中：点第二个波形格完成（再点此退出）':'连线：开启后依次点两个波形格完成弧线',false,state.linkMode);
     return o.join('');
   }
 
@@ -70,19 +71,6 @@ export function createShapes(ctx){
       '<text x="'+(PAD+10)+'" y="'+(y+24)+'" text-anchor="middle" dominant-baseline="central" font-size="13" fill="var(--muted)" pointer-events="none">⠿</text></g>';
   }
 
-  // 节点锚点：波形上真正可点的「连线对象」。有字符的是实心带字母，无字符的是淡空心圆
-  function nodeAnchor(l,i,x0,y){
-    var nch=l.node[i]&&l.node[i]!=='.'?l.node[i]:'';
-    var hw=T?Math.min(CELL-4,36):18, hh=T?20:14, r=T?5:3.2;
-    var ax=x0+CELL/2, ay=y+(T?11:7);
-    var picked=state.connect&&state.connect.lane===l.id&&state.connect.tick===i;
-    return '<g class="nodeAnchor'+(nch?' has':' empty')+(picked?' picked':'')+'" data-lane="'+l.id+'" data-tick="'+i+'" data-node="'+esc(nch)+'">'+
-      '<title>'+(nch?'节点 '+nch:'空锚点')+' · 单击作为连线端点 · 双击编辑该格节点字符</title>'+
-      '<rect x="'+(ax-hw/2)+'" y="'+(y+1)+'" width="'+hw+'" height="'+hh+'" fill="transparent"/>'+
-      '<circle cx="'+ax+'" cy="'+ay+'" r="'+r+'" fill="'+(nch?'var(--accent)':'var(--bg)')+'" stroke="var(--accent)" stroke-width="0.9"/>'+
-      (nch?'<text x="'+(ax+(T?8:6))+'" y="'+(ay+3)+'" font-size="'+(T?11:9)+'" fill="var(--accent)">'+esc(nch)+'</text>':'')+'</g>';
-  }
-
   // 数据标签的唯一编辑入口：长在总线块右下角的 ✎ 徽标，单击就地编辑 data 标签
   function cellLabelHit(l,i,x0,y,label){
     if(T) return '';   // 触摸端数据标签由「对象」面板的「数据标签」按钮编辑
@@ -107,9 +95,10 @@ export function createShapes(ctx){
       var s=String(e), head=s.trim().split(/\s+/)[0]||'', a=map[head.charAt(0)], b=map[head.charAt(head.length-1)];
       if(!a||!b) return;
       var d='M'+a.x+','+a.y+' C'+(a.x+10)+','+(a.y-26)+' '+(b.x-10)+','+(b.y-26)+' '+b.x+','+b.y;
+      // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
       o.push('<g class="edgeArc" data-eidx="'+i+'"><title>双击编辑 edge：'+esc(s)+' · 清空即删除</title>'+
         '<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>'+
-        '<path d="'+d+'" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="'+(T?20:8)+'" pointer-events="stroke"/>');
+        '<path d="'+d+'" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="'+(T?20:8)+'" pointer-events="'+(state.linkMode?'none':'stroke')+'"/>');
       var rest=s.slice(head.length).trim();
       if(rest){
         var mx=(a.x+b.x)/2, my=(a.y+b.y)/2-22, lw=Math.max(22,rest.length*6+10);
@@ -121,13 +110,11 @@ export function createShapes(ctx){
     return o.join('');
   }
 
-  // 底部上下文条：选中格出现字符条，连线态只留一个指示点；不展示说明文字
-  // 触摸端字符条按可用宽度换行成多行大格子；桌面仍是单行（perRow = 字符总数）。
+  // 底部上下文条：普通状态选中格才出现字符条；连线模式整条留白（两种操作互斥，
+  // 也不再画任何指示圆点）。触摸端字符条按可用宽度换行成多行大格子；桌面仍是单行。
   function actionBar(y,W,perRow){
     var o=['<line x1="'+PAD+'" y1="'+y+'" x2="'+(W-PAD)+'" y2="'+y+'" stroke="var(--line)" stroke-width="0.5"/>'];
-    if(state.connect){
-      o.push('<circle cx="'+(XS+(T?12:8))+'" cy="'+(y+20)+'" r="'+(T?7:4)+'" fill="var(--accent)"><title>连线中：点第二个节点锚点完成，Esc 取消</title></circle>');
-    } else if(state.selCell){
+    if(!state.linkMode&&state.selCell){
       Core.ALL.forEach(function(v,i){
         var on=state.ch===v;
         var bx=XS+(i%perRow)*CHIP_STEP, by=y+6+Math.floor(i/perRow)*(CHIP_H+6), cy=by+CHIP_H/2;
@@ -152,7 +139,7 @@ export function createShapes(ctx){
     var barH=T?Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H)):ACT_H;
     var H=actY+barH+20, c, x;
     state.W=W; state.H=H;
-    var o=['<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.connect?'connecting':'')+'" role="img"><title>可编辑时序图</title>'];
+    var o=['<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.linkMode?'linkMode':'')+'" role="img"><title>可编辑时序图</title>'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     o.push(hudSVG(W));
     for(c=0;c<=N;c++){ x=XS+c*CELL; o.push('<line x1="'+x+'" y1="'+(TOP-10)+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>'); }
@@ -170,7 +157,6 @@ export function createShapes(ctx){
         colBtn(c,cx,2,'gap','|','切换列 '+c+' 的相位线（该列唯一入口）',gapc));
       o.push('</g></g>');
     }
-    var anchors=[];
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*ROW_H;
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
@@ -201,7 +187,6 @@ export function createShapes(ctx){
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
           ' x="'+(x0+1)+'" y="'+(y+3)+'" width="'+(CELL-2)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
-        if(s) anchors.push(nodeAnchor(l,i,x0,y));
         if(s&&s.point&&!s.gap&&Core.BUS.test(s.w)) laneBadges.push(cellLabelHit(l,i,x0,y,s.label));
       }
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
@@ -212,8 +197,6 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     o.push(edgeArcs(ir));
-    // 锚点画在弧线之上，避免连线命中区抢走「点连接对象」
-    o.push(anchors.join(''));
     o.push(actionBar(actY,W,perRow));
     if(state.selCell){
       var sli=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.selCell.lane) sli=k; });

@@ -136,8 +136,8 @@ export function attachTouchUI(ctx, dom) {
     var k = b.getAttribute('data-tb');
     if (k === 'undo' || k === 'redo') { ctx.doCmd(k); return; }
     if (k === 'link') {
-      if (state.connect) { state.connect = null; ctx.redraw(); say('已取消连线'); }
-      else say('依次点两个节点锚点完成连线；再点此可取消');
+      closePanel(); setView('diagram');
+      ctx.setLinkMode(!state.linkMode);   // 与桌面 HUD 共用唯一的模式切换入口
       return;
     }
     if (k === 'cancel') {
@@ -152,6 +152,8 @@ export function attachTouchUI(ctx, dom) {
     var u = bar.querySelector('[data-tb="undo"]'), r = bar.querySelector('[data-tb="redo"]');
     if (u) u.disabled = !state.undo.length;
     if (r) r.disabled = !state.redo.length;
+    var lk = bar.querySelector('[data-tb="link"]');
+    if (lk) lk.setAttribute('aria-pressed', String(state.linkMode));
   };
   ctx.closePanel = closePanel;
 

@@ -133,6 +133,16 @@ function check() {
   ok(ackDoc.includes(upstream), 'ACKNOWLEDGMENTS.md 未同步致谢');
   ok(enReadme.includes(issues) && zhReadme.includes(issues), '双语 README 未引导提 issue');
   ok(!/helloyuechen|163\.com/.test(enReadme + zhReadme), 'README 仍把邮箱当反馈渠道');
+  // 图形区互斥与渲染口径：禁止锚点小圆圈回归，连线必须由显式模式驱动
+  const shapesSrc = read('src/editor/shapes.js');
+  const interSrc = read('src/editor/interactions.js');
+  const editorSrc = read('src/editor/index.js');
+  const cssSrc = read('src/styles.css');
+  ok(!/nodeAnchor|<circle|connecting/.test(shapesSrc), '绘制层仍存在锚点小圆圈 / 连线态样式');
+  ok(!/\.nodeAnchor|\.connecting/.test(cssSrc), '样式层仍存在锚点规则');
+  ok(/linkMode/.test(editorSrc) && /setLinkMode/.test(editorSrc), '状态层缺少唯一的连线模式入口');
+  ok(/if\(state\.linkMode\)/.test(interSrc) && !/nodeAnchor/.test(interSrc), '交互层未做互斥分派或仍有锚点命中');
+  ok(/cmd\('link'/.test(shapesSrc) && /data-tb="link"/.test(html), '桌面 HUD / 触摸操作栏缺少连线开关');
   const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
   ok(refs.length >= 2, 'index.html 未引用样式与入口脚本');
   for (const ref of refs) {

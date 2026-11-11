@@ -1,9 +1,9 @@
 // 图形侧交互：命中解析、foreignObject 就地编辑、整行/整列工具、两点式 edge 连线、
-// 键盘与拖拽。只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
+// 键盘与拖拽。连线与时序编辑共用 rect.cell 命中区，由 state.linkMode 互斥分派。
+// 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { esc, cut } from '../core/util.js';
-import { TOUCH } from './mode.js';
 
 var CELL=G.CELL, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD;
 var XS=G.XS;
@@ -63,7 +63,6 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('rowTool')) return {tool:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('cellLabel')) return {label:1,lane:ln,tick:+g.getAttribute('data-tick')};
-        if(g.classList&&g.classList.contains('nodeAnchor')) return {anchor:1,lane:ln,tick:+g.getAttribute('data-tick'),node:g.getAttribute('data-node')||''};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('colhead')) return {col:+g.getAttribute('data-c')};
@@ -146,19 +145,25 @@ export function attachInteractions(ctx){
     ctx.notify('写入 '+v+' → 选中格右移到 t'+nt+'；继续敲字符可连写波形');
   }
 
-  // 两点式连线：点第一个锚点 → 预览曲线跟随鼠标 → 点第二个锚点，一次提交 node + edge
+  // 两点式连线：仅在 linkMode 下由 rect.cell 分派进来，端点与时序编辑是同一片格子。
+  // 点第一个格子 → 预览曲线跟随鼠标 → 点第二个格子，node + edge 合并一次提交；
+  // 成线（或失败）后自动退出连线模式，回到普通时序编辑。
+  function nodeChar(laneId,tick){
+    var l=findLane(laneId);
+    return l&&l.node&&l.node[tick]&&l.node[tick]!=='.'?l.node[tick]:'';
+  }
   function handleAnchor(a){
     var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===a.lane) li=i; });
     if(li<0||state.ir.lanes[li].kind!=='signal') return;
     if(!state.connect){
       state.connect={lane:a.lane,tick:a.tick,node:a.node,li:li};
       ctx.redraw(); ctx.focusCanvas();
-      ctx.notify('连线：已选 '+(a.node||'空锚点')+' @ t'+a.tick+' · 点第二个节点锚点（移动鼠标可预览，Esc 取消）');
+      ctx.notify('连线：已选 t'+a.tick+' 的'+(a.node?'节点 '+a.node:'波形格')+' · 点第二个波形格完成（移动鼠标可预览，Esc 退出）');
       return;
     }
     var s=state.connect;
-    if(s.lane===a.lane&&s.tick===a.tick){ state.connect=null; ctx.redraw(); ctx.notify('已取消连线：起点与终点相同'); return; }
-    if(!ctx.syncCode()){ state.connect=null; ctx.redraw(); return; }
+    if(s.lane===a.lane&&s.tick===a.tick){ state.connect=null; ctx.redraw(); ctx.notify('已取消起点：请重新选一个波形格'); return; }
+    if(!ctx.syncCode()){ state.connect=null; state.linkMode=false; ctx.redraw(); return; }
     var used={}, ops=[];
     state.ir.lanes.forEach(function(l){ (l.node||[]).forEach(function(ch){ if(ch&&ch!=='.') used[ch]=1; }); });
     function ensure(o){
@@ -170,7 +175,7 @@ export function attachInteractions(ctx){
       return null;
     }
     var na=ensure(s), nb=ensure(a);
-    if(!na||!nb||na===nb){ state.connect=null; ctx.redraw(); ctx.notify('连线失败：可用节点字符不足或两端相同',true); return; }
+    if(!na||!nb||na===nb){ state.connect=null; state.linkMode=false; ctx.redraw(); ctx.notify('连线失败：可用节点字符不足或两端相同',true); return; }
     var arr=state.ir.edges.slice(), newHead=na+'~>'+nb, found=-1, oldHead='';
     arr.forEach(function(t,i){
       var h=String(t).trim().split(/\s+/)[0]||'';
@@ -181,7 +186,7 @@ export function attachInteractions(ctx){
       arr[found]=newHead+(rest?' '+rest:'');
     } else arr.push(newHead);
     ops.push({t:'setEdges',v:arr});
-    state.connect=null;
+    state.connect=null; state.linkMode=false;
     ctx.commit(ops,'两点连线 '+na+' → '+nb,false,true);
     ctx.notify('连线完成：'+newHead+' → 已回写源码 node / edge（合并为一次撤销）');
   }
@@ -240,7 +245,6 @@ export function attachInteractions(ctx){
   // 就地编辑的唯一入口：双击（桌面）/ 双敲 / 长按（触摸）都走这里
   function openEditorFor(c){
     if(!c) return;
-    if(c.anchor){ state.connect=null; ctx.painting=null; ctx.redraw(); openNodeEditor(c.lane,c.tick,c.node); return; }
     var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx};
     if(!(snap.nameLane||snap.edgeIdx!==undefined||(snap.lane!==undefined&&snap.tick!==undefined))) return;
     ctx.painting=null; state.connect=null;
@@ -258,7 +262,6 @@ export function attachInteractions(ctx){
     if(!c) return '';
     if(c.edgeIdx!==undefined) return 'e'+c.edgeIdx;
     if(c.nameLane) return 'n'+c.nameLane;
-    if(c.anchor) return 'a'+c.lane+'@'+c.tick;
     if(c.lane!==undefined&&c.tick!==undefined)
       return 'c'+c.lane+'@'+c.tick+'|'+(c.label?'l':'')+(c.tool||'')+(c.cact||'')+(c.meta||'');
     return JSON.stringify(c);
@@ -274,7 +277,7 @@ export function attachInteractions(ctx){
   }
   function editable(c){
     if(!c) return false;
-    if(c.edgeIdx!==undefined||c.nameLane||c.anchor) return true;
+    if(c.edgeIdx!==undefined||c.nameLane) return true;
     return c.lane!==undefined&&c.tick!==undefined&&
       c.label===undefined&&c.tool===undefined&&c.cact===undefined&&
       c.meta===undefined&&c.ch===undefined&&c.col===undefined&&c.rowLane===undefined;
@@ -299,9 +302,24 @@ export function attachInteractions(ctx){
     var c=cellAt(e); // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
     var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
-    if(state.connect&&!(c&&c.anchor)){ state.connect=null; ctx.redraw(); }
     if(!c) return;
+    // 全局命令（撤销 / 重做 / 连线开关）在两种模式下都可用
     if(c.cmd){ if(dbl>1) return; e.preventDefault(); ctx.doCmd(c.cmd); return; }
+    // 互斥分派：连线模式开启时，同一片 rect.cell 只作为连线端点，其余编辑入口
+    // 一律不响应；关闭时完全走时序编辑链路，不会因为点到波形就误触发连线。
+    if(state.linkMode){
+      if(dbl>1){ e.preventDefault(); return; }
+      // 落在波形格区域内的命中（含数据标签徽标）一律视为同一操作区域；弧线命中带已在绘制层让位，列头 / 行工具 / 字符条 / 弧线一概不响应。
+      if(c.lane!==undefined&&c.tick!==undefined){
+        e.preventDefault();
+        var el=findLane(c.lane);
+        if(!el||el.kind!=='signal'||!el.slots[c.tick]){
+          ctx.notify('该周期尚未在源码里定义，请选已定义的波形格作为端点',true); return;
+        }
+        handleAnchor({lane:c.lane,tick:c.tick,node:nodeChar(c.lane,c.tick)});
+      }
+      return;
+    }
     if(c.drag){
       if(isTouch||dbl>1) return;   // 触摸端行重排交给操作栏，不与原生滚动抢手势
       e.preventDefault();
@@ -313,11 +331,6 @@ export function attachInteractions(ctx){
     }
     if(c.ch!==undefined){ if(dbl>1) return; e.preventDefault(); writeChar(c.ch); return; }
     if(c.label){ if(dbl>1) return; e.preventDefault(); openLabelEditor(c.lane,c.tick); return; }
-    if(c.anchor){
-      e.preventDefault();
-      if(dbl>1){ openEditorFor(c); return; }
-      handleAnchor(c); return;
-    }
     if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
     if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
     if(c.meta){ if(dbl>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }
@@ -357,7 +370,7 @@ export function attachInteractions(ctx){
     var svg=svgRoot(); if(!svg||!state.connect) return;
     var p=svg.querySelector('path.connectPreview');
     if(!p){ p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('class','connectPreview'); svg.appendChild(p); }
-    var a=state.connect, ax=XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+(TOUCH?11:7);
+    var a=state.connect, ax=XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+7;
     p.setAttribute('d','M'+ax+','+ay+' C'+(ax+10)+','+(ay-26)+' '+(mx-10)+','+(my-26)+' '+mx+','+my);
   }
 
@@ -459,12 +472,13 @@ export function attachInteractions(ctx){
       if(dl&&dl.parentNode) dl.parentNode.removeChild(dl);
       ctx.redraw(); ctx.notify('已取消拖动'); return;
     }
-    if(e.key==='Escape'&&state.connect){ state.connect=null; ctx.redraw(); ctx.notify('已取消连线'); return; }
+    if(e.key==='Escape'&&state.linkMode){ ctx.setLinkMode(false); return; }
     if((e.ctrlKey||e.metaKey)&&/^(z|y)$/i.test(e.key)&&!typing){
       if(e.preventDefault) e.preventDefault();
       ctx.doCmd((e.shiftKey||/^y$/i.test(e.key))?'redo':'undo'); return;
     }
     if(typing) return;
+    if(state.linkMode) return;   // 连线模式下键盘字符 / 就地编辑都不作用于波形
     if(e.key==='Escape'&&state.selCell){
       if(e.preventDefault) e.preventDefault();
       state.selCell=null; ctx.redraw(); return;
@@ -473,6 +487,12 @@ export function attachInteractions(ctx){
     if(!sc||!state.ir) return;
     var k=e.key, N=state.ir.ticks;
     if(Core.ALL.indexOf(k)>=0){ if(e.preventDefault) e.preventDefault(); writeChar(k); return; }
+    // 节点字符不再有专属锚点：选中格后 Shift+Enter 就地编辑该格 node（触摸端走「节点标记」按钮）
+    if(k==='Enter'&&e.shiftKey){
+      if(e.preventDefault) e.preventDefault();
+      var nl=findLane(sc.lane);
+      ctx.openNodeEditor(sc.lane,sc.tick,nl?nl.node[sc.tick]:''); return;
+    }
     if(k==='Enter'){ if(e.preventDefault) e.preventDefault(); openInlineFor({lane:sc.lane,tick:sc.tick}); return; }
     if(k==='ArrowLeft'||k==='ArrowRight'||k==='ArrowUp'||k==='ArrowDown'){
       if(e.preventDefault) e.preventDefault();
@@ -499,7 +519,7 @@ export function attachInteractions(ctx){
   ctx.handleTool=handleTool;
   ctx.handleColAct=handleColAct;
   ctx.cancelModes=function(){
-    state.connect=null; state.selCell=null; state.sel=null; state.selLane=null;
+    state.connect=null; state.linkMode=false; state.selCell=null; state.sel=null; state.selLane=null;
     state.drag=null; ctx.painting=null; ctx.closeInline(false); ctx.redraw();
   };
 }

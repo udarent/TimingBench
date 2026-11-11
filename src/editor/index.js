@@ -11,7 +11,7 @@ export function createEditor(dom){
     code:dom.code, wrap:dom.wrap, gutter:dom.gutter, errdot:dom.errdot,
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, ratio:1, parseOK:false,
-            ch:'1', connect:null, W:0, H:0, drag:null, rev:0 },
+            ch:'1', connect:null, linkMode:false, W:0, H:0, drag:null, rev:0 },
     inlineCtx:null, painting:null
   };
   var state=ctx.state, code=ctx.code, gutter=ctx.gutter, errdot=ctx.errdot;
@@ -96,7 +96,20 @@ export function createEditor(dom){
     gutter.scrollTop=code.scrollTop;
   }
 
+  // 图形区的两种操作互斥：linkMode 关闭时波形格只做时序编辑，开启时只做连线端点。
+  // 切换只走这一个入口，保证按钮状态、选中态、起点与绘制层一次同步。
+  function setLinkMode(on){
+    on=!!on;
+    state.linkMode=on; state.connect=null;
+    state.selCell=null; state.sel=null; state.selLane=null; state.drag=null;
+    ctx.painting=null;
+    if(ctx.inlineCtx) ctx.closeInline(true);
+    ctx.redraw(); ctx.status();
+    notify(on?'连线模式：依次点两个波形格作为端点（Esc 退出）':'已退出连线模式，恢复时序编辑');
+  }
+
   function doCmd(act){
+    if(act==='link'){ setLinkMode(!state.linkMode); return; }
     if(act!=='undo'&&act!=='redo') return;
     var stack=act==='undo'?state.undo:state.redo, back=act==='undo'?state.redo:state.undo;
     if(!stack.length) return;
@@ -111,7 +124,7 @@ export function createEditor(dom){
 
   ctx.notify=notify; ctx.status=status; ctx.renderGutter=renderGutter;
   ctx.syncCode=syncCode; ctx.commit=commit; ctx.fromCode=fromCode;
-  ctx.doCmd=doCmd; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
+  ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
 
   createShapes(ctx);
   attachInteractions(ctx);
