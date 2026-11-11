@@ -10,6 +10,10 @@ There is only one source of truth: diagram edits are written back as a minimal p
 
 ## See it in action
 
+![Bidirectional editing: source changes redraw the diagram, diagram edits rewrite the source](assets/bidirectional-demo.gif)
+
+> ① Change `p` to `0` in `clk` → the square clock collapses to a flat low level. ② Click a cell and write `1`, `x`, `p` → the same positions are patched back into the source. Both directions read the same WaveJSON.
+
 ```js
 { signal: [
     { name: 'clk', wave: 'p.....|...' },
@@ -19,7 +23,7 @@ There is only one source of truth: diagram edits are written back as a minimal p
   ], edge: ['a~>b t1'] }
 ```
 
-Open the page and you get this source next to its editable timing diagram. Click the third cell of `req` and type `1`: the waveform changes and the same character is written back into the source. Change `p` to `n` in the source and the clock's initial edge flips immediately.
+Open the page and you get this source next to its editable timing diagram. Click the third cell of `req` and type `1`: the waveform changes and the same character is written back into the source. Change `p` to `0` in the source and the clock collapses into a flat low level immediately.
 
 ## Quick start
 

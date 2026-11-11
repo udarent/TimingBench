@@ -111,14 +111,19 @@ function check() {
   // 双语 README：英文为主文件、中文独立成篇，两边互链且版本号同步
   const enReadme = read('README.md'), zhName = 'README.zh-CN.md';
   const hasZh = fs.existsSync(path.join(ROOT, zhName));
+  const zhReadme = hasZh ? read(zhName) : '';
   ok(hasZh, '缺少中文版 ' + zhName);
   ok(enReadme.includes('`' + version + '`'), '英文 README 版本号不一致');
   if (hasZh) {
-    const zhReadme = read(zhName);
     ok(enReadme.includes(zhName), '英文 README 缺少中文切换链接');
     ok(zhReadme.includes('README.md'), '中文 README 缺少英文切换链接');
     ok(zhReadme.includes('`' + version + '`'), '中文 README 版本号不一致');
   }
+  // 演示动图：两版 README 必须引用同一份真实 GIF，避免只改一份或留下失效图片
+  const demo = 'assets/bidirectional-demo.gif', demoPath = path.join(ROOT, demo);
+  ok(fs.existsSync(demoPath), '缺少演示动图 ' + demo);
+  ok(fs.readFileSync(demoPath).subarray(0, 6).toString('ascii') === 'GIF89a', '演示动图不是有效 GIF');
+  ok(enReadme.includes(demo) && zhReadme.includes(demo), '双语 README 未同时引用演示动图');
   const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
   ok(refs.length >= 2, 'index.html 未引用样式与入口脚本');
   for (const ref of refs) {
