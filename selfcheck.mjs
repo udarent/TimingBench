@@ -108,6 +108,17 @@ function check() {
   ok(read('VERSION').trim() === version, 'VERSION 与 package.json 不一致');
   const html = read('index.html');
   ok(html.includes('content="' + version + '"'), 'index.html 版本不一致');
+  // 双语 README：英文为主文件、中文独立成篇，两边互链且版本号同步
+  const enReadme = read('README.md'), zhName = 'README.zh-CN.md';
+  const hasZh = fs.existsSync(path.join(ROOT, zhName));
+  ok(hasZh, '缺少中文版 ' + zhName);
+  ok(enReadme.includes('`' + version + '`'), '英文 README 版本号不一致');
+  if (hasZh) {
+    const zhReadme = read(zhName);
+    ok(enReadme.includes(zhName), '英文 README 缺少中文切换链接');
+    ok(zhReadme.includes('README.md'), '中文 README 缺少英文切换链接');
+    ok(zhReadme.includes('`' + version + '`'), '中文 README 版本号不一致');
+  }
   const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
   ok(refs.length >= 2, 'index.html 未引用样式与入口脚本');
   for (const ref of refs) {

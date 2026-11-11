@@ -1,12 +1,14 @@
 # TimingBench
 
-**WaveJSON ⇄ 可编辑时序图。** 改图形回写源码，改源码重绘图形，两侧实时同步。
+English · [简体中文](README.zh-CN.md)
 
-`0.4.0` · [MIT](LICENSE) · 纯静态 · 零构建 · 零依赖 · 完全本地运行 · [在线打开](https://udarent.github.io/TimingBench/)
+**WaveJSON ⇄ editable timing diagrams.** Edit the diagram and the source is rewritten; edit the source and the diagram redraws — both stay in sync.
 
-两侧只有一份语义：图形回写优先打最小补丁（注释、缩进、键序、引号原样保留），生成结果若与图形不等价就回滚，不会静默改坏你的源码。
+`0.4.0` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/)
 
-## 先看一个例子
+There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
+
+## See it in action
 
 ```js
 { signal: [
@@ -17,85 +19,85 @@
   ], edge: ['a~>b t1'] }
 ```
 
-打开页面就是这段源码和它对应的可编辑时序图。点 `req` 第 3 格敲 `1`，波形立刻变化，源码里同一格字符也跟着变；反过来把源码里的 `p` 改成 `n`，时钟的起始跳变沿立刻翻转。
+Open the page and you get this source next to its editable timing diagram. Click the third cell of `req` and type `1`: the waveform changes and the same character is written back into the source. Change `p` to `n` in the source and the clock's initial edge flips immediately.
 
-## 快速开始
+## Quick start
 
-| 场景 | 做法 |
+| Goal | How |
 |---|---|
-| 直接试 | [在线编辑器](https://udarent.github.io/TimingBench/) · 手机 / 平板自动切换触摸版式 |
-| 本地跑 | `git clone https://github.com/udarent/TimingBench.git && cd TimingBench && npm start` → <http://127.0.0.1:5173/> |
-| 自托管 | 把整个目录放到任意静态服务器；GitHub Pages 选 `main` / `/ (root)`，无需 CI |
-| 桌面预览触摸版式 | 地址后加 `?touch=1` |
+| Try it now | [Online editor](https://udarent.github.io/TimingBench/) · phones / tablets switch to the touch layout automatically |
+| Run locally | `git clone https://github.com/udarent/TimingBench.git && cd TimingBench && npm start` → <http://127.0.0.1:5173/> |
+| Self-host | Put this entire directory on any static server; for GitHub Pages choose `main` / `/ (root)`, no CI needed |
+| Preview touch UI on desktop | Append `?touch=1` to the URL |
 
-不需要 `npm install`、不联网、不上传任何数据；Node 只用于本地静态服务与提交前自检。页面用原生 ES modules，**双击 `index.html` 用 `file://` 打开不生效**，必须经 HTTP 访问。
+No `npm install`, no network access, no uploads. Node is used only for the local static server and the pre-commit check. The app uses native ES modules, so **opening `index.html` via `file://` does not work** — it must be served over HTTP.
 
-## 能做什么
+## What it does
 
-| 能力 | 说明 |
+| Feature | Details |
 |---|---|
-| 双向同步 | 图 → 码最小补丁回写；码 → 图停止输入约 320ms 后重绘；两侧不等价自动回滚 |
-| 波形编辑 | 点格子选中后键盘直敲 / 点字符条 / 按住横向拖动漫刷；字符条的背景图案就是写入后的波形 |
-| 就地编辑 | 双击改格子、信号名、数据标签、节点字符、弧线、整行 `wave` / `data` / `node`、`phase` / `period` |
-| 结构编辑 | 增删行与周期、相位线、行重排、末尾追加周期、`group` / `spacer` |
-| 节点与弧线 | 点两个锚点连弧线，自动分配 a–z 中未用的最小字母；双击弧线改形状 / 标签，清空即删除 |
-| 撤销重做 | `Ctrl+Z` / `Ctrl+Y`；一次漫刷、一次拖动重排、一次连线各自只算一次撤销 |
-| 语法容错 | 源码没写完时保留上次有效图形，右上角红点给出错误与偏移 |
-| 桌面 / 触摸 | 桌面上下双栏同屏；粗指针设备自动切成标签页 + 底部大按钮操作栏 |
-| 隐私 | 全部在浏览器内计算，无网络请求、无账号、无后端、无遥测 |
+| Bidirectional sync | Diagram → source via a minimal patch; source → diagram redraws ~320 ms after you stop typing; non-equivalent results roll back |
+| Waveform editing | Select a cell, then type a character / click the character bar / drag across cells to paint; each chip in the bar shows the waveform it will write |
+| Inline editing | Double-click to edit a cell, signal name, data label, node marker, arc, a whole `wave` / `data` / `node` row, or `phase` / `period` |
+| Structure editing | Add / remove rows and cycles, phase gaps, row reordering, append a trailing cycle, `group` / `spacer` |
+| Nodes and arcs | Click two anchors to connect them; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Y`; one paint drag, one row reorder and one arc each count as a single undo step |
+| Tolerant parsing | While the source is incomplete, the last valid diagram stays on screen and a red dot shows the error and offset |
+| Desktop / touch | Two stacked panes on desktop; coarse-pointer devices get tabs + a bottom action bar instead |
+| Privacy | Everything runs in the browser — no requests, no accounts, no backend, no telemetry |
 
-## 操作速查
+## Operations at a glance
 
-| 想做的事 | 桌面 | 触摸 |
+| Goal | Desktop | Touch |
 |---|---|---|
-| 写波形 | 点格子 → 敲字符 / 点字符条；按住左键横向拖动连写 | 点格子 → 点字符条（按宽度换行成多行大格子，不必横向拖） |
-| 就地编辑 | 双击目标（或选中后 `Enter`） | 同目标 330ms 内双敲，或长按 480ms |
-| 连弧线 | 点锚点 A → 跟随鼠标的虚线预览 → 点锚点 B | 依次点两个锚点；首个锚点高亮 |
-| 行列 / 相位线 | 悬停行右端出工具、悬停列号出 `+` `−` `\|` | 底部「对象」14 个 +「列」4 个常显按钮 |
-| 行重排 | 拖行首 ⠿ | `↑ 上移` / `↓ 下移` |
-| 撤销 / 重做 | 顶部 ↶ ↷ 或 `Ctrl+Z` / `Ctrl+Y` | 底部操作栏 `↶ 撤销` `↷ 重做` |
-| 取消当前状态 | `Esc` | 底部 `✕ 取消` |
-| 看源码 / 看图 | 上下双栏同时可见 | 顶部「时序图 / 源码」标签页切换 |
+| Write a waveform | Click a cell → type / click the character bar; hold and drag horizontally to paint | Tap a cell → tap the character bar (wraps into multiple rows of large chips, no horizontal scrolling) |
+| Inline edit | Double-click the target (or `Enter` on a selected cell) | Double-tap the same target within 330 ms, or long-press for 480 ms |
+| Connect an arc | Click anchor A → dashed preview follows the pointer → click anchor B | Tap the two anchors in turn; the first one stays highlighted |
+| Rows / cycles / phase gaps | Hover the right edge of a row or a column number for `+` `−` `\|` | 14 always-visible buttons in the "Object" panel + 4 in the "Column" panel |
+| Reorder rows | Drag the ⠿ handle at the row start | `↑ Move up` / `↓ Move down` |
+| Undo / redo | Top ↶ ↷ or `Ctrl+Z` / `Ctrl+Y` | `↶ Undo` / `↷ Redo` in the bottom bar |
+| Cancel current mode | `Esc` | `✕ Cancel` in the bottom bar |
+| See source / diagram | Both panes visible at once | Switch with the "Diagram / Source" tabs |
 
-触摸端命中区按 44 CSS px 放大（格子 46×50、字符条 44×44、操作栏按钮 ≥48），hover 才显现的小按钮全部撤下；不阻止默认手势，画布原生滚动与双指缩放照常可用。
+Touch hit targets follow the 44 CSS px guideline (cells 46×50, character chips 44×44, action-bar buttons ≥48). Hover-only mini controls are removed. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
 
-## 快捷键
+## Keyboard shortcuts
 
-| 键 | 作用 |
+| Key | Action |
 |---|---|
-| `0 1 x z u d p P n N h l H L = 2…9` `.` `\|` | 写入当前格并自动右移（含义见下表） |
-| `Enter` | 就地编辑当前格 |
-| `←` `→` `↑` `↓` | 移动选中格 |
-| `Ctrl/⌘ + Z` · `Ctrl/⌘ + Y` / `Ctrl+Shift+Z` | 撤销 · 重做 |
-| `Esc` | 取消连线 / 拖动 / 清除选中 |
+| `0 1 x z u d p P n N h l H L = 2…9` `.` `\|` | Write to the current cell and move right (see the table below) |
+| `Enter` | Inline-edit the current cell |
+| `←` `→` `↑` `↓` | Move the selected cell |
+| `Ctrl/⌘ + Z` · `Ctrl/⌘ + Y` / `Ctrl+Shift+Z` | Undo · redo |
+| `Esc` | Cancel an arc / drag, or clear the selection |
 
-键盘直通只在焦点位于画布时生效。
+Shortcuts apply only while the canvas has focus.
 
-## wave 字符速查
+## Wave character reference
 
-| 类别 | 字符 | 效果 |
+| Group | Characters | Meaning |
 |---|---|---|
-| 电平 | `0` `1` `x` `z` `u` `d` | 低 · 高 · 未知（斜线阴影）· 高阻 · 上拉 · 下拉 |
-| 时钟 | `p` `n` `h` `l`；大写 `P` `N` `H` `L` | 起始跳变沿 / 电平变体；大写额外带箭头 |
-| 总线 | `=` `2`…`9` | 数据块，按序消耗 `data` 标签，配色随数字变化 |
-| 辅助 | `.` `\|` `<` `>` | 延续前一状态（不消耗标签）· 相位线 · sub-cycle 开关（不占周期） |
-| 节点 / 弧线 | `node: '..a...'`、`edge: ['a~>b t1']` | 标记按周期位置对应；edge 首字符为起点、末字符为终点，中间 `~` 曲线 / `-` 直线 / `>` 箭头，空格后是标签 |
+| Levels | `0` `1` `x` `z` `u` `d` | low · high · unknown (hatched) · high-impedance · pull-up · pull-down |
+| Clocks | `p` `n` `h` `l`; uppercase `P` `N` `H` `L` | starting edge / level variants; uppercase adds an arrow |
+| Bus | `=` `2`…`9` | data block consuming `data` labels in order; color varies with the digit |
+| Auxiliary | `.` `\|` `<` `>` | hold the previous state (no label consumed) · phase gap · sub-cycle switches (no cycle consumed) |
+| Nodes / arcs | `node: '..a...'`, `edge: ['a~>b t1']` | markers map to cycle positions; in an edge the first character is the start and the last is the end, `~` curve / `-` straight / `>` arrow in between, text after the space is the label |
 
-短行缺失的周期按 repeater 沿用最后一状态补画（略淡），点它写入会自动扩展源码与图形，可撤销。
+Missing trailing cycles are drawn repeater-style with the last state (slightly dimmed); clicking one extends both the source and the diagram, and the change is undoable.
 
-## 你可能会问
+## FAQ and limitations
 
-- **双击 HTML 打不开？** ES modules 受 `file://` 的 CORS 限制，用 `npm start` 或任意静态服务器访问；GitHub Pages 部署天然可用。
-- **我的时序图会上传到服务器吗？** 不会。纯前端计算，没有请求、没有存储、没有账号。
-- **支持 WaveDrom 全部语法吗？** 支持常用子集：`wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer` 与 repeater 补画。不是 WaveDrom 的完整实现，也不含其代码。
-- **哪些浏览器？** 现代 Chrome / Edge / Firefox / Safari（需 ES modules、SVG `foreignObject`、Pointer Events）；缺少 Pointer Events 的老浏览器触摸端回退 touch 事件。
-- **触屏笔记本没切换版式？** 主指针是鼠标时不自动切换，地址后加 `?touch=1` 强制预览。
-- **已知限制**：iOS Safari 软键盘配合 `foreignObject` 输入框尚未真机验证；触摸端不做按住拖过连写与拖动重排（避免抢原生滚动手势），连线没有跟随手指的预览曲线。
+- **Nothing happens when I double-click the HTML file?** ES modules are blocked by CORS under `file://`. Use `npm start` or any static server; a GitHub Pages deployment works out of the box.
+- **Are my diagrams uploaded anywhere?** No. Everything is computed in the browser — no requests, no storage, no account.
+- **Does it support all of WaveDrom?** It covers the common subset: `wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer` and repeater-style fill-in. It is not a full WaveDrom implementation and contains none of its code.
+- **Which browsers?** Current Chrome / Edge / Firefox / Safari (ES modules, SVG `foreignObject`, Pointer Events). Older browsers without Pointer Events fall back to touch events.
+- **My touchscreen laptop stayed in desktop mode?** If the primary pointer is a mouse, the layout does not switch automatically; append `?touch=1` to force it.
+- **Known limitations**: the `foreignObject` input with the iOS Safari soft keyboard has not been verified on a real device; touch mode drops drag-paint and drag-to-reorder (to avoid stealing native scroll gestures), and arcs have no finger-following preview curve.
 
-## 开发
+## Development
 
-`npm run check` 跑提交前自检（双向等价、站点资源、模块引用、版本一致），失败退出码 1。完整验收套件不在本仓库内。
+`npm run check` runs the pre-commit self-check (bidirectional equivalence, site assets, module imports, version consistency) and exits 1 on failure. The full test suite is not shipped in this repository.
 
-## 许可与致谢
+## License and credits
 
-[MIT](LICENSE) 许可，只覆盖本项目自有内容（[范围说明](LICENSE.md)）。仅参考 WaveDrom Editor 的默认版式、WaveJSON 公开格式与默认皮肤视觉风格，不含其源码或依赖，也不构成隶属或背书关系 —— 详见 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。反馈与建议：<helloyuechen@163.com>。
+[MIT](LICENSE), covering only this project's own code ([scope](LICENSE.md)). Only WaveDrom Editor's default layout, the public WaveJSON format and the default skin's visual style were referenced; no upstream source, dependency, affiliation or endorsement is involved — see [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md). Feedback: <helloyuechen@163.com>.
