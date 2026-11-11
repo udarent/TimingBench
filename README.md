@@ -20,9 +20,10 @@ TimingBench 是 WaveJSON 源码 ⇄ 可编辑时序图的双向编辑器：改�
 
 仓库本身就是可托管的静态站点：根目录 [`index.html`](index.html) 为站点入口，`src/` 为运行时资源，路径全部相对站点根，不含任何需要预构建的文件。
 
-1. 把仓库推送到 GitHub（`git remote add origin <url>` → `git push -u origin main`）。
-2. 仓库 **Settings → Pages**，Source 选 *Deploy from a branch*，Branch 选 `main`、目录选 `/ (root)`，保存。
-3. 等一两分钟，站点地址为 `https://<用户名>.github.io/TimingBench/`（仓库名为 `<用户名>.github.io` 时则是站点根域名）。
+仓库已发布在 <https://github.com/udarent/TimingBench>，`main` 分支即站点内容。启用 Pages 只需两步：
+
+1. 仓库 **Settings → Pages**，Source 选 *Deploy from a branch*，Branch 选 `main`、目录选 `/ (root)`，保存。
+2. 等一两分钟，站点地址为 <https://udarent.github.io/TimingBench/>（仓库改名为 `<用户名>.github.io` 时则是站点根域名）。
 
 几点说明：
 
