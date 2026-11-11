@@ -2,6 +2,8 @@
 
 ## 与 WaveDrom 的关系
 
+**首先感谢 [WaveDrom](https://github.com/wavedrom/wavedrom) 项目及其贡献者**：WaveJSON 格式、编辑器的版式思路与波形呈现方式，是本项目得以成立的前提 —— 没有 WaveDrom，就没有 TimingBench。下文的边界声明只为说清参照范围，不减弱这份致谢。
+
 TimingBench 是**独立实现**的项目。开发过程中仅在设计思路、格式约定与交互组织方式上参考了上游项目：
 
 - **WaveDrom Editor**（<https://wavedrom.com/editor.html>）的默认版式：源码区在上、波形区在下，上下分区、各占半屏且通栏。这是界面布局与交互组织方式上的参考。
@@ -19,6 +21,6 @@ TimingBench 是**独立实现**的项目。开发过程中仅在设计思路、�
 ## 其他
 
 - 需求 / 架构 / 变更日志 / 完整验收套件等研发过程资料由开发工作区保管，不在本交付物内。
-- 项目作者：udarent <helloyuechen@163.com>。
+- 项目作者：udarent <helloyuechen@163.com>（署名信息，非反馈渠道；反馈与交流请到 <https://github.com/udarent/TimingBench/issues>）。
 
 许可范围见 [`LICENSE.md`](LICENSE.md)，项目说明见 [`README.md`](README.md)。

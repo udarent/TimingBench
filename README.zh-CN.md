@@ -102,6 +102,10 @@
 
 `npm run check` 跑提交前自检（双向等价、站点资源、模块引用、版本一致），失败退出码 1。完整验收套件不在本仓库内。
 
-## 许可与致谢
+## 致谢、许可与反馈
 
-[MIT](LICENSE) 许可，只覆盖本项目自有内容（[范围说明](LICENSE.md)）。仅参考 WaveDrom Editor 的默认版式、WaveJSON 公开格式与默认皮肤视觉风格，不含其源码或依赖，也不构成隶属或背书关系 —— 详见 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。反馈与建议：<helloyuechen@163.com>。
+**感谢 [WaveDrom](https://github.com/wavedrom/wavedrom) 项目及其贡献者** —— 没有 WaveDrom 与它定义的 WaveJSON 格式，就不会有 TimingBench。本项目在设计上参考了它的编辑器版式、公开格式与默认皮肤的视觉风格，具体参照范围见 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。
+
+[MIT](LICENSE) 许可只覆盖本项目自有内容（[范围说明](LICENSE.md)）；不含上游源码或依赖，也不构成隶属或背书关系。
+
+**欢迎反馈** —— 遇到 bug、有想法或疑问，请直接[提 issue](https://github.com/udarent/TimingBench/issues)。

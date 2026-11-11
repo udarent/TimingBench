@@ -124,6 +124,15 @@ function check() {
   ok(fs.existsSync(demoPath), '缺少演示动图 ' + demo);
   ok(fs.readFileSync(demoPath).subarray(0, 6).toString('ascii') === 'GIF89a', '演示动图不是有效 GIF');
   ok(enReadme.includes(demo) && zhReadme.includes(demo), '双语 README 未同时引用演示动图');
+  // 致谢与反馈口径：两版都须感谢上游项目、引导提 issue，且不再把邮箱当反馈渠道
+  const upstream = 'https://github.com/wavedrom/wavedrom';
+  const issues = 'https://github.com/udarent/TimingBench/issues';
+  const ackDoc = read('ACKNOWLEDGMENTS.md');
+  ok(enReadme.includes('Thanks to') && zhReadme.includes('感谢'), '双语 README 缺少 WaveDrom 致谢');
+  ok(enReadme.includes(upstream) && zhReadme.includes(upstream), '致谢未链接上游项目');
+  ok(ackDoc.includes(upstream), 'ACKNOWLEDGMENTS.md 未同步致谢');
+  ok(enReadme.includes(issues) && zhReadme.includes(issues), '双语 README 未引导提 issue');
+  ok(!/helloyuechen|163\.com/.test(enReadme + zhReadme), 'README 仍把邮箱当反馈渠道');
   const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
   ok(refs.length >= 2, 'index.html 未引用样式与入口脚本');
   for (const ref of refs) {

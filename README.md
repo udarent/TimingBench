@@ -102,6 +102,10 @@ Missing trailing cycles are drawn repeater-style with the last state (slightly d
 
 `npm run check` runs the pre-commit self-check (bidirectional equivalence, site assets, module imports, version consistency) and exits 1 on failure. The full test suite is not shipped in this repository.
 
-## License and credits
+## Credits, license and feedback
 
-[MIT](LICENSE), covering only this project's own code ([scope](LICENSE.md)). Only WaveDrom Editor's default layout, the public WaveJSON format and the default skin's visual style were referenced; no upstream source, dependency, affiliation or endorsement is involved — see [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md). Feedback: <helloyuechen@163.com>.
+**Thanks to [WaveDrom](https://github.com/wavedrom/wavedrom) and its contributors** — without WaveDrom and the WaveJSON format it introduced, TimingBench would not exist. Its editor layout, the public format and the default skin's visual style are this project's design reference; the exact scope is recorded in [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).
+
+[MIT](LICENSE) covers only this project's own code ([scope](LICENSE.md)). No upstream source or dependency is included, and there is no affiliation or endorsement.
+
+**Feedback is very welcome** — for bugs, ideas or questions, please [open an issue](https://github.com/udarent/TimingBench/issues).
