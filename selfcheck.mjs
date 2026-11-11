@@ -119,11 +119,20 @@ function check() {
     ok(zhReadme.includes('README.md'), '中文 README 缺少英文切换链接');
     ok(zhReadme.includes('`' + version + '`'), '中文 README 版本号不一致');
   }
-  // 演示动图：两版 README 必须引用同一份真实 GIF，避免只改一份或留下失效图片
+  // 演示动图：两版 README 必须引用同一份真实 GIF，避免只改一份或留下失效图片。
+  // 图片用仓库自身的绝对 raw URL —— 相对路径只有 GitHub 网页会重写，本地 / 第三方
+  // Markdown 阅读器会解析成空白；相对路径改作兜底链接保留，兼顾 fork 与离线场景。
   const demo = 'assets/bidirectional-demo.gif', demoPath = path.join(ROOT, demo);
+  const demoUrl = 'https://github.com/udarent/TimingBench/raw/main/' + demo;
   ok(fs.existsSync(demoPath), '缺少演示动图 ' + demo);
   ok(fs.readFileSync(demoPath).subarray(0, 6).toString('ascii') === 'GIF89a', '演示动图不是有效 GIF');
-  ok(enReadme.includes(demo) && zhReadme.includes(demo), '双语 README 未同时引用演示动图');
+  ok(enReadme.includes(demoUrl) && zhReadme.includes(demoUrl), '双语 README 未同时引用演示动图绝对 URL');
+  ok(!/!\[[^\]]*\]\(assets\/bidirectional-demo\.gif\)/.test(enReadme + zhReadme),
+     '演示动图退回相对路径，非 GitHub 阅读器会显示空白');
+  ok(enReadme.includes('](' + demoUrl + ')') && zhReadme.includes('](' + demoUrl + ')'),
+     '双语 README 缺少动图直接打开链接');
+  ok(enReadme.includes('](' + demo + ')') && zhReadme.includes('](' + demo + ')'),
+     '双语 README 缺少本地动图文件兜底链接');
   // 致谢与反馈口径：两版都须感谢上游项目、引导提 issue，且不再把邮箱当反馈渠道
   const upstream = 'https://github.com/wavedrom/wavedrom';
   const issues = 'https://github.com/udarent/TimingBench/issues';

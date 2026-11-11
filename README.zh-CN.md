@@ -10,9 +10,11 @@
 
 ## 先看一个例子
 
-![双向编辑演示：改源码重绘波形，点画布回写源码](assets/bidirectional-demo.gif)
+![双向编辑演示：改源码重绘波形，点画布回写源码](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif)
 
 > ① 源码里把 `clk` 的 `p` 改成 `0` → 方波时钟立刻塌成一条低电平直线；② 点画布格子依次写入 `1`、`x`、`p` → 源码对应位置同步回写。两侧始终是同一份 WaveJSON。
+
+如果你的 Markdown 阅读器不显示动图，[点此直接打开 GIF](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif)。同一份录屏也在 [`assets/bidirectional-demo.gif`](assets/bidirectional-demo.gif)。
 
 ```js
 { signal: [

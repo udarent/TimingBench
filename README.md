@@ -10,9 +10,11 @@ There is only one source of truth: diagram edits are written back as a minimal p
 
 ## See it in action
 
-![Bidirectional editing: source changes redraw the diagram, diagram edits rewrite the source](assets/bidirectional-demo.gif)
+![Bidirectional editing: source changes redraw the diagram, diagram edits rewrite the source](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif)
 
 > ① Change `p` to `0` in `clk` → the square clock collapses to a flat low level. ② Click a cell and write `1`, `x`, `p` → the same positions are patched back into the source. Both directions read the same WaveJSON.
+
+If the animation does not appear in your Markdown viewer, [open the GIF directly](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif). The same recording is in [`assets/bidirectional-demo.gif`](assets/bidirectional-demo.gif).
 
 ```js
 { signal: [
