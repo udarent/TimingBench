@@ -11,7 +11,8 @@ export function createEditor(dom){
     code:dom.code, wrap:dom.wrap, gutter:dom.gutter, errdot:dom.errdot,
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, ratio:1, parseOK:false,
-            ch:'1', connect:null, linkMode:false, W:0, H:0, drag:null, rev:0 },
+            ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0,
+            W:0, H:0, drag:null, rev:0 },
     inlineCtx:null, painting:null
   };
   var state=ctx.state, code=ctx.code, gutter=ctx.gutter, errdot=ctx.errdot;
@@ -96,16 +97,58 @@ export function createEditor(dom){
     gutter.scrollTop=code.scrollTop;
   }
 
+  // ---- 键盘可达：焦点 / 初始选中 / 选中夹取 ---------------------------------
+  // 页面常驻文字为零，键盘用户靠 Tab / F6 进入画布；一旦画布获得焦点且尚无选中格，
+  // 自动落在第一条信号行的 t0，之后所有编辑都能纯键盘完成。
+  function setView(v){
+    if(dom.app) dom.app.setAttribute('data-view',v);
+    if(dom.tabbar){
+      var bs=dom.tabbar.querySelectorAll('button[data-view]');
+      for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-selected',String(bs[i].getAttribute('data-view')===v));
+    }
+  }
+  function signalLanes(){
+    var out=[];
+    if(state.ir) state.ir.lanes.forEach(function(l){ if(l.kind==='signal') out.push(l); });
+    return out;
+  }
+  function firstCell(){ var ls=signalLanes(); return ls.length?{lane:ls[0].id,tick:0}:null; }
+  function ensureSelCell(){
+    if(!state.ir||state.linkMode) return state.selCell;
+    if(!state.selCell){ state.selCell=firstCell(); if(state.selCell){ state.selLane=state.selCell.lane; ctx.redraw(); } }
+    return state.selCell;
+  }
+  // 结构编辑会改变行数 / 周期数，命令结束后把选中格夹回有效范围（不改 IR）
+  function clampSel(){
+    var sc=state.selCell; if(!sc||!state.ir) return sc;
+    var N=Math.max(1,state.ir.ticks), found=false;
+    state.ir.lanes.forEach(function(l){ if(l.id===sc.lane&&l.kind==='signal') found=true; });
+    if(!found){ var f=firstCell(); sc={lane:f?f.lane:sc.lane,tick:Math.min(sc.tick,N-1)}; }
+    else sc={lane:sc.lane,tick:Math.max(0,Math.min(sc.tick,N-1))};
+    state.selCell=sc; state.selLane=sc.lane;
+    return sc;
+  }
+  function focusPane(which){
+    if(which==='src'){ setView('src'); try{ code.focus({preventScroll:true}); }catch(e){ code.focus(); } return; }
+    setView('diagram'); focusCanvas(); ensureSelCell();
+  }
+
   // 图形区的两种操作互斥：linkMode 关闭时波形格只做时序编辑，开启时只做连线端点。
-  // 切换只走这一个入口，保证按钮状态、选中态、起点与绘制层一次同步。
+  // 切换只走这一个入口，保证按钮状态、选中态、连线光标与绘制层一次同步。
   function setLinkMode(on){
     on=!!on;
-    state.linkMode=on; state.connect=null;
+    var from=state.selCell, lc=null;
+    if(on&&state.ir){
+      var valid=false, N=state.ir.ticks;
+      state.ir.lanes.forEach(function(l){ if(from&&l.id===from.lane&&l.kind==='signal') valid=true; });
+      lc=valid?{lane:from.lane,tick:Math.max(0,Math.min(from.tick,N-1))}:firstCell();
+    }
+    state.linkMode=on; state.connect=null; state.linkCursor=lc;
     state.selCell=null; state.sel=null; state.selLane=null; state.drag=null;
     ctx.painting=null;
     if(ctx.inlineCtx) ctx.closeInline(true);
     ctx.redraw(); ctx.status();
-    notify(on?'连线模式：依次点两个波形格作为端点（Esc 退出）':'已退出连线模式，恢复时序编辑');
+    notify(on?'连线模式：点两个波形格作端点；键盘方向键移光标、Enter 选端点（Esc 退出）':'已退出连线模式，恢复时序编辑');
   }
 
   function doCmd(act){
@@ -125,6 +168,7 @@ export function createEditor(dom){
   ctx.notify=notify; ctx.status=status; ctx.renderGutter=renderGutter;
   ctx.syncCode=syncCode; ctx.commit=commit; ctx.fromCode=fromCode;
   ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
+  ctx.focusPane=focusPane; ctx.setView=setView; ctx.ensureSelCell=ensureSelCell; ctx.clampSel=clampSel;
 
   createShapes(ctx);
   attachInteractions(ctx);
@@ -134,6 +178,7 @@ export function createEditor(dom){
   ctx.redraw=function(){ paint(); if(ctx.afterRedraw) ctx.afterRedraw(); };
 
   ctx.wrap.tabIndex=0;
+  ctx.wrap.addEventListener('focus',function(){ if(!state.linkMode) ensureSelCell(); });
   code.addEventListener('scroll',function(){ gutter.scrollTop=code.scrollTop; });
   code.addEventListener('input',function(){
     renderGutter();

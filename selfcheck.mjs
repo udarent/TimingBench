@@ -143,6 +143,23 @@ function check() {
   ok(/linkMode/.test(editorSrc) && /setLinkMode/.test(editorSrc), '状态层缺少唯一的连线模式入口');
   ok(/if\(state\.linkMode\)/.test(interSrc) && !/nodeAnchor/.test(interSrc), '交互层未做互斥分派或仍有锚点命中');
   ok(/cmd\('link'/.test(shapesSrc) && /data-tb="link"/.test(html), '桌面 HUD / 触摸操作栏缺少连线开关');
+  // 全键盘可达：焦点入口、连线端点光标、命令分派、就地编辑焦点恢复、可见焦点样式
+  ok(/focusPane/.test(editorSrc) && /ensureSelCell/.test(editorSrc) && /tabIndex=0/.test(editorSrc),
+    '状态层缺少键盘焦点入口或画布不可聚焦');
+  ok(/F6/.test(interSrc) && /linkKeys/.test(interSrc) && /linkCursor/.test(interSrc) &&
+     /command\(/.test(interSrc), '交互层缺少 F6 / 连线端点光标 / 命令分派');
+  ok(/restoreFocus/.test(interSrc) && /closeInline\(true,true\)/.test(interSrc),
+    '就地编辑键盘结算后未把焦点还给画布');
+  ok(/linkCursor/.test(shapesSrc) && /\.linkCursor/.test(cssSrc) && /:focus-visible/.test(cssSrc),
+    '绘制层或样式层缺少连线端点光标 / 键盘焦点样式');
+  // 两版 README 必须同时给出完整键盘表，防止只改一份或漏掉关键键位
+  for (const key of ['F6', 'Shift+Enter', '`K`', 'Ctrl+↑', 'Shift+E'])
+    ok(enReadme.includes(key) && zhReadme.includes(key), '双语 README 快捷键表缺少 ' + key);
+  const kbRows = (s) => s.split('\n').filter((l) => l.startsWith('|')).length;
+  const enKb = (enReadme.split('## Keyboard shortcuts')[1] || '').split('\n## ')[0];
+  const zhKb = (zhReadme.split('## 快捷键')[1] || '').split('\n## ')[0];
+  ok(kbRows(enKb) >= 18 && kbRows(zhKb) === kbRows(enKb),
+    '双语快捷键表行数不一致或内容过短：en=' + kbRows(enKb) + ' zh=' + kbRows(zhKb));
   const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
   ok(refs.length >= 2, 'index.html 未引用样式与入口脚本');
   for (const ref of refs) {

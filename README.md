@@ -43,6 +43,7 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 | Bidirectional sync | Diagram → source via a minimal patch; source → diagram redraws ~320 ms after you stop typing; non-equivalent results roll back |
 | Waveform editing | Select a cell, then type a character / click the character bar / drag across cells to paint; each chip in the bar shows the waveform it will write |
 | Inline editing | Double-click to edit a cell, signal name, data label, arc, a whole `wave` / `data` / `node` row, or `phase` / `period`; `Shift+Enter` edits the node marker of the selected cell |
+| Keyboard-only | Every edit — cells, rows, cycles, names, labels, arcs, reordering and link mode — has a shortcut. `Tab` / `F6` focuses the canvas and selects the first cell; `F6` returns to the source |
 | Structure editing | Add / remove rows and cycles, phase gaps, row reordering, append a trailing cycle, `group` / `spacer` |
 | Nodes and arcs | Click **◇ Link** in the HUD (or the bottom bar on touch), then click two waveform cells; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
 | Undo / redo | `Ctrl+Z` / `Ctrl+Y`; one paint drag, one row reorder and one arc each count as a single undo step |
@@ -65,18 +66,45 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 
 Touch hit targets follow the 44 CSS px guideline (cells 46×50, character chips 44×44, action-bar buttons ≥48). Hover-only mini controls are removed. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
 
+No mouse at all? Every row / cycle / arc / structure action in this table has a key — see the shortcuts below. The canvas shows a focus ring only when reached by keyboard.
+
 ## Keyboard shortcuts
 
 | Key | Action |
 |---|---|
-| `0 1 x z u d p P n N h l H L = 2…9` `.` `\|` | Write to the current cell and move right (see the table below) |
+| `Tab` / `F6` | Source → canvas (auto-selects the first cell) / canvas → source |
+| `←` `→` `↑` `↓` | Move the selected cell (skips spacer rows) |
+| `Home` / `End` | First / last cycle of the current row |
+| `Ctrl+Home` / `Ctrl+End` | First / last cell of the whole diagram |
+| `0 1 x z u d p P n N h l H L = 2…9` | Write to the current cell and move right (see the table below) |
+| `Shift+←` / `Shift+→` | Paint: write the last character and move in that direction |
 | `Enter` | Inline-edit the current cell (waveform character) |
 | `Shift+Enter` | Inline-edit the node marker of the current cell |
-| `←` `→` `↑` `↓` | Move the selected cell |
+| `R` | Rename the current signal |
+| `W` / `A` / `S` | Inline-edit the whole `wave` / `data` / `node` row |
+| `F` / `T` | Inline-edit `phase` / `period` |
+| `B` | Inline-edit the data label of the current bus block |
+| `E` / `Shift+E` | Edit the current arc / switch to the next arc (clear the input to delete it) |
+| `K` | Toggle link mode |
+| `O` / `Shift+O` / `X` | Add a signal row / spacer row below, or delete the current row |
+| `Ctrl+↑` / `Ctrl+↓` | Move the current row up / down |
+| `+` / `-` / `G` | Insert / delete a cycle at the current column, toggle its phase gap |
+| `Shift+A` | Append a cycle at the end |
 | `Ctrl/⌘ + Z` · `Ctrl/⌘ + Y` / `Ctrl+Shift+Z` | Undo · redo |
 | `Esc` | Exit link mode, cancel a drag, or clear the selection |
 
-Shortcuts apply only while the canvas has focus.
+### In link mode
+
+| Key | Action |
+|---|---|
+| `←` `→` `↑` `↓` · `Home` / `End` | Move the endpoint cursor (a dashed rectangle, separate from the normal selection) |
+| `Enter` / `Space` | Pick the current cell as an endpoint; the second pick draws the arc and exits link mode |
+| `Esc` / `K` | Exit link mode early |
+| `Ctrl+Z` / `Ctrl+Y` | Undo · redo (still available) |
+
+Shortcuts apply when focus is outside the source editor and the inline input: `Tab` reaches the canvas in DOM order, `F6` switches explicitly, and buttons keep their native keyboard behaviour. Inline inputs commit with `Enter`, cancel with `Esc` and return focus to the canvas.
+
+The 23 characters above are the writable waveform set. `.` (hold), `|` (phase gap) and `<` / `>` (sub-cycle) are WaveJSON syntax: write them in the source, or press `G` to toggle a phase gap at the current column.
 
 ## Wave character reference
 
@@ -92,6 +120,7 @@ Missing trailing cycles are drawn repeater-style with the last state (slightly d
 
 ## FAQ and limitations
 
+- **Can I use it without a mouse?** Yes. `Tab` or `F6` focuses the canvas and selects the first cell; the shortcuts above cover every edit, including `K` → arrow keys → `Enter` → arrow keys → `Enter` to draw an arc with no pointer at all. `F6` takes you back to the source editor.
 - **Where did the node markers / little circles go?** They are gone, so the waveform looks like WaveDrom's own rendering. The cells themselves are the connection targets: click ◇ Link, then pick two cells. While link mode is on nothing else responds — character chips, keyboard writing, double-click editing and selection are suspended until the arc is drawn or `Esc` is pressed.
 - **Nothing happens when I double-click the HTML file?** ES modules are blocked by CORS under `file://`. Use `npm start` or any static server; a GitHub Pages deployment works out of the box.
 - **Are my diagrams uploaded anywhere?** No. Everything is computed in the browser — no requests, no storage, no account.

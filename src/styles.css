@@ -11,6 +11,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
 .gutter{position:absolute;left:0;top:0;bottom:0;width:40px;padding:12px 9px 12px 0;text-align:right;font:12px/1.65 var(--mono);color:var(--muted);border-right:1px solid var(--line);overflow:hidden;white-space:pre;user-select:none;pointer-events:none}
 textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;background:transparent;color:var(--ink);padding:12px 10px 12px 50px;font:12px/1.65 var(--mono);tab-size:2;white-space:pre;overflow:auto}
 .svgwrap{position:absolute;inset:0;overflow:auto;background:var(--bg);outline:none}
+/* 键盘用户用 Tab / F6 进入画布时给出可见焦点；鼠标点击不显示 */
+.svgwrap:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 svg{display:block;font-family:var(--sans)}
 .errdot{position:absolute;right:10px;top:10px;width:8px;height:8px;border-radius:50%;background:var(--err);cursor:help;z-index:5}
 [hidden]{display:none!important}
@@ -19,6 +21,9 @@ svg{display:block;font-family:var(--sans)}
 .hudBtn text,.colhead text,.colActBtn text,.charChip text,.rowDrag text{pointer-events:none}
 .hudBtn:hover rect{fill:var(--accent-bg);stroke:var(--accent)}
 .cellSel{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:3 2;pointer-events:none}
+/* 连线模式的端点光标：与普通选中框互斥，只服务键盘 / 触摸端点定位 */
+.linkCursor{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:5 3;pointer-events:none}
+.linkMode .linkCursor{stroke-width:2.4}
 .rowDrag{opacity:.3}
 .laneGrp:hover .rowDrag,.laneGrp.sel .rowDrag{opacity:.9}
 .dropLine{stroke:var(--accent);stroke-width:2;pointer-events:none}

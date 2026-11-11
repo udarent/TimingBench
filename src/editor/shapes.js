@@ -26,7 +26,7 @@ export function createShapes(ctx){
     function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
     cmd('undo','↶','撤销（Ctrl+Z）',!state.undo.length);
     cmd('redo','↷','重做（Ctrl+Y）',!state.redo.length);
-    cmd('link','◇',state.linkMode?'连线中：点第二个波形格完成（再点此退出）':'连线：开启后依次点两个波形格完成弧线',false,state.linkMode);
+    cmd('link','◇',state.linkMode?'连线中：点第二个波形格完成；键盘 K 退出、方向键移光标、Enter 选端点':'连线：点两个波形格，或按 K 后用方向键 + Enter 选端点',false,state.linkMode);
     return o.join('');
   }
 
@@ -198,7 +198,12 @@ export function createShapes(ctx){
     });
     o.push(edgeArcs(ir));
     o.push(actionBar(actY,W,perRow));
-    if(state.selCell){
+    // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
+    if(state.linkMode&&state.linkCursor){
+      var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });
+      if(lci>=0&&state.linkCursor.tick<N) o.push('<rect class="linkCursor" x="'+(XS+state.linkCursor.tick*CELL+1)+'" y="'+(TOP+lci*ROW_H+3)+'" width="'+(CELL-2)+'" height="'+(ROW_H-10)+'" rx="3"><title>连线端点光标 · 方向键移动 · Enter 选为端点</title></rect>');
+    }
+    if(!state.linkMode&&state.selCell){
       var sli=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.selCell.lane) sli=k; });
       if(sli>=0&&state.selCell.tick<N) o.push('<rect class="cellSel" x="'+(XS+state.selCell.tick*CELL+1)+'" y="'+(TOP+sli*ROW_H+3)+'" width="'+(CELL-2)+'" height="'+(ROW_H-10)+'" rx="3"/>');
     }
