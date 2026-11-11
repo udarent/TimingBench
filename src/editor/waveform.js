@@ -3,6 +3,7 @@
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { esc } from '../core/util.js';
+import { TOUCH } from './mode.js';
 
 var CHIP_W=G.CHIP_W;
   // 参考上游默认皮肤外观规范自行绘制的波形图元
@@ -71,7 +72,7 @@ var CHIP_W=G.CHIP_W;
   }
 
   // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph
-  function chipGlyph(v){ return waveGlyph(v,null,0,5,13,21,CHIP_W,{arrowX:3}); }
+  function chipGlyph(v){ return waveGlyph(v,null,0,TOUCH?7:5,TOUCH?22:13,TOUCH?37:21,CHIP_W,{arrowX:3}); }
   function chipDesc(v){
     if(Core.BUS.test(v)) return (v==='='||v==='2')?'总线数据块（白）':'总线数据块 · 配色 '+(Number(v)+5);
     if(Core.CLOCK.test(v)) return {
@@ -82,4 +83,4 @@ var CHIP_W=G.CHIP_W;
     return {'1':'高电平','0':'低电平','x':'未知态（斜线阴影）','z':'高阻（中间实线）','u':'上拉（高电平虚线）','d':'下拉（低电平虚线）'}[v]||'波形字符';
   }
 
-export { waveGlyph, chipGlyph, chipDesc };
+export { waveGlyph, waveGap, chipGlyph, chipDesc };

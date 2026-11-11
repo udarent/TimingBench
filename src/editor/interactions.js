@@ -3,6 +3,7 @@
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { esc, cut } from '../core/util.js';
+import { TOUCH } from './mode.js';
 
 var CELL=G.CELL, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD;
 var XS=G.XS;
@@ -236,53 +237,115 @@ export function attachInteractions(ctx){
     openCellCharEditor(s.lane,s.tick);
   }
 
-  wrap.addEventListener('mousedown',function(e){
-    if(e.button!==0) return;
+  // 就地编辑的唯一入口：双击（桌面）/ 双敲 / 长按（触摸）都走这里
+  function openEditorFor(c){
+    if(!c) return;
+    if(c.anchor){ state.connect=null; ctx.painting=null; ctx.redraw(); openNodeEditor(c.lane,c.tick,c.node); return; }
+    var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx};
+    if(!(snap.nameLane||snap.edgeIdx!==undefined||(snap.lane!==undefined&&snap.tick!==undefined))) return;
+    ctx.painting=null; state.connect=null;
+    ctx.redraw(); openInlineFor(snap);
+  }
+
+  // ---- 统一输入层 -------------------------------------------------------
+  // 鼠标：mousedown / mousemove / mouseup（保留桌面拖拽漫刷与既有验收）
+  // 触摸 / 笔：pointerdown / move / up / cancel，共用同一组命令与 EditOp
+  // 触摸端不调 preventDefault，原生滚动与双指缩放照常可用；双击由「同目标 330ms
+  // 内两次点按」识别，长按 480ms 是就地编辑的备用入口。
+  var lastTap=null, longPress=null, longTimer=null, ignoreMouseUntil=0;
+
+  function hitKey(c){
+    if(!c) return '';
+    if(c.edgeIdx!==undefined) return 'e'+c.edgeIdx;
+    if(c.nameLane) return 'n'+c.nameLane;
+    if(c.anchor) return 'a'+c.lane+'@'+c.tick;
+    if(c.lane!==undefined&&c.tick!==undefined)
+      return 'c'+c.lane+'@'+c.tick+'|'+(c.label?'l':'')+(c.tool||'')+(c.cact||'')+(c.meta||'');
+    return JSON.stringify(c);
+  }
+  function touchDetail(c){
+    var now=Date.now(), key=hitKey(c);
+    if(lastTap&&lastTap.key===key&&now-lastTap.time<330){ lastTap=null; return 2; }
+    lastTap={key:key,time:now}; return 1;
+  }
+  function clearLong(){
+    if(longTimer){ clearTimeout(longTimer); longTimer=null; }
+    longPress=null;
+  }
+  function editable(c){
+    if(!c) return false;
+    if(c.edgeIdx!==undefined||c.nameLane||c.anchor) return true;
+    return c.lane!==undefined&&c.tick!==undefined&&
+      c.label===undefined&&c.tool===undefined&&c.cact===undefined&&
+      c.meta===undefined&&c.ch===undefined&&c.col===undefined&&c.rowLane===undefined;
+  }
+  function startLong(c,x,y){
+    clearLong();
+    if(!editable(c)) return;
+    longPress={x:x,y:y,c:c};
+    longTimer=setTimeout(function(){
+      longTimer=null;
+      var p=longPress; longPress=null;
+      if(!p) return;
+      lastTap=null;
+      openEditorFor(p.c);
+    },480);
+  }
+
+  function handleDown(e,isTouch){
+    if(e.button!==undefined&&e.button!==0) return;
     // 就地输入框也在 SVG 里，点它自己不能触发结算
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
     var c=cellAt(e); // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
+    var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
     if(state.connect&&!(c&&c.anchor)){ state.connect=null; ctx.redraw(); }
     if(!c) return;
-    if(c.cmd){ if(e.detail>1) return; e.preventDefault(); ctx.doCmd(c.cmd); return; }
+    if(c.cmd){ if(dbl>1) return; e.preventDefault(); ctx.doCmd(c.cmd); return; }
     if(c.drag){
-      if(e.detail>1) return; e.preventDefault();
+      if(isTouch||dbl>1) return;   // 触摸端行重排交给操作栏，不与原生滚动抢手势
+      e.preventDefault();
       var di=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===c.drag) di=i; });
       if(di<0) return;
       state.drag={ laneId:c.drag, from:di, to:di, base:{ir:state.ir,src:code.value,sel:state.sel} };
       ctx.focusCanvas(); ctx.notify('拖动第 '+(di+1)+' 行：移到目标位置松手重排（Esc 取消）');
       return;
     }
-    if(c.ch!==undefined){ if(e.detail>1) return; e.preventDefault(); writeChar(c.ch); return; }
-    if(c.label){ if(e.detail>1) return; e.preventDefault(); openLabelEditor(c.lane,c.tick); return; }
+    if(c.ch!==undefined){ if(dbl>1) return; e.preventDefault(); writeChar(c.ch); return; }
+    if(c.label){ if(dbl>1) return; e.preventDefault(); openLabelEditor(c.lane,c.tick); return; }
     if(c.anchor){
       e.preventDefault();
-      if(e.detail>1){ state.connect=null; ctx.painting=null; ctx.redraw(); openNodeEditor(c.lane,c.tick,c.node); return; }
+      if(dbl>1){ openEditorFor(c); return; }
       handleAnchor(c); return;
     }
-    if(c.tool){ if(e.detail>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
-    if(c.cact){ if(e.detail>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
-    if(c.meta){ if(e.detail>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }
-    if(c.col!==undefined){ if(e.detail>1) return; e.preventDefault(); state.sel=c.col; ctx.redraw(); ctx.status(); return; }
+    if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
+    if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
+    if(c.meta){ if(dbl>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }
+    if(c.col!==undefined){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; ctx.redraw(); ctx.status(); return; }
     if(c.edgeIdx!==undefined){
-      if(e.detail>1){ e.preventDefault(); openEdgeEditor(c.edgeIdx); return; }
+      if(dbl>1){ e.preventDefault(); openEditorFor(c); return; }
       e.preventDefault(); state.selLane=null; ctx.redraw(); return;
     }
-    if(e.detail>1){
+    if(dbl>1){
       e.preventDefault();
-      var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx};
-      if(!(snap.nameLane||snap.edgeIdx!==undefined||(snap.lane!==undefined&&snap.tick!==undefined))) return;
-      ctx.painting=null; state.connect=null;
-      ctx.redraw(); openInlineFor(snap);
+      if(!editable(c)) return;
+      openEditorFor(c);
       return;
     }
     if(c.nameLane||c.rowLane){ state.selLane=c.nameLane||c.rowLane; ctx.redraw(); return; }
-    // 单击格子只选中，不写入；写入统一由 writeChar（键盘 / 上下文字符条 / 拖过）完成
-    e.preventDefault(); ctx.focusCanvas();
+    // 单击格子只选中，不写入；写入统一由 writeChar（键盘 / 字符条）完成
+    e.preventDefault();
+    if(isTouch){
+      state.selCell={lane:c.lane,tick:c.tick}; state.selLane=c.lane;
+      state.sel=null; ctx.painting=null; ctx.redraw();
+      startLong(c,e.clientX,e.clientY);
+      return;
+    }
+    ctx.focusCanvas();
     state.selCell={lane:c.lane,tick:c.tick}; state.selLane=c.lane;
     ctx.painting={ lane:c.lane, ticks:[], v:state.ch, base:{ir:state.ir,src:code.value,sel:state.sel}, moved:false };
     ctx.redraw();
-  });
+  }
   function showDropLine(to){
     var svg=svgRoot(); if(!svg) return;
     var ln=svg.querySelector('line.dropLine');
@@ -294,9 +357,14 @@ export function attachInteractions(ctx){
     var svg=svgRoot(); if(!svg||!state.connect) return;
     var p=svg.querySelector('path.connectPreview');
     if(!p){ p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('class','connectPreview'); svg.appendChild(p); }
-    var a=state.connect, ax=XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+7;
+    var a=state.connect, ax=XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+(TOUCH?11:7);
     p.setAttribute('d','M'+ax+','+ay+' C'+(ax+10)+','+(ay-26)+' '+(mx-10)+','+(my-26)+' '+mx+','+my);
   }
+
+  wrap.addEventListener('mousedown',function(e){
+    if(Date.now()<ignoreMouseUntil) return;   // 触摸后浏览器合成的 mousedown 不再重复执行
+    handleDown(e,false);
+  });
   wrap.addEventListener('mousemove',function(e){
     var svg=svgRoot();
     if(state.drag&&svg){
@@ -317,6 +385,7 @@ export function attachInteractions(ctx){
     ctx.commit({t:'setSlot',lanes:[c.lane],tick:c.tick,v:ctx.painting.v},'漫刷 @ t'+c.tick,true,true);
   });
   document.addEventListener('mouseup',function(){
+    if(Date.now()<ignoreMouseUntil) return;
     if(state.drag){
       var d=state.drag; state.drag=null;
       var svg=svgRoot(), ln=svg&&svg.querySelector('line.dropLine'); if(ln&&ln.parentNode) ln.parentNode.removeChild(ln);
@@ -341,6 +410,48 @@ export function attachInteractions(ctx){
       ctx.notify('漫刷完成：'+p.ticks.length+' 个槽合并为一次撤销');
     }
   });
+
+  // 非鼠标指针：统一转成不阻止默认行为的轻量事件对象，保留原生滚动
+  function pointerShim(e){
+    return { target:e.target, button:0, detail:0, clientX:e.clientX||0, clientY:e.clientY||0,
+             preventDefault:function(){} };
+  }
+  wrap.addEventListener('pointerdown',function(e){
+    if(e.pointerType==='mouse') return;
+    if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
+    if(e.isTrusted) ignoreMouseUntil=Date.now()+800;
+    handleDown(pointerShim(e),true);
+  });
+  wrap.addEventListener('pointermove',function(e){
+    if(e.pointerType==='mouse') return;
+    if(longPress&&(Math.abs((e.clientX||0)-longPress.x)>12||Math.abs((e.clientY||0)-longPress.y)>12)) clearLong();
+  });
+  function endPointer(e){ if(e.pointerType!=='mouse') clearLong(); }
+  document.addEventListener('pointerup',endPointer);
+  document.addEventListener('pointercancel',endPointer);
+
+  // 没有 Pointer Events 的老浏览器：用 touch 事件回退，命中点交给 elementFromPoint
+  if(typeof window!=='undefined'&&!window.PointerEvent){
+    function touchShim(e){
+      var t=e.touches&&e.touches[0]?e.touches[0]:(e.changedTouches&&e.changedTouches[0]);
+      if(!t) return null;
+      var target=document.elementFromPoint(t.clientX,t.clientY)||e.target;
+      return { target:target, button:0, detail:0, clientX:t.clientX, clientY:t.clientY,
+               preventDefault:function(){} };
+    }
+    wrap.addEventListener('touchstart',function(e){
+      var s=touchShim(e); if(!s) return;
+      if(e.isTrusted) ignoreMouseUntil=Date.now()+800;
+      handleDown(s,true);
+    },{passive:true});
+    wrap.addEventListener('touchmove',function(e){
+      var t=e.touches&&e.touches[0]; if(!t||!longPress) return;
+      if(Math.abs(t.clientX-longPress.x)>12||Math.abs(t.clientY-longPress.y)>12) clearLong();
+    },{passive:true});
+    document.addEventListener('touchend',clearLong,{passive:true});
+    document.addEventListener('touchcancel',clearLong,{passive:true});
+  }
+
   document.addEventListener('keydown',function(e){
     var t=e.target||{}, typing=/^(TEXTAREA|INPUT|SELECT)$/.test(t.tagName||'')||t.isContentEditable;
     if(e.key==='Escape'&&state.drag){
@@ -377,4 +488,18 @@ export function attachInteractions(ctx){
   ctx.findLane=findLane;
   ctx.closeInline=closeInline;
   ctx.openInline=openInline;
+  // 触摸操作栏复用的动作（同一命令、同一 EditOp，不新增第二套编辑路径）
+  ctx.openRowEditor=openRowEditor;
+  ctx.openCellCharEditor=openCellCharEditor;
+  ctx.openLabelEditor=openLabelEditor;
+  ctx.openNodeEditor=openNodeEditor;
+  ctx.openEdgeEditor=openEdgeEditor;
+  ctx.openInlineFor=openInlineFor;
+  ctx.openEditorFor=openEditorFor;
+  ctx.handleTool=handleTool;
+  ctx.handleColAct=handleColAct;
+  ctx.cancelModes=function(){
+    state.connect=null; state.selCell=null; state.sel=null; state.selLane=null;
+    state.drag=null; ctx.painting=null; ctx.closeInline(false); ctx.redraw();
+  };
 }

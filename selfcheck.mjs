@@ -116,6 +116,36 @@ function check() {
   }
   ok(refs.every((r) => !r.startsWith('../')), 'index.html 存在跳出站点根的相对路径');
   ok(fs.existsSync(path.join(ROOT, '.nojekyll')), '缺少 .nojekyll');
+
+  // 触摸版式的容器与入口：桌面隐藏、粗指针（或 ?touch=1）时由 main.js 装配
+  for (const id of ['app', 'tabbar', 'touchbar', 'tbpanel', 'toast'])
+    ok(html.includes('id="' + id + '"'), '触摸 UI 容器缺失：#' + id);
+  ok(html.includes('viewport-fit=cover'), '移动端安全区 viewport 缺失');
+  ok(read('src/main.js').includes('is-touch'), 'main.js 未装配触摸版式开关');
+
+  // src/ 下所有 ES module 的相对 import 必须指向真实文件，避免残留失效引用
+  function walk(dir) {
+    let out = [];
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const p = path.posix.join(dir, e.name);
+      if (e.isDirectory()) out = out.concat(walk(p));
+      else if (e.name.endsWith('.js')) out.push(p);
+    }
+    return out;
+  }
+  const modules = walk('src');
+  ok(modules.length >= 9, 'src/ 模块数异常：' + modules.length);
+  for (const file of modules) {
+    const src = read(file);
+    const re = /(?:from|import)\s*['"]([^'"]+)['"]/g;
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      const spec = m[1];
+      if (!spec.startsWith('.')) continue;   // 无第三方运行时依赖；裸说明符交给浏览器报错
+      const target = path.resolve(path.dirname(path.join(ROOT, file)), spec);
+      ok(fs.existsSync(target), file + ' 引用了不存在的模块：' + spec);
+    }
+  }
 }
 
 try {

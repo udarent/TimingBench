@@ -4,6 +4,7 @@ import { Core } from '../core/ir.js';
 import { EXAMPLE } from '../core/example.js';
 import { createShapes } from './shapes.js';
 import { attachInteractions } from './interactions.js';
+import { attachTouchUI } from './touch.js';
 
 export function createEditor(dom){
   var ctx={
@@ -114,6 +115,10 @@ export function createEditor(dom){
 
   createShapes(ctx);
   attachInteractions(ctx);
+  attachTouchUI(ctx, dom);
+  // 触摸操作栏跟着每次重绘同步按钮可用态；桌面无 hook，重绘开销不变
+  var paint=ctx.redraw;
+  ctx.redraw=function(){ paint(); if(ctx.afterRedraw) ctx.afterRedraw(); };
 
   ctx.wrap.tabIndex=0;
   code.addEventListener('scroll',function(){ gutter.scrollTop=code.scrollTop; });
