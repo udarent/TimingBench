@@ -1,0 +1,16 @@
+{
+  "name": "timingbench",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "WaveJSON ⇄ 可编辑时序图的双向编辑器（纯静态、零构建、零运行时依赖）",
+  "license": "MIT",
+  "author": "udarent <helloyuechen@163.com>",
+  "scripts": {
+    "start": "node serve.mjs",
+    "check": "node selfcheck.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

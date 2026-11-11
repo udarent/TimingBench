@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TimingBench</title>
+<meta name="author" content="udarent">
+<meta name="email" content="helloyuechen@163.com">
+<meta name="version" content="0.3.0">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+<div class="app">
+  <div class="pane src">
+    <div class="gutter" id="gutter" aria-hidden="true"></div>
+    <textarea id="code" spellcheck="false" wrap="off" aria-label="WaveJSON 源码"></textarea>
+    <div class="errdot" id="errdot" hidden></div>
+  </div>
+  <div class="pane diagram">
+    <div class="svgwrap" id="svgwrap" aria-label="可编辑时序图画布"></div>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

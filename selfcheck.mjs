@@ -1,0 +1,127 @@
+// 提交前保险：一个复杂用例覆盖双向编辑闭环，并校验静态站点入口可用。
+// 零第三方依赖；npm run check。不是完整验收套件，失败退出码 1。
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Core } from './src/core/ir.js';
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+let passed = 0;
+
+function ok(cond, msg) {
+  if (!cond) throw new Error(msg);
+  passed += 1;
+}
+
+// 单一复杂输入：注释 / 单引号 / group / spacer / gap / data / node / edge / phase / period
+const COMPLEX = `{ signal: [
+  // 自检用例：保留注释与引号风格
+  { name: 'clk', wave: 'p.....|...', period: 1 },
+  { name: 'dat', wave: 'x.345x|=.x', data: ['head', 'body', 'tail', 'data'] },
+  { name: 'req', wave: '0.1..0|1.0', node: '..a...' },
+  {},
+  ['Master',
+    { name: 'wr', wave: '01.0....', node: '.b......' },
+    { name: 'cmd', wave: 'x.=.=x..', data: 'RAS NOP CAS', phase: 0.5 }
+  ],
+  { name: 'ack', wave: '1.....|01.' }
+], edge: ['a~>b t1'], config: { hscale: 1 } }
+`;
+
+// 图形编辑完整链路：applyOp → patchSource → 重新解析 → I2 等价
+function roundTrip(ir, ops) {
+  let next = ir;
+  for (const op of ops) next = Core.applyOp(next, op);
+  const res = Core.patchSource(ir, next);
+  const parsed = Core.buildIR(res.src);
+  ok(Core.canon(parsed) === Core.canon(next), 'I2 不成立：' + ops.map((o) => o.t).join('+'));
+  return { res, next, parsed };
+}
+
+function check() {
+  const ir = Core.buildIR(COMPLEX);
+  const lane = (n) => ir.lanes.find((l) => l.name === n);
+  const clk = lane('clk'), dat = lane('dat'), req = lane('req'), wr = lane('wr');
+  ok(clk && dat && req && wr && lane('cmd'), '复杂用例解析缺行');
+  ok(ir.ticks === 10, '周期数 = ' + ir.ticks);
+  ok(ir.lanes.some((l) => l.kind === 'spacer'), '缺 spacer');
+  ok(ir.lanes.some((l) => l.groupPath.length > 0), '缺 group');
+  ok(ir.edges.length === 1, 'edge 数 = ' + ir.edges.length);
+  ok(clk.slots[6] && clk.slots[6].gap === true, 'gap 未标记相位线');
+  ok(JSON.stringify(Core.laneLabels(dat)) === JSON.stringify(['head', 'body', 'tail', 'data']), 'data 标签未按序消耗');
+  ok(Core.canon(Core.buildIR(Core.emitIR(ir))) === Core.canon(ir), 'I1 不成立');
+
+  // 16 类 EditOp 逐类回写，均以同一个复杂文档为起点
+  const ops = [
+    { t: 'setSlot', lanes: [clk.id], tick: 0, v: '0' },
+    { t: 'setLabel', lane: dat.id, tick: 2, v: 'NEW' },
+    { t: 'setNode', lane: clk.id, tick: 2, v: 'q' },
+    { t: 'rename', lane: clk.id, v: 'renamed' },
+    { t: 'setPhase', lane: clk.id, v: 0.5 },
+    { t: 'setPeriod', lane: clk.id, v: 2 },
+    { t: 'toggleGap', tick: 2 },
+    { t: 'insertTick', tick: 2 },
+    { t: 'deleteTick', tick: 2 },
+    { t: 'setEdges', v: ['a~>b t1', 'c~>d t2'] },
+    { t: 'setWave', lane: clk.id, v: '01.xz....' },
+    { t: 'setLabels', lane: dat.id, v: 'A B' },
+    { t: 'setNodeStr', lane: clk.id, v: '.a...' },
+    { t: 'moveLane', lane: clk.id, v: 'down' },
+    { t: 'addLane', id: 'fresh', name: 'fresh', at: 1, kind: 'signal' },
+    { t: 'deleteLane', lane: clk.id }
+  ];
+  ok(ops.length === 16, 'EditOp 覆盖数 = ' + ops.length);
+  for (const op of ops) roundTrip(Core.buildIR(COMPLEX), [op]);
+
+  // 字面量修改走最小补丁，保住注释 / 键序 / 引号风格
+  const lit = roundTrip(Core.buildIR(COMPLEX), [
+    { t: 'setSlot', lanes: [clk.id], tick: 0, v: '1' },
+    { t: 'setLabel', lane: dat.id, tick: 2, v: 'BODY' },
+    { t: 'rename', lane: clk.id, v: 'clk2' },
+    { t: 'setPhase', lane: lane('cmd').id, v: 0.25 }
+  ]);
+  ok(lit.res.patched === true, '字面量修改未走最小补丁');
+  ok(lit.res.src.includes('// 自检用例'), '注释丢失');
+  ok(lit.res.src.includes("name: 'dat'"), '单引号 / 键名被改写');
+  ok(lit.res.src.includes('BODY') && lit.res.src.includes('clk2'), '标签 / 名称未回写源码');
+
+  // 两点连线：node + edge 一次提交，结构变化显式回退全量 emit
+  const link = roundTrip(Core.buildIR(COMPLEX), [
+    { t: 'setNode', lane: req.id, tick: 1, v: 'z' },
+    { t: 'setNode', lane: wr.id, tick: 2, v: 'y' },
+    { t: 'setEdges', v: ['z~>y t1'] }
+  ]);
+  ok(link.res.patched === false, '结构变化应回退全量 emit');
+  ok(link.res.src.includes('z~>y'), 'edge 未回写源码');
+
+  // 负例与边界
+  ok(Core.canon(Core.buildIR(COMPLEX.replace('// 自检用例：保留注释与引号风格', '// 注释改写'))) === Core.canon(ir), '注释被算进语义');
+  ok(Core.canon(Core.buildIR(COMPLEX.replace("name: 'clk'", "name: 'CLK2'"))) !== Core.canon(ir), '信号名变化未被感知');
+  let threw = false;
+  try { Core.buildIR('{ signal: ['); } catch { threw = true; }
+  ok(threw, '非法源码未抛错');
+  ok(Core.ALL.indexOf('Q') < 0, '非法字符进入字表');
+
+  // 版本一致 + 静态站点入口自洽（GitHub Pages 以仓库根为站点根）
+  const version = JSON.parse(read('package.json')).version;
+  ok(read('VERSION').trim() === version, 'VERSION 与 package.json 不一致');
+  const html = read('index.html');
+  ok(html.includes('content="' + version + '"'), 'index.html 版本不一致');
+  const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+  ok(refs.length >= 2, 'index.html 未引用样式与入口脚本');
+  for (const ref of refs) {
+    if (/^(https?:|data:|#)/.test(ref)) continue;
+    ok(fs.existsSync(path.join(ROOT, ref)), 'index.html 引用的资源缺失：' + ref);
+  }
+  ok(refs.every((r) => !r.startsWith('../')), 'index.html 存在跳出站点根的相对路径');
+  ok(fs.existsSync(path.join(ROOT, '.nojekyll')), '缺少 .nojekyll');
+}
+
+try {
+  check();
+  console.log('TimingBench selfcheck OK · ' + passed + '/' + passed + ' 断言通过');
+} catch (e) {
+  console.error('TimingBench selfcheck FAILED · ' + passed + ' 断言通过后：' + e.message);
+  process.exit(1);
+}

@@ -1,0 +1,17 @@
+# 会话级工具目录：自动化缓存，含本机路径与偏好，非交付资料
+# 临时验证脚本、输出、截图（命名约定：下划线前缀）
+.playwright-cli/
+_*.js
+_*.mjs
+_*.py
+_*.txt
+_*.html
+_*.png
+_*.jpg
+_*.log
+
+# 编辑器 / 系统噪声
+node_modules/
+.DS_Store
+Thumbs.db
+*.swp
