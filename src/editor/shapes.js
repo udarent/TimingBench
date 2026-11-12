@@ -22,12 +22,14 @@ export function createShapes(ctx){
   }
   function hudSVG(W){
     var o=[], x=PAD;
-    o.push('<rect x="0" y="0" width="'+W+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
+    var bg='<rect x="0" y="0" width="'+W+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>';
     function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
     cmd('undo','↶','撤销（Ctrl+Z）',!state.undo.length);
     cmd('redo','↷','重做（Ctrl+Y）',!state.redo.length);
     cmd('link','◇',state.linkMode?'连线中：点第二个波形格完成；键盘 K 退出、方向键移光标、Enter 选端点':'连线：点两个波形格，或按 K 后用方向键 + Enter 选端点',false,state.linkMode);
-    return o.join('');
+    // 触摸端把三个图标钉在可视区左上角：波形横向滚动时按钮不跟着跑出屏幕。
+    // 桌面仍返回原来的「背景 + 按钮」字符串，逐字节不变。
+    return bg+(T?'<g class="hudBar" transform="translate('+wrap.scrollLeft+',0)">'+o.join('')+'</g>':o.join(''));
   }
 
 
@@ -111,18 +113,21 @@ export function createShapes(ctx){
   }
 
   // 底部上下文条：普通状态选中格才出现字符条；连线模式整条留白（两种操作互斥，
-  // 也不再画任何指示圆点）。触摸端字符条按可用宽度换行成多行大格子；桌面仍是单行。
-  function actionBar(y,W,perRow){
+  // 也不再画任何指示圆点）。桌面仍是单行；触摸端从画布左缘起排、按「可视宽度」
+  // 换行 —— 整张 SVG 会随波形周期数变宽并可横向滚动，但操作按钮必须留在屏幕内。
+  function actionBar(y,W,perRow,originX){
     var o=['<line x1="'+PAD+'" y1="'+y+'" x2="'+(W-PAD)+'" y2="'+y+'" stroke="var(--line)" stroke-width="0.5"/>'];
     if(!state.linkMode&&state.selCell){
+      if(T) o.push('<g class="charChips" transform="translate('+wrap.scrollLeft+',0)">');
       Core.ALL.forEach(function(v,i){
         var on=state.ch===v;
-        var bx=XS+(i%perRow)*CHIP_STEP, by=y+6+Math.floor(i/perRow)*(CHIP_H+6), cy=by+CHIP_H/2;
+        var bx=originX+(i%perRow)*CHIP_STEP, by=y+6+Math.floor(i/perRow)*(CHIP_H+6), cy=by+CHIP_H/2;
         o.push('<g class="charChip'+(on?' on':'')+'" data-ch="'+esc(v)+'"><title>写入 '+esc(v)+' · '+esc(chipDesc(v))+' · 背景图案即写入后该格的波形</title>'+
           '<rect x="'+bx+'" y="'+by+'" width="'+CHIP_W+'" height="'+CHIP_H+'" rx="5" fill="var(--panel)" stroke="var(--line2)" stroke-width="0.7"/>'+
           '<g class="chipWave" transform="translate('+bx+','+by+')">'+chipGlyph(v)+'</g>'+
           '<text x="'+(bx+CHIP_W/2)+'" y="'+cy+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?15:11)+'" font-family="var(--mono)" fill="'+(on?'var(--accent)':'var(--ink)')+'">'+esc(v)+'</text></g>');
       });
+      if(T) o.push('</g>');
     }
     return o.join('');
   }
@@ -134,7 +139,11 @@ export function createShapes(ctx){
     var N=ir.ticks, ACT_X=XS+N*CELL;
     var W=Math.max(ACT_X+ACT_W+PAD, T?0:CHIPS_W, 560), bottom=TOP+ir.lanes.length*ROW_H;
     var actY=bottom+4;
-    var perRow=T?Math.max(1,Math.floor((W-XS-PAD)/CHIP_STEP)):Core.ALL.length;
+    // 桌面沿用整张画布宽度与 XS 起点；触摸端改用 wrap 的可视宽度并从左缘排起，
+    // 保证 320px 手机上一整排字符按钮都在横向显示区内，不必横向滚动去找。
+    var viewW=T?Math.max(240, wrap.clientWidth||window.innerWidth||360):W;
+    var perRow=T?Math.max(1,Math.floor((viewW-2*PAD)/CHIP_STEP)):Core.ALL.length;
+    var barOrigin=T?PAD:XS;
     var rows=Math.ceil(Core.ALL.length/perRow);
     var barH=T?Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H)):ACT_H;
     var H=actY+barH+20, c, x;
@@ -197,7 +206,7 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     o.push(edgeArcs(ir));
-    o.push(actionBar(actY,W,perRow));
+    o.push(actionBar(actY,W,perRow,barOrigin));
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
       var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });

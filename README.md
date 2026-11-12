@@ -66,7 +66,7 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 | Cancel current mode | `Esc` | `✕ Cancel` in the bottom bar |
 | See source / diagram | Both panes visible at once | Switch with the "Diagram / Source" tabs |
 
-Touch hit targets follow the 44 CSS px guideline (cells 46×50, character chips 44×44, action-bar buttons ≥48). Hover-only mini controls are removed. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
+Touch hit targets follow the 44 CSS px guideline (cells 46×50, character chips 44×44, action-bar buttons ≥44). Hover-only mini controls are removed. The bottom bar shares the screen width evenly, and the character chips wrap to the **visible** width and stay pinned to the left edge: every action button stays on screen even at 320 px, and stays there while you scroll the waveform sideways. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
 
 No mouse at all? Every row / cycle / arc / structure action in this table has a key — see the shortcuts below. The canvas shows a focus ring only when reached by keyboard.
 

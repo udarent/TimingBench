@@ -5,6 +5,7 @@ import { EXAMPLE } from '../core/example.js';
 import { createShapes } from './shapes.js';
 import { attachInteractions } from './interactions.js';
 import { attachTouchUI } from './touch.js';
+import { TOUCH } from './mode.js';
 
 export function createEditor(dom){
   var ctx={
@@ -179,6 +180,20 @@ export function createEditor(dom){
 
   ctx.wrap.tabIndex=0;
   ctx.wrap.addEventListener('focus',function(){ if(!state.linkMode) ensureSelCell(); });
+  // 窄屏旋屏 / 窗口缩放后，字符条按新的可视宽度重新排布；
+  // 就地编辑未结算时不重绘，避免把正在输入的内容提前提交。
+  if(TOUCH){
+    var rzTimer=null;
+    window.addEventListener('resize',function(){
+      clearTimeout(rzTimer);
+      rzTimer=setTimeout(function(){ if(!ctx.inlineCtx) ctx.redraw(); },120);
+    });
+    // 波形横向滚动时，HUD 与字符条留在可视区左侧（只移动操作按钮，波形照常滚动）
+    ctx.wrap.addEventListener('scroll',function(){
+      var sx=ctx.wrap.scrollLeft, gs=ctx.wrap.querySelectorAll('g.hudBar,g.charChips');
+      for(var i=0;i<gs.length;i++) gs[i].setAttribute('transform','translate('+sx+',0)');
+    });
+  }
   code.addEventListener('scroll',function(){ gutter.scrollTop=code.scrollTop; });
   code.addEventListener('input',function(){
     renderGutter();

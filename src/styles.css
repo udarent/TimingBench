@@ -99,9 +99,11 @@ svg{display:block;font-family:var(--sans)}
 /* hover 才显现的细小控件在触摸端全部撤下，改由操作栏承担 */
 .is-touch .rowCtl,.is-touch .rowHint,.is-touch .rowDrag,.is-touch .colAct,.is-touch .cellLabel{display:none}
 .is-touch .cellSel{stroke-width:2.4}
-.is-touch .touchbar{display:flex;flex:0 0 60px;align-items:center;gap:5px;padding:5px 6px;
-  background:var(--panel);border-top:1px solid var(--line);overflow-x:auto;user-select:none;touch-action:manipulation}
-.is-touch .touchbar button{flex:0 0 auto;min-width:58px;min-height:48px;padding:4px 8px;
+/* 窄屏：6 个按钮均分可用宽度，最小仍是 44px 命中区；320px 也无需横向滚动。
+   宽屏用 max-width 收住按钮宽度并整组居中，不把操作栏拉成一条长带。 */
+.is-touch .touchbar{display:flex;flex:0 0 60px;align-items:center;justify-content:center;gap:5px;padding:5px 6px;
+  background:var(--panel);border-top:1px solid var(--line);overflow:hidden;user-select:none;touch-action:manipulation}
+.is-touch .touchbar button{flex:1 1 44px;min-width:44px;max-width:96px;min-height:48px;padding:4px 2px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:11px/1.2 var(--sans);touch-action:manipulation}
