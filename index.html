@@ -47,6 +47,14 @@
   figure img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
   figcaption{margin-top:10px;font-size:13px;color:var(--muted)}
 
+  /* The embed example is live: embed.js replaces .livecard with an iframe that brings its own frame */
+  .live{margin:0 0 22px}
+  .livecard{border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}
+  .livecard iframe{display:block;width:100%;border:0}
+  .cap{margin:10px 0 0;font-size:13px;line-height:1.7;color:var(--muted)}
+  .cap b{color:var(--ink);font-weight:600}
+  .cap code{font-family:var(--mono);font-size:12.5px}
+
   h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
      color:var(--muted);margin:0 0 18px}
   ul.feat{list-style:none;padding:0;margin:0 0 56px;
@@ -123,10 +131,18 @@
   </ul>
 
   <h2 id="embed">Embed it in your page</h2>
-  <figure>
-    <img src="assets/embed-card.gif" alt="Embedded card: a read-only waveform with a single pencil button in the corner; clicking the waveform reveals the toolbar and character chips in place" width="760" height="291">
-    <figcaption>The embedded card: read-only by default, with a pencil as the only chrome. Click the waveform and the editor appears in place — no navigation, no modal.</figcaption>
-  </figure>
+  <div class="live">
+    <div class="livecard" data-timingbench data-title="TimingBench live demo" data-height="300"
+         data-wavejson='{ signal: [ { name: "clk", wave: "p..........." }, { name: "dat", wave: "x.3.4.5.x...", data: ["head","body","tail"] }, { name: "req", wave: "0.1......0..", node: "..a........." } ] }'></div>
+    <p class="cap">
+      <b>Live, not a recording.</b> This is the real embed running on this page — read-only until
+      you click it. Click a cell, pick a character, double-click to type in place, or press
+      <code>Esc</code> to go back to viewing.
+    </p>
+    <noscript>
+      <p class="cap">JavaScript is off, so the live card can't run here — <a href="editor.html">open the editor</a> instead.</p>
+    </noscript>
+  </div>
   <pre>&lt;script src="https://udarent.github.io/TimingBench/embed.js"&gt;&lt;/script&gt;
 &lt;div data-timingbench data-height="240"
      data-wavejson='{ signal: [ { name: "clk", wave: "p....." } ] }'&gt;&lt;/div&gt;</pre>
@@ -150,5 +166,9 @@
   </footer>
 
 </div>
+<!-- The only script on this page: the embed loader. It swaps .livecard for an iframe; everything
+     else here is plain static HTML. The card lives in its own document, so this page's CSS can't
+     leak in and the card's styles can't leak out. -->
+<script src="embed.js"></script>
 </body>
 </html>

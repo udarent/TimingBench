@@ -181,12 +181,21 @@ function check() {
   ok(refs.every((r) => !r.startsWith('../')), 'editor.html 存在跳出站点根的相对路径');
   ok(fs.existsSync(path.join(ROOT, '.nojekyll')), '缺少 .nojekyll');
 
-  // 首页是介绍页：极简、自包含（不引外部 CSS / JS）、必须有进编辑器的入口与演示动图
+  // 首页是介绍页：极简、自包含（不引外部 CSS），必须有进编辑器的入口与演示动图
   const lrefs = [...landing.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
   ok(lrefs.includes('editor.html'), '首页缺少进入编辑器的入口 editor.html');
   ok(lrefs.some((r) => r === 'assets/bidirectional-demo.gif'), '首页未引用演示动图');
-  ok(!/<script/.test(landing), '首页不应加载脚本（极简介绍页保持纯静态自包含）');
   ok(!/<link[^>]+stylesheet/.test(landing), '首页不应引外部样式表（自带内联样式）');
+  // 唯一允许的脚本是嵌入加载器：首页的「嵌入示例」是活的卡片，不是动图。
+  // 除此之外仍须保持零脚本，且脚本路径只能是同目录的本地文件（不能外链 CDN）。
+  const lscripts = [...landing.matchAll(/<script[^>]*>/g)].map((m) => m[0]);
+  ok(lscripts.length === 1 && /src="embed\.js"/.test(lscripts[0]),
+    '首页应只加载本地 embed.js 这一个脚本（实际 ' + lscripts.length + ' 个）');
+  ok(!/<script[^>]*>(?!\s*<\/script>)/.test(landing.replace(/<script src="embed\.js"[^>]*><\/script>/g, '')),
+    '首页出现了内联脚本（只允许外部 embed.js）');
+  ok(/data-timingbench/.test(landing) && /data-wavejson=/.test(landing) && /data-height=/.test(landing),
+    '首页缺少可直接编辑的嵌入示例（data-timingbench / data-wavejson / data-height）');
+  ok(/<noscript>/.test(landing), '首页缺少 noscript 兜底（脚本被禁用时给出编辑器入口）');
   ok(/prefers-color-scheme/.test(landing), '首页未跟随系统明暗主题');
   // 首页面向国际受众，用英文：`lang="en"`，且全文不得出现中日韩字符
   ok(/<html[^>]+lang="en"/.test(landing), '首页未声明 lang="en"');
