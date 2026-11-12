@@ -20,14 +20,18 @@ export function createShapes(ctx){
       '<rect x="'+x+'" y="'+CMD_Y+'" width="'+bw+'" height="'+CMD_H+'" rx="'+br+'" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line)')+'" stroke-width="0.7" opacity="'+(dim?'.4':'1')+'"/>'+
       '<text x="'+(x+bw/2)+'" y="'+(CMD_Y+CMD_H/2)+'" text-anchor="middle" dominant-baseline="central" font-size="'+fs+'" fill="'+(on?'var(--accent)':'var(--ink)')+'">'+esc(txt)+'</text></g>';
   }
-  function hudSVG(W){
-    var o=[], x=PAD;
-    o.push('<rect x="0" y="0" width="'+W+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
+  // HUD 是卡片顶栏：坐标相对视口，随横向 / 纵向滚动反向位移，始终钉在可视区左上角。
+  // 背景宽度取可视宽度而不是整张画布，避免顶栏拉成一条超出卡片的长带。
+  function hudSVG(viewW){
+    var sy=wrap.scrollTop;
+    var o=['<g class="hudBar" transform="translate('+wrap.scrollLeft+','+sy+')">'];
+    o.push('<rect x="0" y="0" width="'+viewW+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
+    var x=PAD;
     function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
     cmd('undo','↶','撤销（Ctrl+Z）',!state.undo.length);
     cmd('redo','↷','重做（Ctrl+Y）',!state.redo.length);
     cmd('link','◇',state.linkMode?'连线中：点第二个波形格完成；键盘 K 退出、方向键移光标、Enter 选端点':'连线：点两个波形格，或按 K 后用方向键 + Enter 选端点',false,state.linkMode);
-    // HUD 是波形画布内的图元：坐标固定在 [PAD, W]，随波形一起滚动 / 缩放。
+    o.push('</g>');
     return o.join('');
   }
 
@@ -112,21 +116,28 @@ export function createShapes(ctx){
   }
 
   // 底部上下文条：普通状态选中格才出现字符条；连线模式整条留白（两种操作互斥，
-  // 也不再画任何指示圆点）。桌面单行；触摸端按波形画布宽度换行、从 XS 起排。
-  // 全部按钮落在波形横向显示区域 [XS, W-PAD] 内，是波形图元的一部分 ——
-  // 波形横向滚动 / 缩放时按钮跟着走，不单独钉在屏幕可视区。
-  function actionBar(y,W,perRow){
-    var o=['<line x1="'+PAD+'" y1="'+y+'" x2="'+(W-PAD)+'" y2="'+y+'" stroke="var(--line)" stroke-width="0.5"/>'];
+  // 也不再画任何指示圆点）。
+  // 卡片口径：字符条按**可视宽度**换行（只扩纵向、不超横向），整组钉在可视区底部 ——
+  // 内容矮于视口时仍落在画布底部；内容高于视口时向上吸附，随纵向滚动保持可见。
+  function actionBar(y,W,perRow,viewW,barH,barLeft){
+    var sy=wrap.scrollTop, oy=Math.min(0, sy+wrap.clientHeight-barH-8-y);
+    var o=['<g class="charChips" transform="translate('+wrap.scrollLeft+','+oy+')">'];
+    if(!state.linkMode&&state.selCell){
+      // 底板只在字符条真正出现时铺，避免无选中时挡住底部波形
+      o.push('<rect x="0" y="'+y+'" width="'+viewW+'" height="'+barH+'" fill="var(--bg)"/>');
+    }
+    o.push('<line x1="'+PAD+'" y1="'+y+'" x2="'+(viewW-PAD)+'" y2="'+y+'" stroke="var(--line)" stroke-width="0.5"/>');
     if(!state.linkMode&&state.selCell){
       Core.ALL.forEach(function(v,i){
         var on=state.ch===v;
-        var bx=XS+(i%perRow)*CHIP_STEP, by=y+6+Math.floor(i/perRow)*(CHIP_H+6), cy=by+CHIP_H/2;
+        var bx=barLeft+(i%perRow)*CHIP_STEP, by=y+6+Math.floor(i/perRow)*(CHIP_H+6), cy=by+CHIP_H/2;
         o.push('<g class="charChip'+(on?' on':'')+'" data-ch="'+esc(v)+'"><title>写入 '+esc(v)+' · '+esc(chipDesc(v))+' · 背景图案即写入后该格的波形</title>'+
           '<rect x="'+bx+'" y="'+by+'" width="'+CHIP_W+'" height="'+CHIP_H+'" rx="5" fill="var(--panel)" stroke="var(--line2)" stroke-width="0.7"/>'+
           '<g class="chipWave" transform="translate('+bx+','+by+')">'+chipGlyph(v)+'</g>'+
           '<text x="'+(bx+CHIP_W/2)+'" y="'+cy+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?15:11)+'" font-family="var(--mono)" fill="'+(on?'var(--accent)':'var(--ink)')+'">'+esc(v)+'</text></g>');
       });
     }
+    o.push('</g>');
     return o.join('');
   }
 
@@ -135,20 +146,26 @@ export function createShapes(ctx){
     if(ctx.inlineCtx) ctx.closeInline(true);
     var ir=state.ir; if(!ir) return;
     var N=ir.ticks, ACT_X=XS+N*CELL;
-    var W=Math.max(ACT_X+ACT_W+PAD, T?0:CHIPS_W, 560), bottom=TOP+ir.lanes.length*ROW_H;
+    // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
+    // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
+    var viewW=Math.max(240, Math.round(wrap.clientWidth||0)||360);
+    var viewH=Math.max(0, Math.round(wrap.clientHeight||0));
+    // 波形层仍按内容撑宽并允许横向滚动；但至少铺满卡片，便于钉住的顶栏 / 底栏有落脚宽度。
+    var W=Math.max(ACT_X+ACT_W+PAD, viewW, 560), bottom=TOP+ir.lanes.length*ROW_H;
     var actY=bottom+4;
-    // 字符条的横向边界就是波形画布 [XS, W-PAD]：perRow 只由 W 决定，与屏幕宽度无关。
-    // 因 CHIP_W < CHIP_STEP，最右按钮右缘恒 ≤ W-PAD，不会越出波形横向显示区域。
-    // 波形本身可以宽于屏幕，靠原生横向滚动 / 双指缩放查看。
-    var barRight=W-PAD;
-    var perRow=T?Math.max(1,Math.floor((barRight-XS)/CHIP_STEP)):Core.ALL.length;
+    // 可视宽度够放下整排时，仍从波形起点 XS 起排（与格子对齐，保持原版式观感）；
+    // 放不下才退到卡片左缘用满整行宽度，靠多行纵向堆叠消化。
+    var barLeft=(XS+Core.ALL.length*CHIP_STEP+PAD<=viewW)?XS:PAD;
+    var perRow=Math.max(1, Math.min(Core.ALL.length, Math.floor((viewW-barLeft-PAD)/CHIP_STEP)));
     var rows=Math.ceil(Core.ALL.length/perRow);
-    var barH=T?Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H)):ACT_H;
-    var H=actY+barH+20, c, x;
+    var barH=Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H));
+    // 内容高于视口时画布抬高到至少视口高度，让钉住的底栏有可见滚动终点。
+    var H=Math.max(actY+barH+20, viewH), c, x;
+    state.barY=actY; state.barH=barH; state.viewW=viewW;
     state.W=W; state.H=H;
     var o=['<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.linkMode?'linkMode':'')+'" role="img"><title>可编辑时序图</title>'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
-    o.push(hudSVG(W));
+    o.push(hudSVG(viewW));
     for(c=0;c<=N;c++){ x=XS+c*CELL; o.push('<line x1="'+x+'" y1="'+(TOP-10)+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>'); }
     for(c=0;c<=N;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
@@ -204,7 +221,7 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     o.push(edgeArcs(ir));
-    o.push(actionBar(actY,W,perRow));
+    o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
       var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });
@@ -218,6 +235,19 @@ export function createShapes(ctx){
     wrap.innerHTML=o.join('');
     ctx.renderGutter();
   }
+  // 只改位移、不重绘：波形滚动时把操作层重新钉回可视区。
+  function syncPinned(){
+    var sx=wrap.scrollLeft, sy=wrap.scrollTop;
+    var hud=wrap.querySelector('g.hudBar');
+    if(hud) hud.setAttribute('transform','translate('+sx+','+sy+')');
+    var chips=wrap.querySelector('g.charChips');
+    if(chips&&state.barY!=null){
+      var oy=Math.min(0, sy+wrap.clientHeight-state.barH-8-state.barY);
+      chips.setAttribute('transform','translate('+sx+','+oy+')');
+    }
+  }
+
   ctx.redraw=redraw;
-  return { redraw:redraw };
+  ctx.syncPinned=syncPinned;
+  return { redraw:redraw, syncPinned:syncPinned };
 }

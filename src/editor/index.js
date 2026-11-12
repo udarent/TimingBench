@@ -179,8 +179,14 @@ export function createEditor(dom){
 
   ctx.wrap.tabIndex=0;
   ctx.wrap.addEventListener('focus',function(){ if(!state.linkMode) ensureSelCell(); });
-  // 画布内按钮属于波形坐标系：不监听窗口尺寸 / 滚动，波形缩放与移动只影响可视区，
-  // 按钮与波形的相对位置始终不变，也不额外触发重绘。
+  // 卡片口径：波形层可横向滚动 / 双指缩放，操作层（HUD、字符条）钉在可视区。
+  // 滚动只改这两个 <g> 的位移，不重绘；旋屏 / 窗口缩放才需要重排（字符条按可视宽度换行）。
+  var rzTimer=null;
+  window.addEventListener('resize',function(){
+    clearTimeout(rzTimer);
+    rzTimer=setTimeout(function(){ if(!ctx.inlineCtx) ctx.redraw(); },120);
+  });
+  ctx.wrap.addEventListener('scroll',function(){ if(ctx.syncPinned) ctx.syncPinned(); });
   code.addEventListener('scroll',function(){ gutter.scrollTop=code.scrollTop; });
   code.addEventListener('input',function(){
     renderGutter();

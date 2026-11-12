@@ -28,11 +28,15 @@ export function attachTouchUI(ctx, dom) {
   };
 
   function setView(v) {
+    var prev = app && app.getAttribute('data-view');
     if (app) app.setAttribute('data-view', v);
     if (!tabbar) return;
     var bs = tabbar.querySelectorAll('button[data-view]');
     for (var i = 0; i < bs.length; i++)
       bs[i].setAttribute('aria-selected', String(bs[i].getAttribute('data-view') === v));
+    // 切回时序图时画布才重新可见；此前 clientWidth 为 0，字符条按兜底宽度排过，
+    // 这里补一次重绘让操作层按真实卡片宽度重新排布（就地输入未结算时跳过）。
+    if (v === 'diagram' && prev !== 'diagram' && ctx.redraw && !ctx.inlineCtx) ctx.redraw();
   }
   if (tabbar) tabbar.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-view]') : null;
