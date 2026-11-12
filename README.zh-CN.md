@@ -8,6 +8,43 @@
 
 两侧只有一份语义：图形回写优先打最小补丁（注释、缩进、键序、引号原样保留），生成结果若与图形不等价就回滚，不会静默改坏你的源码。
 
+## 嵌入到你的页面
+
+两行，不需要构建、不需要在项目里装依赖：
+
+```html
+<script src="https://udarent.github.io/TimingBench/embed.js"></script>
+<div data-timingbench data-height="240"
+     data-wavejson='{ signal: [ { name: "clk", wave: "p....." }, { name: "dat", wave: "x.345x." } ] }'></div>
+```
+
+卡片**默认只读**——读者只看到波形；点一下就在原地变成可编辑，按 `Esc`（或点右下角提示条）回到查看。它跑在自己的 iframe 里，宿主页面的 CSS 进不来、它的样式也污染不到宿主。
+
+想用代码控制？
+
+```js
+const api = TimingBenchEmbed.mount(el, { wavejson, mode: 'view' });  // 或 'edit'
+api.setSource(新源码);
+api.setMode('edit');
+
+el.addEventListener('timingbench:change', e => {
+  console.log('用户改了图，最新源码：', e.detail.wavejson);
+});
+```
+
+| 行为 | 说明 |
+|---|---|
+| 默认状态 | 只读（只有波形，没有按钮） |
+| 进入编辑 | 点一下波形，顺手选中被点的格子 |
+| 退出编辑 | `Esc`，或点右下角提示条 |
+| 高度自适应 | 卡片通过 `postMessage` 上报真实高度，`embed.js` 自动应用 |
+| 宿主事件 | `timingbench:ready` · `timingbench:change` · `timingbench:mode` |
+| 宿主命令 | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |
+| 参数 | `?embed=1`（卡片模式）· `&mode=edit`（一进来就可编辑） |
+| 强制只读 | 占位元素上加 `data-mode="view"` |
+
+可直接跑的示例：[`embed-demo.html`](embed-demo.html)（`npm start` 后打开）。
+
 ## 先看一个例子
 
 ![双向编辑演示：改源码重绘波形，点画布回写源码](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif)

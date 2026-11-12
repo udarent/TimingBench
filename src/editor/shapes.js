@@ -158,14 +158,18 @@ export function createShapes(ctx){
     var barLeft=(XS+Core.ALL.length*CHIP_STEP+PAD<=viewW)?XS:PAD;
     var perRow=Math.max(1, Math.min(Core.ALL.length, Math.floor((viewW-barLeft-PAD)/CHIP_STEP)));
     var rows=Math.ceil(Core.ALL.length/perRow);
-    var barH=Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H));
-    // 内容高于视口时画布抬高到至少视口高度，让钉住的底栏有可见滚动终点。
-    var H=Math.max(actY+barH+20, viewH), c, x;
-    state.barY=actY; state.barH=barH; state.viewW=viewW;
+    // 只读态不画字符条，也不需要为它预留高度（否则卡片底部会留一条空白）
+    var barH=state.readonly?0:Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H));
+    // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
+    // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
+    var contentH=actY+barH+20;
+    var H=state.embedCard?contentH:Math.max(contentH, viewH), c, x;
+    state.barY=actY; state.barH=barH; state.viewW=viewW; state.contentH=contentH;
     state.W=W; state.H=H;
     var o=['<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.linkMode?'linkMode':'')+'" role="img"><title>可编辑时序图</title>'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
-    o.push(hudSVG(viewW));
+    // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
+    if(!state.readonly) o.push(hudSVG(viewW));
     for(c=0;c<=N;c++){ x=XS+c*CELL; o.push('<line x1="'+x+'" y1="'+(TOP-10)+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>'); }
     for(c=0;c<=N;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
@@ -221,7 +225,7 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     o.push(edgeArcs(ir));
-    o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
+    if(!state.readonly) o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
       var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });

@@ -212,6 +212,24 @@ function check() {
   ok(!/waveGlyph\([^)]*viewW|waveGlyph\([^)]*scrollLeft|waveGlyph\([^)]*barLeft/.test(shapesSrc),
     'waveGlyph 被传入了操作层变量（波形层与 UI 已耦合）');
 
+  // 嵌入能力（2026-11-13 起）：宿主可一行引入，默认只读、点一下进编辑。
+  const mainSrc = read('src/main.js');
+  ok(fs.existsSync(path.join(ROOT, 'embed.js')), '缺少嵌入加载器 embed.js');
+  ok(/data-timingbench/.test(read('embed.js')) && /TimingBenchEmbed/.test(read('embed.js')),
+    'embed.js 未提供 [data-timingbench] 自动挂载与全局 mount 接口');
+  ok(/embed=1/.test(read('embed.js')), 'embed.js 未按 ?embed=1 装配卡片');
+  ok(/attachEmbed/.test(mainSrc) && /EMBED/.test(mainSrc),
+    'main.js 未接入嵌入壳');
+  ok(/state\.readonly/.test(shapesSrc) && /state\.readonly/.test(editorSrc) &&
+     /state\.readonly/.test(read('src/editor/interactions.js')),
+    '只读态未贯穿绘制层 / 装配层 / 交互层');
+  ok(/postMessage/.test(read('src/editor/embed-shell.js')) &&
+     /'height'|"height"/.test(read('src/editor/embed-shell.js')),
+    '嵌入壳未上报高度（宿主无法自适应 iframe 高度）');
+  ok(/is-embed/.test(cssSrc) && /is-readonly/.test(cssSrc),
+    '样式缺少嵌入 / 只读态规则');
+  ok(fs.existsSync(path.join(ROOT, 'embed-demo.html')), '缺少嵌入示例页 embed-demo.html');
+
   // src/ 下所有 ES module 的相对 import 必须指向真实文件，避免残留失效引用
   function walk(dir) {
     let out = [];

@@ -306,6 +306,18 @@ export function attachInteractions(ctx){
 
   function handleDown(e,isTouch){
     if(e.button!==undefined&&e.button!==0) return;
+    // 只读态：点一下波形进入编辑，并顺手选中被点的格子（字符条随即出现）；
+    // 本次点击不产生任何编辑 —— 避免在宿主页面里误改图。
+    if(state.readonly){
+      e.preventDefault&&e.preventDefault();
+      var rc=cellAt(e);
+      if(rc&&rc.lane!==undefined&&rc.tick!==undefined&&!rc.cmd){
+        state.selCell={lane:rc.lane,tick:rc.tick};
+        state.selLane=rc.lane; state.sel=null;
+      }
+      if(ctx.requestEdit) ctx.requestEdit();
+      return;
+    }
     // 就地输入框也在 SVG 里，点它自己不能触发结算
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
     var c=cellAt(e); // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
@@ -612,6 +624,8 @@ export function attachInteractions(ctx){
       prevent(e); ctx.doCmd((e.shiftKey||/^y$/i.test(e.key))?'redo':'undo'); return;
     }
     if(typing||otherControl()) return;
+    // 只读态不响应任何编辑键；Esc 由卡片外层负责退出编辑态。
+    if(state.readonly) return;
     if(state.linkMode){ linkKeys(e); return; }
     var k=e.key;
     if(k==='Escape'&&state.selCell){ prevent(e); state.selCell=null; ctx.redraw(); return; }

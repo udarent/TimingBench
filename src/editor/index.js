@@ -12,7 +12,7 @@ export function createEditor(dom){
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, ratio:1, parseOK:false,
             ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0,
-            W:0, H:0, drag:null, rev:0 },
+            W:0, H:0, drag:null, rev:0, readonly:false },
     inlineCtx:null, painting:null
   };
   var state=ctx.state, code=ctx.code, gutter=ctx.gutter, errdot=ctx.errdot;
@@ -165,6 +165,28 @@ export function createEditor(dom){
 
   function focusCanvas(){ try{ ctx.wrap.focus({preventScroll:true}); }catch(e){ try{ ctx.wrap.focus(); }catch(e2){} } }
 
+  // 只读态：波形照常渲染、可滚动缩放，但不出 HUD / 字符条，点击不产生任何编辑。
+  // 嵌入卡片默认只读（以看为主），点一下波形进入编辑；Esc 或点空白回到只读。
+  var readonlyListeners=[];
+  function setReadonly(on){
+    on=!!on;
+    if(state.readonly===on) return;
+    state.readonly=on;
+    if(on){
+      state.selCell=null; state.sel=null; state.selLane=null; state.drag=null;
+      state.linkMode=false; state.connect=null; state.linkCursor=null;
+      if(ctx.inlineCtx) ctx.closeInline(true);
+      if(ctx.closePanel) ctx.closePanel();
+      if(ctx.wrap.blur) try{ ctx.wrap.blur(); }catch(e){}
+    }
+    document.documentElement.classList.toggle('is-readonly', on);
+    ctx.redraw(); ctx.status();
+    for(var i=0;i<readonlyListeners.length;i++) readonlyListeners[i](on);
+  }
+  ctx.setReadonly=setReadonly;
+  ctx.isReadonly=function(){ return state.readonly; };
+  ctx.onReadonlyChange=function(fn){ readonlyListeners.push(fn); };
+
   ctx.notify=notify; ctx.status=status; ctx.renderGutter=renderGutter;
   ctx.syncCode=syncCode; ctx.commit=commit; ctx.fromCode=fromCode;
   ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
@@ -178,7 +200,7 @@ export function createEditor(dom){
   ctx.redraw=function(){ paint(); if(ctx.afterRedraw) ctx.afterRedraw(); };
 
   ctx.wrap.tabIndex=0;
-  ctx.wrap.addEventListener('focus',function(){ if(!state.linkMode) ensureSelCell(); });
+  ctx.wrap.addEventListener('focus',function(){ if(!state.linkMode&&!state.readonly) ensureSelCell(); });
   // 卡片口径：波形层可横向滚动 / 双指缩放，操作层（HUD、字符条）钉在可视区。
   // 滚动只改这两个 <g> 的位移，不重绘；旋屏 / 窗口缩放才需要重排（字符条按可视宽度换行）。
   var rzTimer=null;

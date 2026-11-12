@@ -8,6 +8,43 @@ English · [简体中文](README.zh-CN.md)
 
 There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
 
+## Embed it in your page
+
+Two lines, no build step, no dependency in your project:
+
+```html
+<script src="https://udarent.github.io/TimingBench/embed.js"></script>
+<div data-timingbench data-height="240"
+     data-wavejson='{ signal: [ { name: "clk", wave: "p....." }, { name: "dat", wave: "x.345x." } ] }'></div>
+```
+
+The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the hint in the corner) to go back to viewing. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
+
+Need programmatic control?
+
+```js
+const api = TimingBenchEmbed.mount(el, { wavejson, mode: 'view' });  // or 'edit'
+api.setSource(newSource);
+api.setMode('edit');
+
+el.addEventListener('timingbench:change', e => {
+  console.log('user edited the diagram →', e.detail.wavejson);
+});
+```
+
+| Behaviour | Detail |
+|---|---|
+| Default state | read-only (waveform only, no buttons) |
+| Enter editing | click the waveform (the clicked cell is selected for you) |
+| Leave editing | `Esc`, or the hint in the bottom-right corner |
+| Auto height | the card reports its real height via `postMessage`; `embed.js` applies it |
+| Host events | `timingbench:ready` · `timingbench:change` · `timingbench:mode` |
+| Host commands | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |
+| Params | `?embed=1` (card mode) · `&mode=edit` (start editable) |
+| Force view | `data-mode="view"` on the placeholder |
+
+Working example: [`embed-demo.html`](embed-demo.html) — serve the folder (`npm start`) and open it.
+
 ## See it in action
 
 ![Bidirectional editing: source changes redraw the diagram, diagram edits rewrite the source](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif)

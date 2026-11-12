@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TimingBench 嵌入示例</title>
+<style>
+  body{margin:0;padding:28px 24px 64px;background:#fbfbfa;color:#1f2328;
+       font:15px/1.75 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:20px;font-weight:600;margin:0 0 6px}
+  p.lead{margin:0 0 22px;color:#5f5e5a}
+  h2{font-size:15px;font-weight:600;margin:30px 0 8px}
+  .card{background:#fff;border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:12px;margin:8px 0 4px}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+  pre{background:#f4f4f2;border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:12px 14px;overflow:auto}
+  .note{color:#5f5e5a;font-size:13px;margin:6px 0 0}
+  .out{background:#f4f4f2;border-radius:10px;padding:10px 12px;margin-top:10px;
+       font:12.5px/1.6 ui-monospace,Consolas,monospace;white-space:pre-wrap;max-height:180px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>把 TimingBench 嵌进你的页面</h1>
+  <p class="lead">默认只读，读者点一下波形就能直接改；改动会以事件回传给宿主。</p>
+
+  <h2>① 一行 script + 一个 div</h2>
+<pre>&lt;script src="https://udarent.github.io/TimingBench/embed.js"&gt;&lt;/script&gt;
+&lt;div data-timingbench data-height="240"
+     data-wavejson='{ signal: [ { name:"clk", wave:"p....." } ] }'&gt;&lt;/div&gt;</pre>
+
+  <h2>② 实际效果（可在页内直接编辑）</h2>
+  <div class="card">
+    <div data-timingbench data-height="230" data-title="示例波形"
+         data-wavejson='{ signal: [ { name: "clk", wave: "p......" }, { name: "dat", wave: "x.345x.", data: ["head","body","tail","data"] }, { name: "req", wave: "0.1..0", node: "..a..." } ] }'></div>
+  </div>
+  <p class="note">点击波形进入编辑；按 <code>Esc</code> 或右下角提示条回到只读。</p>
+  <div class="out" id="log">等待宿主事件…</div>
+
+  <h2>③ 想自己控制内容？用 JS</h2>
+<pre>const api = TimingBenchEmbed.mount(document.querySelector('#myCard'), {
+  wavejson: '{ signal: [...] }',
+  mode: 'view'          // 或 'edit' 直接可编辑
+});
+
+document.querySelector('#myCard')
+  .addEventListener('timingbench:change', e =&gt; {
+    console.log('用户改了图，最新源码：', e.detail.wavejson);
+  });</pre>
+</div>
+
+<script src="embed.js"></script>
+<script>
+  var log = document.getElementById('log');
+  document.addEventListener('timingbench:change', function (e) {
+    log.textContent = 'timingbench:change 触发\n' + e.detail.wavejson;
+  });
+  document.addEventListener('timingbench:ready', function (e) {
+    if (log.textContent.indexOf('等待') === 0) log.textContent = '卡片已就绪，改动会显示在这里。';
+  });
+</script>
+</body>
+</html>
