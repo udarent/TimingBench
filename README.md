@@ -20,6 +20,8 @@ Two lines, no build step, no dependency in your project:
 
 The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the hint in the corner) to go back to viewing. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
 
+Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/), then click the fourth icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
+
 Need programmatic control?
 
 ```js

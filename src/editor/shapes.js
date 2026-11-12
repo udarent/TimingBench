@@ -31,6 +31,7 @@ export function createShapes(ctx){
     cmd('undo','↶','撤销（Ctrl+Z）',!state.undo.length);
     cmd('redo','↷','重做（Ctrl+Y）',!state.redo.length);
     cmd('link','◇',state.linkMode?'连线中：点第二个波形格完成；键盘 K 退出、方向键移光标、Enter 选端点':'连线：点两个波形格，或按 K 后用方向键 + Enter 选端点',false,state.linkMode);
+    cmd('embed','<>','拿到这张图的嵌入代码：贴进你的页面，读者点一下就能改',false,false);
     o.push('</g>');
     return o.join('');
   }

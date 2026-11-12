@@ -9,7 +9,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
 .pane{position:relative;min-width:0;min-height:0;overflow:hidden}
 .pane.src{background:var(--src-bg);border-bottom:1px solid var(--line)}
 .gutter{position:absolute;left:0;top:0;bottom:0;width:40px;padding:12px 9px 12px 0;text-align:right;font:12px/1.65 var(--mono);color:var(--muted);border-right:1px solid var(--line);overflow:hidden;white-space:pre;user-select:none;pointer-events:none}
-textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;background:transparent;color:var(--ink);padding:12px 10px 12px 50px;font:12px/1.65 var(--mono);tab-size:2;white-space:pre;overflow:auto}
+/* 只作用于源码框：.shareCode 等其它 textarea 不能被这条绝对定位规则误伤 */
+.pane.src textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;background:transparent;color:var(--ink);padding:12px 10px 12px 50px;font:12px/1.65 var(--mono);tab-size:2;white-space:pre;overflow:auto}
 .svgwrap{position:absolute;inset:0;overflow:auto;background:var(--bg);outline:none}
 /* 键盘用户用 Tab / F6 进入画布时给出可见焦点；鼠标点击不显示 */
 .svgwrap:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
@@ -94,7 +95,7 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .app[data-view="diagram"] .pane.src{display:none}
 .is-touch .pane.src{border-bottom:0}
 .is-touch .gutter{font-size:13px;line-height:1.9}
-.is-touch textarea{font-size:14px;line-height:1.9;padding-left:52px}
+.is-touch .pane.src textarea{font-size:14px;line-height:1.9;padding-left:52px}
 .is-touch .svgwrap{touch-action:manipulation;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* hover 才显现的细小控件在触摸端全部撤下，改由操作栏承担 */
 .is-touch .rowCtl,.is-touch .rowHint,.is-touch .rowDrag,.is-touch .colAct,.is-touch .cellLabel{display:none}
@@ -155,3 +156,29 @@ svg{display:block;font-family:var(--sans)}
   cursor:pointer;opacity:.72;transition:opacity .15s,color .15s,border-color .15s;user-select:none}
 .is-embed .embedhint:hover{opacity:1;color:var(--accent);border-color:var(--accent)}
 .is-embed .embedhint.editing{opacity:.9;color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+
+/* ---------------------------------------------------------------------------
+   嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。
+   浮层只在交互时出现，不进入 SVG，因此不影响波形层指纹。
+   --------------------------------------------------------------------------- */
+.shareMask{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:rgba(0,0,0,.32)}
+.sharePanel{width:min(620px,100%);max-height:calc(100dvh - 48px);display:flex;flex-direction:column;
+  border-radius:12px;border:1px solid var(--line);background:var(--panel);
+  box-shadow:0 12px 40px rgba(0,0,0,.28);overflow:hidden}
+.shareHead{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-bottom:1px solid var(--line);font:500 13px/1.4 var(--sans);color:var(--ink)}
+.shareClose{border:0;background:transparent;color:var(--muted);font:14px/1 var(--sans);
+  cursor:pointer;padding:4px 6px;border-radius:6px}
+.shareClose:hover{color:var(--accent);background:var(--accent-bg)}
+.shareHint{margin:0;padding:12px 14px 0;font:12.5px/1.6 var(--sans);color:var(--muted)}
+.shareCode{margin:12px 14px 0;padding:10px 12px;height:calc(9 * 1.55em);resize:vertical;
+  border:1px solid var(--line2);border-radius:8px;background:var(--src-bg);color:var(--ink);
+  font:12px/1.55 var(--mono);white-space:pre;overflow:auto;outline:none}
+.shareCode:focus{border-color:var(--accent)}
+.shareFoot{display:flex;align-items:center;gap:10px;padding:12px 14px 14px}
+.shareCopy{min-height:32px;padding:6px 14px;border:1px solid var(--accent);border-radius:8px;
+  background:var(--accent-bg);color:var(--accent);font:500 12.5px var(--sans);cursor:pointer}
+.shareCopy:hover{background:var(--accent);color:var(--panel)}
+.shareTip{font:12px var(--sans);color:var(--muted)}
+.shareTip.ok{color:var(--ok)}

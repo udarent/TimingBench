@@ -5,6 +5,7 @@ import { EXAMPLE } from '../core/example.js';
 import { createShapes } from './shapes.js';
 import { attachInteractions } from './interactions.js';
 import { attachTouchUI } from './touch.js';
+import { attachShare } from './share.js';
 
 export function createEditor(dom){
   var ctx={
@@ -153,6 +154,7 @@ export function createEditor(dom){
 
   function doCmd(act){
     if(act==='link'){ setLinkMode(!state.linkMode); return; }
+    if(act==='embed'){ if(ctx.openEmbedCode) ctx.openEmbedCode(); return; }
     if(act!=='undo'&&act!=='redo') return;
     var stack=act==='undo'?state.undo:state.redo, back=act==='undo'?state.redo:state.undo;
     if(!stack.length) return;
@@ -195,6 +197,7 @@ export function createEditor(dom){
   createShapes(ctx);
   attachInteractions(ctx);
   attachTouchUI(ctx, dom);
+  attachShare(ctx);
   // 触摸操作栏跟着每次重绘同步按钮可用态；桌面无 hook，重绘开销不变
   var paint=ctx.redraw;
   ctx.redraw=function(){ paint(); if(ctx.afterRedraw) ctx.afterRedraw(); };

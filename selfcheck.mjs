@@ -229,6 +229,21 @@ function check() {
   ok(/is-embed/.test(cssSrc) && /is-readonly/.test(cssSrc),
     '样式缺少嵌入 / 只读态规则');
   ok(fs.existsSync(path.join(ROOT, 'embed-demo.html')), '缺少嵌入示例页 embed-demo.html');
+  // 工作台 → 嵌入的分发路径：HUD 的 <> 生成可粘贴片段
+  const shareSrc = read('src/editor/share.js');
+  ok(/openEmbedCode/.test(shareSrc) && /attachShare/.test(editorSrc),
+    '缺少嵌入代码生成（openEmbedCode / attachShare）');
+  ok(/data-wavejson/.test(shareSrc) && /data-timingbench/.test(shareSrc) && /embed\.js/.test(shareSrc),
+    '生成的片段缺少 embed.js / data-timingbench / data-wavejson');
+  // 属性值改用双引号包裹（片段可读性最好），因此必须转义双引号；
+  // 同时 & < > 也要转义，否则源码里的箭头或 & 会破坏属性。
+  ok(/&#34;|&quot;/.test(shareSrc), '片段未转义双引号（data-wavejson 用双引号包裹会截断）');
+  ok(/&amp;/.test(shareSrc) && /&lt;/.test(shareSrc),
+    '片段未转义 & 或 <（源码含 < > & 时会破坏属性）');
+  ok(/data-wavejson="/.test(shareSrc),
+    '片段应用双引号包裹 data-wavejson（单引号会让源码里的 &#39; 遍地都是）');
+  ok(/data-cmd="embed"|'embed'/.test(shapesSrc),
+    'HUD 未提供嵌入代码入口');
 
   // src/ 下所有 ES module 的相对 import 必须指向真实文件，避免残留失效引用
   function walk(dir) {
