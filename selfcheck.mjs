@@ -188,6 +188,9 @@ function check() {
   ok(!/<script/.test(landing), '首页不应加载脚本（极简介绍页保持纯静态自包含）');
   ok(!/<link[^>]+stylesheet/.test(landing), '首页不应引外部样式表（自带内联样式）');
   ok(/prefers-color-scheme/.test(landing), '首页未跟随系统明暗主题');
+  // 首页面向国际受众，用英文：`lang="en"`，且全文不得出现中日韩字符
+  ok(/<html[^>]+lang="en"/.test(landing), '首页未声明 lang="en"');
+  ok(!/[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]/.test(landing), '首页出现中日韩字符（应全英文）');
   for (const ref of lrefs) {
     if (/^(https?:|data:|#)/.test(ref)) continue;
     ok(fs.existsSync(path.join(ROOT, ref)), '首页引用的资源缺失：' + ref);

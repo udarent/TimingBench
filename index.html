@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TimingBench · WaveJSON 时序图双向编辑器</title>
+<title>TimingBench · a two-way editor for WaveJSON timing diagrams</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
 <meta name="version" content="0.5.0">
-<meta name="description" content="WaveJSON ⇄ 时序图的双向编辑器。纯静态、零构建、零依赖，可嵌入任意页面；默认只读，读者点一下即可就地编辑。">
+<meta name="description" content="A two-way editor for WaveJSON timing diagrams. Static, build-free, dependency-free, and embeddable in any page — read-only by default, editable with a click.">
 <style>
   :root{
     --bg:#fff;--panel:#fff;--src-bg:#f7f7f7;--ink:#1f2328;--muted:#8b8f96;
@@ -78,67 +78,71 @@
     <span class="logo">TimingBench</span>
     <nav>
       <a href="https://github.com/udarent/TimingBench">GitHub</a>
-      <a href="https://github.com/udarent/TimingBench#readme">文档</a>
+      <a href="https://github.com/udarent/TimingBench#readme">Docs</a>
     </nav>
   </header>
 
   <h1>
-    WaveJSON ⇄ 时序图的双向编辑器
-    <span class="sub">纯静态、零构建、零依赖 —— 可以嵌进任何页面。</span>
+    A two-way editor for WaveJSON timing diagrams
+    <span class="sub">Static, build-free, dependency-free — and embeddable anywhere.</span>
   </h1>
   <p class="lede">
-    左边写 WaveJSON，右边立刻画出波形；点画布上的格子，源码对应位置同步回写。
-    图形和代码是同一份数据的两种视图，改哪边都不会丢失另一边。
+    Write WaveJSON on one side and the waveform redraws immediately on the other. Click a cell on
+    the canvas and the matching slot in the source is updated. The diagram and the code are two
+    views of the same data — editing either side never loses the other.
   </p>
 
   <div class="actions">
-    <a class="btn primary" href="editor.html">打开编辑器</a>
-    <a class="btn ghost" href="#embed">怎么嵌进我的页面</a>
+    <a class="btn primary" href="editor.html">Open the editor</a>
+    <a class="btn ghost" href="#embed">How to embed it</a>
   </div>
 
   <figure>
-    <img src="assets/bidirectional-demo.gif" alt="双向编辑演示：改源码重绘波形，点画布回写源码" width="900" height="734">
-    <figcaption>改源码里的波形字符，时序图立刻重绘；点画布格子写入字符，源码同步回写。</figcaption>
+    <img src="assets/bidirectional-demo.gif" alt="Two-way editing demo: change the source and the diagram redraws; click the canvas and the source is written back" width="900" height="734">
+    <figcaption>Edit a wave character in the source and the diagram redraws; click a canvas cell and the source is written back.</figcaption>
   </figure>
 
-  <h2>它是什么</h2>
+  <h2>What it is</h2>
   <ul class="feat">
     <li>
-      <b>双向编辑，无第二套语义</b>
-      <span>图形侧与代码侧的每一次修改都落到同一组编辑操作上，撤销重做两边同步。</span>
+      <b>Two-way editing, one set of semantics</b>
+      <span>Every change from the diagram or the code lands on the same edit operations, so undo and redo stay in sync on both sides.</span>
     </li>
     <li>
-      <b>纯静态，零构建零依赖</b>
-      <span>原生 ES modules，不需要安装、不需要打包，放在任何静态服务器上就能跑。</span>
+      <b>Static, zero build, zero dependencies</b>
+      <span>Native ES modules. Nothing to install, nothing to bundle — serve it from any static host.</span>
     </li>
     <li>
-      <b>键盘和触摸都能完成全部编辑</b>
-      <span>不用鼠标也能改图；手机上自动切换为标签页加常驻操作栏，命中区按 44px 放大。</span>
+      <b>Fully editable by keyboard and by touch</b>
+      <span>Every edit is reachable without a mouse. On phones it switches to tabs plus a persistent action bar with 44&nbsp;px hit targets.</span>
     </li>
     <li>
-      <b>嵌入时默认只读</b>
-      <span>放进文章或文档里不打扰读者，点一下才就地编辑，<code>Esc</code> 回到查看。</span>
+      <b>Read-only until clicked, when embedded</b>
+      <span>Drop it into an article or a docs page without grabbing attention; one click makes it editable in place, <code>Esc</code> goes back to viewing.</span>
     </li>
   </ul>
 
-  <h2 id="embed">嵌进你的页面</h2>
+  <h2 id="embed">Embed it in your page</h2>
   <pre>&lt;script src="https://udarent.github.io/TimingBench/embed.js"&gt;&lt;/script&gt;
 &lt;div data-timingbench data-height="240"
      data-wavejson='{ signal: [ { name: "clk", wave: "p....." } ] }'&gt;&lt;/div&gt;</pre>
   <p class="note">
-    两行，不用构建。卡片跑在自己的 iframe 里，宿主页面的 CSS 进不来、它的样式也出不去。
-    想用代码控制内容或监听改动，见 <a href="embed-demo.html">嵌入示例页</a> 与
-    <a href="https://github.com/udarent/TimingBench#embed-it-in-your-page">README</a>。
+    Two lines, no build step. The card runs in its own iframe, so your CSS can't leak in and its
+    styles can't leak out. For programmatic control and change events, see the
+    <a href="embed-demo.html">embed demo</a> and the
+    <a href="https://github.com/udarent/TimingBench#embed-it-in-your-page">README</a>.
   </p>
 
   <footer>
-    时序图的绘制与 WaveJSON 语义参照 <a href="https://wavedrom.com/">WaveDrom</a> ——
-    没有 WaveDrom 与 WaveJSON 就不会有这个项目。<br>
-    以 <a href="https://github.com/udarent/TimingBench/blob/main/LICENSE">MIT</a> 许可发布 ·
-    <a href="https://github.com/udarent/TimingBench">源码</a> ·
-    <a href="https://github.com/udarent/TimingBench#readme">English README</a> ·
-    <a href="https://github.com/udarent/TimingBench/blob/main/README.zh-CN.md">中文说明</a> ·
-    <a href="https://github.com/udarent/TimingBench/issues">反馈与建议</a>
+    Diagram rendering and WaveJSON semantics follow
+    <a href="https://wavedrom.com/">WaveDrom</a> — without WaveDrom and WaveJSON this project
+    wouldn't exist.<br>
+    Released under the
+    <a href="https://github.com/udarent/TimingBench/blob/main/LICENSE">MIT license</a> ·
+    <a href="https://github.com/udarent/TimingBench">Source</a> ·
+    <a href="https://github.com/udarent/TimingBench#readme">README</a> ·
+    <a href="https://github.com/udarent/TimingBench/blob/main/README.zh-CN.md">Chinese README</a> ·
+    <a href="https://github.com/udarent/TimingBench/issues">Issues</a>
   </footer>
 
 </div>
