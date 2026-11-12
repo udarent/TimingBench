@@ -183,17 +183,17 @@ function check() {
     ok(html.includes('id="' + id + '"'), '触摸 UI 容器缺失：#' + id);
   ok(html.includes('viewport-fit=cover'), '移动端安全区 viewport 缺失');
   ok(read('src/main.js').includes('is-touch'), 'main.js 未装配触摸版式开关');
-  // 窄屏兼容：操作栏均分且不横向滚动；画布内按钮按可视宽度换行并钉在可视区
+  // 窄屏口径：操作按钮只受波形画布宽度 W 约束，落在波形横向显示区域内；
+  // 波形整体可缩放 / 平移且允许宽于屏幕，画布内按钮不得按视口宽度重排或钉在可视区。
   ok(!/overflow-x:auto/.test(cssSrc), '触摸操作栏仍允许横向滚动（窄屏会溢出）');
   ok(/flex:1 1 44px/.test(cssSrc) && /min-width:44px/.test(cssSrc),
     '触摸操作栏按钮未按屏宽自适应或命中区不足 44px');
-  ok(/viewW/.test(shapesSrc) && /barOrigin/.test(shapesSrc),
-    '字符条未按画布可视宽度换行（窄屏会跑出屏幕）');
-  ok(/hudBar/.test(shapesSrc) && /charChips/.test(shapesSrc),
-    'HUD / 字符条未钉在可视区，横向滚动波形会跑出屏幕');
-  ok(/window\.addEventListener\('resize'/.test(editorSrc) &&
-     /ctx\.wrap\.addEventListener\('scroll'/.test(editorSrc),
-    '缺少旋屏重绘或横向滚动跟随');
+  ok(/barRight=W-PAD/.test(shapesSrc) && /Math\.floor\(\(barRight-XS\)\/CHIP_STEP\)/.test(shapesSrc),
+    '字符条未按波形画布宽度 W 换行（可能越出波形横向显示区域）');
+  ok(!/wrap\.clientWidth|window\.innerWidth|wrap\.scrollLeft|g class="hudBar"|g class="charChips"/.test(shapesSrc),
+    '画布内按钮仍依赖视口宽度 / 滚动位置（波形可缩放移动，按钮不应钉在可视区）');
+  ok(!/window\.addEventListener\('resize'|ctx\.wrap\.addEventListener\('scroll'/.test(editorSrc),
+    '仍按窗口尺寸 / 滚动位置重绘或搬移画布内按钮');
 
   // src/ 下所有 ES module 的相对 import 必须指向真实文件，避免残留失效引用
   function walk(dir) {
