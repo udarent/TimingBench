@@ -477,6 +477,14 @@ export function attachInteractions(ctx){
   wrap.addEventListener('pointermove',function(e){
     if(e.pointerType==='mouse') return;
     if(longPress&&(Math.abs((e.clientX||0)-longPress.x)>12||Math.abs((e.clientY||0)-longPress.y)>12)) clearLong();
+    // 触摸端也跟手画连线预览曲线：记录第一个端点后，曲线末端跟着手指走
+    if(state.connect){
+      var svg=svgRoot();
+      if(svg){
+        var r=svg.getBoundingClientRect();
+        showConnectPreview((e.clientX||0)-r.left,(e.clientY||0)-r.top);
+      }
+    }
   });
   function endPointer(e){ if(e.pointerType!=='mouse') clearLong(); }
   document.addEventListener('pointerup',endPointer);
@@ -497,8 +505,12 @@ export function attachInteractions(ctx){
       handleDown(s,true);
     },{passive:true});
     wrap.addEventListener('touchmove',function(e){
-      var t=e.touches&&e.touches[0]; if(!t||!longPress) return;
-      if(Math.abs(t.clientX-longPress.x)>12||Math.abs(t.clientY-longPress.y)>12) clearLong();
+      var t=e.touches&&e.touches[0]; if(!t) return;
+      if(longPress&&(Math.abs(t.clientX-longPress.x)>12||Math.abs(t.clientY-longPress.y)>12)) clearLong();
+      if(state.connect){
+        var svg=svgRoot();
+        if(svg){ var r=svg.getBoundingClientRect(); showConnectPreview(t.clientX-r.left,t.clientY-r.top); }
+      }
     },{passive:true});
     document.addEventListener('touchend',clearLong,{passive:true});
     document.addEventListener('touchcancel',clearLong,{passive:true});

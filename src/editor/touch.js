@@ -203,10 +203,30 @@ export function attachTouchUI(ctx, dom) {
   ctx.closePanel = hideContext;
   ctx.hideToast = function () { if (toast) { clearTimeout(toastTimer); toast.classList.remove('show'); } };
 
+  // 首屏手势引导：一段 2.2 秒的「点一下 → 再点一下」动画，替代原来的文字 toast。
+  // 画在页面固定层上（不在 SVG 里，所以不占画布、不进波形层、也不会被重绘抹掉），
+  // 播完由 JS 整块移除；对读屏是 aria-hidden —— 触摸手势本来就不需要文字说明。
+  function guide() {
+    if (ctx.isReadonly && ctx.isReadonly()) return;   // 嵌入卡片只读态没有「点格子」这回事
+    var cell = ctx.wrap && ctx.wrap.querySelector('rect.cell');
+    if (!cell) return;
+    var r = cell.getBoundingClientRect();
+    if (r.width < 1) return;                          // 画布还不可见（停在源码页）就跳过
+    var g = document.createElement('div');
+    g.className = 'gesture';
+    g.setAttribute('aria-hidden', 'true');
+    g.style.left = (r.left + r.width / 2) + 'px';
+    g.style.top = (r.top + r.height / 2) + 'px';
+    g.innerHTML = '<i class="ring r1"></i><i class="ring r2"></i><i class="finger"></i>';
+    document.body.appendChild(g);
+    setTimeout(function () { if (g.parentNode) g.parentNode.removeChild(g); }, 2400);
+  }
+
   setTimeout(function () {
-    // 只读（嵌入卡片默认态）没有字符条可点，这条引导不适用，也不该弹 ——
-    // 何况它是中文，会出现在英文宿主页面里。
+    // 只读（嵌入卡片默认态）没有字符条可点，这条引导不适用，也不该弹。
     if (ctx.isReadonly && ctx.isReadonly()) return;
-    say('Tap a cell, then a character. Double-tap or long-press to edit in place.');
+    var c = ctx.wrap && ctx.wrap.querySelector('rect.cell');
+    if (!c) return;                                   // 还没布局好就不再重试，宁缺不闪
+    guide();
   }, 500);
 }

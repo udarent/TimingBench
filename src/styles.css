@@ -154,6 +154,30 @@ svg{display:block;font-family:var(--sans)}
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
   font:12px/1.5 var(--sans);box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none}
 .is-touch .toast.show{display:block}
+/* 首屏手势引导：指尖从右下滑到格子 → 点一下 + 轻涟漪 → 再点一下（双敲进就地编辑）。
+   画在页面固定层上，播完由 JS 移除；不占画布、不进波形层、不写任何文字。 */
+.gesture{position:fixed;z-index:35;width:0;height:0;pointer-events:none}
+.gesture i{position:absolute;display:block;border-radius:50%}
+.gesture .finger{width:22px;height:22px;margin:-11px 0 0 -11px;background:var(--accent);
+  border:2px solid var(--bg);box-shadow:0 2px 8px rgba(0,0,0,.3);animation:gFinger 2.2s ease-out forwards}
+.gesture .ring{width:40px;height:40px;margin:-20px 0 0 -20px;border:2.5px solid var(--accent);opacity:0}
+.gesture .r1{animation:gRing .7s ease-out .55s forwards}
+.gesture .r2{animation:gRing .7s ease-out 1s forwards}
+@keyframes gFinger{
+  0%{transform:translate(24px,32px) scale(1);opacity:0}
+  8%{transform:translate(24px,32px) scale(1);opacity:.95}
+  22%{transform:translate(0,0) scale(1)}
+  30%{transform:translate(0,0) scale(.78)}
+  38%{transform:translate(0,0) scale(1)}
+  48%{transform:translate(0,0) scale(.78)}
+  56%{transform:translate(0,0) scale(1)}
+  70%{transform:translate(0,0) scale(1);opacity:.95}
+  100%{transform:translate(0,0) scale(1);opacity:0}
+}
+@keyframes gRing{
+  0%{transform:scale(.35);opacity:1}
+  100%{transform:scale(1.7);opacity:0}
+}
 .is-touch .errdot{width:12px;height:12px;top:12px;right:12px}
 .is-touch .inline-edit{font-size:16px;height:100%}
 
