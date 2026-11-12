@@ -18,6 +18,9 @@ export function attachInteractions(ctx){
     return l;
   }
 
+  // 阻止类提示的图形目标：优先给「被拦住的那个图元」，让红环落在用户刚点的地方
+  function laneRowEl(id){ return wrap.querySelector('rect.laneRow[data-lane="'+id+'"]'); }
+
   // 就地编辑器：foreignObject 直接挂在目标 SVG 里，横向滚动时跟着图元一起走
   function svgRoot(){ return wrap.querySelector('svg'); }
   function closeInline(doCommit,restoreFocus){
@@ -64,6 +67,7 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('hudBtn')) return {cmd:g.getAttribute('data-cmd')};
         if(g.classList&&g.classList.contains('rowDrag')) return {drag:g.getAttribute('data-drag'),lane:g.getAttribute('data-drag')};
         if(g.classList&&g.classList.contains('charChip')) return {ch:g.getAttribute('data-ch')};
+        if(g.classList&&g.classList.contains('emptyRow')) return {empty:1};
         if(g.classList&&g.classList.contains('rowTool')) return {tool:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('cellLabel')) return {label:1,lane:ln,tick:+g.getAttribute('data-tick')};
@@ -97,7 +101,7 @@ export function attachInteractions(ctx){
   }
   function openRowEditor(laneId,act){
     var l=findLane(laneId); if(!l) return;
-    if(l.kind==='spacer'){ ctx.notify('Spacer rows have no editable field',true); return; }
+    if(l.kind==='spacer'){ ctx.notify('Spacer rows have no editable field',true,laneRowEl(laneId)); return; }
     var spec=rowSpec(l,act); if(!spec) return;
     var anchor=spec.wide
       ? wrap.querySelector('rect.waveZone[data-lane="'+laneId+'"]')
@@ -107,7 +111,7 @@ export function attachInteractions(ctx){
     if(!anchor) return;
     openInline(anchor,spec.val,function(v){
       var op=spec.makeOp(v);
-      if(!op){ ctx.notify('Invalid input: '+(act==='phase'?'phase must be a number':'period must be a number >= 1'),true); return; }
+      if(!op){ ctx.notify('Invalid input: '+(act==='phase'?'phase must be a number':'period must be a number >= 1'),true,anchor); return; }
       ctx.commit(op,spec.label+' → '+v);
     },{ title:spec.title+' · Enter to confirm / Esc to cancel', placeholder:spec.title, width:spec.width });
   }
@@ -180,7 +184,12 @@ export function attachInteractions(ctx){
       return null;
     }
     var na=ensure(s), nb=ensure(a);
-    if(!na||!nb||na===nb){ state.connect=null; state.linkMode=false; state.linkCursor=null; ctx.redraw(); ctx.notify('Link failed: not enough node letters, or both ends are the same',true); return; }
+    if(!na||!nb||na===nb){
+      var badAt={lane:s.lane,tick:s.tick};
+      state.connect=null; state.linkMode=false; state.linkCursor=null; ctx.redraw();
+      ctx.notify('Link failed: not enough node letters, or both ends are the same',true,cellTarget(badAt.lane,badAt.tick));
+      return;
+    }
     var arr=state.ir.edges.slice(), newHead=na+'~>'+nb, found=-1, oldHead='';
     arr.forEach(function(t,i){
       var h=String(t).trim().split(/\s+/)[0]||'';
@@ -206,7 +215,7 @@ export function attachInteractions(ctx){
     var sl=l.slots[tick], cur=sl?sl.w:(l.slots.length?l.slots[l.slots.length-1].w:'x');
     openInline(target,cur,function(v){
       var t=String(v).trim();
-      if(Core.ALL.indexOf(t)<0){ ctx.notify('Allowed wave characters: '+Core.ALL.join(''),true); return; }
+      if(Core.ALL.indexOf(t)<0){ ctx.notify('Allowed wave characters: '+Core.ALL.join(''),true,target); return; }
       ctx.commit({t:'setSlot',lanes:[laneId],tick:tick,v:t},'edit wave char -> '+t);
     },{ title:'wave character · Enter to confirm / Esc to cancel', placeholder:'1 / 0 / x / 4 / P ...', width:126 });
   }
@@ -222,7 +231,7 @@ export function attachInteractions(ctx){
   function openLabelEditor(laneId,tick){
     var l=findLane(laneId); if(!l||l.kind==='spacer') return;
     var sl=l.slots[tick];
-    if(!sl||!sl.point||sl.gap||!Core.BUS.test(sl.w)){ ctx.notify('This cell is not a data block',true); return; }
+    if(!sl||!sl.point||sl.gap||!Core.BUS.test(sl.w)){ ctx.notify('This cell is not a data block',true,cellTarget(laneId,tick)); return; }
     var target=cellTarget(laneId,tick); if(!target) return;
     openInline(target,sl.label||'',function(v){
       var t=String(v).trim();
@@ -315,6 +324,13 @@ export function attachInteractions(ctx){
     var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
     if(!c) return;
+    // 零行空态占位行：整块就是一个「加第一条信号行」的按钮
+    if(c.empty){
+      if(dbl>1) return;
+      e.preventDefault();
+      ctx.commit({t:'addLane',id:'ln'+Date.now().toString(36),name:'new',at:0,kind:'signal'},'add signal row');
+      return;
+    }
     // 全局命令（撤销 / 重做 / 连线开关）在两种模式下都可用
     if(c.cmd){ if(dbl>1) return; e.preventDefault(); ctx.doCmd(c.cmd); return; }
     // 互斥分派：连线模式开启时，同一片 rect.cell 只作为连线端点，其余编辑入口
@@ -326,7 +342,7 @@ export function attachInteractions(ctx){
         e.preventDefault();
         var el=findLane(c.lane);
         if(!el||el.kind!=='signal'||!el.slots[c.tick]){
-          ctx.notify('That period is not defined in the source yet',true); return;
+          ctx.notify('That period is not defined in the source yet',true,cellTarget(c.lane,c.tick)); return;
         }
         state.linkCursor={lane:c.lane,tick:c.tick};
         handleAnchor({lane:c.lane,tick:c.tick,node:nodeChar(c.lane,c.tick)});
@@ -550,7 +566,7 @@ export function attachInteractions(ctx){
     if(e.ctrlKey||e.metaKey||e.altKey) return false;
     var lane=findLane(sc.lane);
     function needSignal(){
-      if(!lane||lane.kind==='spacer'){ ctx.notify('This is a spacer row — move to a signal row first',true); return false; }
+      if(!lane||lane.kind==='spacer'){ ctx.notify('This is a spacer row — move to a signal row first',true,laneRowEl(sc.lane)); return false; }
       return true;
     }
     switch(k){
@@ -580,7 +596,7 @@ export function attachInteractions(ctx){
       if(!lc){ ctx.notify('No signal rows available as link endpoints',true); return; }
       var l=findLane(lc.lane);
       if(!l||l.kind!=='signal'||!l.slots[lc.tick]){
-        ctx.notify('That period is not defined in the source yet',true); return;
+        ctx.notify('That period is not defined in the source yet',true,cellTarget(lc.lane,lc.tick)); return;
       }
       handleAnchor({lane:lc.lane,tick:lc.tick,node:nodeChar(lc.lane,lc.tick)});
       return;

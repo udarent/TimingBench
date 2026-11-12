@@ -20,11 +20,13 @@ export function attachTouchUI(ctx, dom) {
   }
   ctx.say = say;
 
-  // 桌面把反馈藏在 title 里；触摸端没有 hover，改成一次性轻提示。错误仍走源码区红点。
+  // 桌面把反馈藏在 title 里；触摸端没有 hover，改成一次性轻提示。
+  // 阻止类提示也走轻提示 —— 源码区红点在时序图标签页里根本看不见，
+  // 只留红环会「有反馈但不知道原因」，所以红环是主反馈、这行英文是兜底。
   var baseNotify = ctx.notify;
-  ctx.notify = function (t, bad) {
-    baseNotify(t, bad);
-    if (!bad && t) say(t);
+  ctx.notify = function (t, bad, el) {
+    baseNotify(t, bad, el);
+    if (t) say(t);
   };
 
   function setView(v) {

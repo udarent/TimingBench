@@ -142,6 +142,27 @@ export function createShapes(ctx){
     return o.join('');
   }
 
+  // 零行空态：没有信号行时画一块可点的虚线占位行（加号 + 淡方波），
+  // 点它即新增第一条信号行。图形自己表达「这里能加一行」，画布上仍不出现任何文字，
+  // 语义只走 aria-label。这里只画操作层的占位元素，不碰波形层图元与指纹。
+  function emptyRow(W){
+    var h=ROW_H, cy=TOP+h/2;
+    var px=XS+Math.round(CELL*0.5), wx=XS+Math.round(CELL*1.6), ww=Math.round(CELL*2.2);
+    return '<g class="emptyRow" data-act="addFirst" role="button" aria-label="Add the first signal row">'+
+      '<rect x="'+(PAD+2)+'" y="'+(TOP+2)+'" width="'+(W-PAD*2-4)+'" height="'+(h-4)+'" rx="6" '+
+        'fill="none" stroke="var(--line2)" stroke-width="1" stroke-dasharray="4 4"/>'+
+      // 淡方波：提示「这里画的是时序」
+      '<path class="emptyWave" d="M'+wx+','+(cy+7)+'H'+(wx+Math.round(ww*.3))+'V'+(cy-7)+
+        'H'+(wx+Math.round(ww*.66))+'V'+(cy+7)+'H'+(wx+ww)+'" fill="none" '+
+        'stroke="var(--muted)" stroke-width="1.2" opacity=".38" stroke-linejoin="round"/>'+
+      // 加号：唯一的动作提示（圆角方形而不是圆点，避免与已删除的锚点小圆圈在视觉上撞形）
+      '<rect class="plusBox" x="'+(px-(T?15:13))+'" y="'+(cy-(T?15:13))+'" width="'+(T?30:26)+'" height="'+(T?30:26)+'" rx="'+(T?15:13)+'" '+
+        'fill="none" stroke="var(--accent)" stroke-width="1.2"/>'+
+      '<path d="M'+(px-(T?6:5))+','+cy+'h'+(T?12:10)+'M'+px+','+(cy-(T?6:5))+'v'+(T?12:10)+'" '+
+        'stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/>'+
+      '</g>';
+  }
+
   function redraw(){
     // 重绘会替换 SVG DOM；未提交的就地编辑先结算，再用最新 IR 重建整张图
     if(ctx.inlineCtx) ctx.closeInline(true);
@@ -153,6 +174,9 @@ export function createShapes(ctx){
     var viewH=Math.max(0, Math.round(wrap.clientHeight||0));
     // 波形层仍按内容撑宽并允许横向滚动；但至少铺满卡片，便于钉住的顶栏 / 底栏有落脚宽度。
     var W=Math.max(ACT_X+ACT_W+PAD, viewW, 560), bottom=TOP+ir.lanes.length*ROW_H;
+    // 零行时波形区高度为 0，占位行需要占一行高度，否则会被算到画布外
+    var isEmpty=ir.lanes.length===0;
+    if(isEmpty) bottom=TOP+ROW_H;
     var actY=bottom+4;
     // 可视宽度够放下整排时，仍从波形起点 XS 起排（与格子对齐，保持原版式观感）；
     // 放不下才退到卡片左缘用满整行宽度，靠多行纵向堆叠消化。
@@ -181,7 +205,9 @@ export function createShapes(ctx){
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
     if(!state.readonly) o.push(hudSVG(viewW));
     for(c=0;c<=N;c++){ x=XS+c*CELL; o.push('<line x1="'+x+'" y1="'+(TOP-10)+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>'); }
-    for(c=0;c<=N;c++){
+    // 零行空态不画列头：0 个周期时列号与「末尾追加」都没有意义，
+    // 而幽灵列头的 + 会正好压在占位行上。
+    for(c=0;c<=N&&!isEmpty;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
       var gapc=ghost?false:ir.lanes.some(function(l){ return l.kind==='signal'&&l.slots[c]&&l.slots[c].gap; });
       o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'" role="img" aria-label="Column '+c+(ghost?' — append a cycle':'')+'">');
@@ -195,6 +221,7 @@ export function createShapes(ctx){
         colBtn(c,cx,2,'gap','|','Toggle the phase line on column '+c,gapc));
       o.push('</g></g>');
     }
+    if(isEmpty) o.push(emptyRow(W));
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*ROW_H;
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);

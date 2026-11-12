@@ -190,6 +190,8 @@ function check() {
   ok(/prefers-color-scheme/.test(landing), '首页未跟随系统明暗主题');
   // 首页面向国际受众，用英文：`lang="en"`，且全文不得出现中日韩字符
   ok(/<html[^>]+lang="en"/.test(landing), '首页未声明 lang="en"');
+  // 编辑器页面同样只含英文（aria-label / title 全英文）：lang 若仍写 zh-CN，读屏会用中文音库念英文名称
+  ok(/<html[^>]+lang="en"/.test(html), 'editor.html 未声明 lang="en"（界面与 aria 全英文）');
   ok(!/[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]/.test(landing), '首页出现中日韩字符（应全英文）');
   for (const ref of lrefs) {
     if (/^(https?:|data:|#)/.test(ref)) continue;

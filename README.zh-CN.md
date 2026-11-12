@@ -18,7 +18,7 @@
      data-wavejson='{ signal: [ { name: "clk", wave: "p....." }, { name: "dat", wave: "x.345x." } ] }'></div>
 ```
 
-卡片**默认只读**——读者只看到波形；点一下就在原地变成可编辑，按 `Esc`（或点右下角提示条）回到查看。窄卡片会把整张图**等比缩放到卡片宽度**，读者一眼看全，不用横向拖；点进编辑后恢复 1:1 + 滚动，保证格子好点。它跑在自己的 iframe 里，宿主页面的 CSS 进不来、它的样式也污染不到宿主。
+卡片**默认只读**——读者只看到波形；点一下就在原地变成可编辑，按 `Esc`（或点右下角的铅笔图标）回到查看。窄卡片会把整张图**等比缩放到卡片宽度**，读者一眼看全，不用横向拖；点进编辑后恢复 1:1 + 滚动，保证格子好点。它跑在自己的 iframe 里，宿主页面的 CSS 进不来、它的样式也污染不到宿主。
 
 不想手写这段代码？在[工作台](https://udarent.github.io/TimingBench/editor.html)里画好图，点画布左上角第四个图标 `<>`，它会按当前源码生成上面那段片段，一键复制即可。
 
@@ -38,7 +38,7 @@ el.addEventListener('timingbench:change', e => {
 |---|---|
 | 默认状态 | 只读（只有波形，没有按钮） |
 | 进入编辑 | 点一下波形，顺手选中被点的格子 |
-| 退出编辑 | `Esc`，或点右下角提示条 |
+| 退出编辑 | `Esc`，或点右下角的铅笔图标（编辑中变对勾） |
 | 高度自适应 | 卡片通过 `postMessage` 上报真实高度，`embed.js` 自动应用 |
 | 宿主事件 | `timingbench:ready` · `timingbench:change` · `timingbench:mode` |
 | 宿主命令 | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |

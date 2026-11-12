@@ -27,10 +27,15 @@ export function attachEmbed(ctx, opts) {
   }
 
   // ---- 只读 ↔ 编辑 ---------------------------------------------------------
+  // 提示条是一个图标按钮：铅笔 = 点一下可编辑，对勾 = 编辑中、点一下结束。
+  // 视觉上零常驻文字，语义只走 aria-label（嵌入页是英文优先）。
   function setEditing(on) {
     ctx.setReadonly(!on);
-    if (hint) hint.textContent = on ? 'Editing · Esc or click to finish' : 'Click to edit';
-    hint && hint.classList.toggle('editing', !!on);
+    if (hint) {
+      hint.setAttribute('aria-label', on ? 'Finish editing and go back to read-only' : 'Edit this timing diagram');
+      hint.setAttribute('aria-pressed', on ? 'true' : 'false');
+      hint.classList.toggle('editing', !!on);
+    }
     post('mode', { editing: !!on });
   }
   ctx.requestEdit = function () { setEditing(true); };

@@ -19,9 +19,35 @@ export function createEditor(dom){
   var state=ctx.state, code=ctx.code, gutter=ctx.gutter, errdot=ctx.errdot;
   var codeEditBase=null, lastCodeInput=0, timer=null;
 
-  // 主页面不显示任何消息文字：只有源码解析失败时右上角一个红点，原因写在 title 里
-  function notify(t,bad){
-    if(bad){ errdot.hidden=false; errdot.title=String(t); }
+  // 主页面不显示任何消息文字：阻止类提示先给图形反馈，文字只做兜底。
+  // 图形 —— 在被拦住的目标上瞬时画一圈红环。红环是 SVG 里的临时图元，只做不透明度 / 线宽动画，
+  // 既不位移也不改布局，因此不会打乱钉在可视区的 HUD 与字符条，也不进波形层指纹。
+  // 文字 —— 桌面落进右上红点的 title，触摸端落进一次性轻提示（英文）。
+  function denyRing(el){
+    var svg=ctx.svgRoot&&ctx.svgRoot();
+    if(!svg||!el||!el.getBoundingClientRect||!svg.getScreenCTM) return;
+    var r=el.getBoundingClientRect();
+    if(r.width<1&&r.height<1) return;
+    var inv=svg.getScreenCTM(); if(!inv) return;
+    inv=inv.inverse();
+    var a=svg.createSVGPoint(), b=svg.createSVGPoint();
+    a.x=r.left; a.y=r.top; b.x=r.right; b.y=r.bottom;
+    a=a.matrixTransform(inv); b=b.matrixTransform(inv);
+    var ring=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    ring.setAttribute('class','denyRing');
+    ring.setAttribute('x',Math.round(a.x)-3); ring.setAttribute('y',Math.round(a.y)-3);
+    ring.setAttribute('width',Math.max(8,Math.round(b.x-a.x)+6));
+    ring.setAttribute('height',Math.max(8,Math.round(b.y-a.y)+6));
+    ring.setAttribute('rx','4');
+    svg.appendChild(ring);
+    setTimeout(function(){ if(ring.parentNode) ring.parentNode.removeChild(ring); },480);
+  }
+  function notify(t,bad,el){
+    if(bad){
+      errdot.hidden=false; errdot.title=String(t);
+      errdot.classList.remove('pulse'); void errdot.offsetWidth; errdot.classList.add('pulse');
+      if(el) denyRing(el);
+    }
     else { errdot.hidden=true; errdot.title=''; }
   }
   function status(){ if(state.parseOK){ errdot.hidden=true; errdot.title=''; } }
@@ -190,6 +216,7 @@ export function createEditor(dom){
   ctx.onReadonlyChange=function(fn){ readonlyListeners.push(fn); };
 
   ctx.notify=notify; ctx.status=status; ctx.renderGutter=renderGutter;
+  ctx.denyRing=denyRing;
   ctx.syncCode=syncCode; ctx.commit=commit; ctx.fromCode=fromCode;
   ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
   ctx.focusPane=focusPane; ctx.setView=setView; ctx.ensureSelCell=ensureSelCell; ctx.clampSel=clampSel;

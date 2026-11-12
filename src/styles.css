@@ -16,6 +16,21 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
 .svgwrap:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 svg{display:block;font-family:var(--sans)}
 .errdot{position:absolute;right:10px;top:10px;width:8px;height:8px;border-radius:50%;background:var(--err);cursor:help;z-index:5}
+/* 阻止类提示：红点脉冲一次，让「刚被拒绝」在源码区也有一眼可见的反馈（文本原因仍在 title 里） */
+.errdot.pulse{animation:dotPulse 700ms ease-out}
+@keyframes dotPulse{
+  0%{box-shadow:0 0 0 0 var(--err)}
+  55%{box-shadow:0 0 0 8px rgba(192,57,43,0)}
+  100%{box-shadow:0 0 0 0 rgba(192,57,43,0)}
+}
+/* 被拦住的目标上闪一圈红环：只动不透明度与线宽，不位移、不改布局 */
+.denyRing{fill:none;stroke:var(--err);stroke-width:2.4;pointer-events:none;
+  animation:denyRing 460ms ease-out forwards}
+@keyframes denyRing{
+  0%{opacity:0;stroke-width:3.4}
+  15%{opacity:.95;stroke-width:3.4}
+  100%{opacity:0;stroke-width:1.2}
+}
 [hidden]{display:none!important}
 /* 极简 HUD：撤销 / 重做 / 连线三个图标；无常驻文字，画布内无状态圆点 */
 .hudBtn,.rowDrag,.charChip{cursor:pointer}
@@ -41,6 +56,11 @@ svg{display:block;font-family:var(--sans)}
 .inline-fo{overflow:visible}
 .inline-edit{width:100%;height:100%;box-sizing:border-box;font:12px var(--mono);padding:2px 6px;border:1px solid var(--accent);border-radius:5px;background:var(--panel);color:var(--ink);box-shadow:0 3px 12px rgba(0,0,0,.22);outline:none}
 .inline-edit:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg),0 3px 12px rgba(0,0,0,.22)}
+/* 零行空态：整行是可点的占位按钮，悬停时描边与加号一起提亮 */
+.emptyRow{cursor:pointer}
+.emptyRow:hover rect{stroke:var(--accent)}
+.emptyRow:hover .plusBox{fill:var(--accent-bg)}
+.emptyRow:hover .emptyWave{opacity:.7}
 /* 行工具：只有悬停 / 选中该行时才显现，且始终画在这一行的 SVG 图元里 */
 .rowCtl{opacity:0;pointer-events:none;transition:opacity .12s}
 .laneGrp:hover .rowCtl,.laneGrp.sel .rowCtl{opacity:1;pointer-events:auto}
@@ -158,13 +178,24 @@ svg{display:block;font-family:var(--sans)}
 .is-embed.is-readonly .rowCtl,.is-embed.is-readonly .rowHint,.is-embed.is-readonly .rowDrag,
 .is-embed.is-readonly .colAct,.is-embed.is-readonly .cellLabel{display:none}
 .is-embed.is-readonly .svgwrap:focus-visible{outline:none}
-/* 提示条：常驻右上角，只读时显示「点击波形进入编辑」，编辑中显示「Esc 结束」 */
-.is-embed .embedhint{display:block;position:fixed;right:8px;bottom:8px;z-index:40;
-  padding:4px 10px;border:1px solid var(--line);border-radius:8px;
-  background:var(--panel);color:var(--muted);font:11px/1.5 var(--sans);
-  cursor:pointer;opacity:.72;transition:opacity .15s,color .15s,border-color .15s;user-select:none}
+/* 提示条：常驻右下角的图标按钮 —— 铅笔＝点一下进入编辑，对勾＝编辑中、点一下结束。
+   零常驻文字：图形自己表达状态，语义只在 aria-label 与 hover 的着色上。 */
+.is-embed .embedhint{display:flex;position:fixed;right:8px;bottom:8px;z-index:40;
+  align-items:center;justify-content:center;width:30px;height:30px;padding:0;
+  border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);color:var(--muted);
+  cursor:pointer;opacity:.72;transition:opacity .15s,color .15s,border-color .15s,background .15s}
+.is-embed .embedhint .hintico{width:16px;height:16px;fill:none;stroke:currentColor;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.is-embed .embedhint .hintico-done{display:none}
+.is-embed .embedhint.editing .hintico-edit{display:none}
+.is-embed .embedhint.editing .hintico-done{display:block}
 .is-embed .embedhint:hover{opacity:1;color:var(--accent);border-color:var(--accent)}
-.is-embed .embedhint.editing{opacity:.9;color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+.is-embed .embedhint.editing{opacity:.95;color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+@media (pointer:coarse){
+  .is-embed .embedhint{width:38px;height:38px;border-radius:10px}
+  .is-embed .embedhint .hintico{width:20px;height:20px}
+}
 
 /* ---------------------------------------------------------------------------
    嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。

@@ -18,7 +18,7 @@ Two lines, no build step, no dependency in your project:
      data-wavejson='{ signal: [ { name: "clk", wave: "p....." }, { name: "dat", wave: "x.345x." } ] }'></div>
 ```
 
-The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the hint in the corner) to go back to viewing. On a narrow card the whole diagram is **scaled down to fit the width**, so readers see everything at a glance instead of having to scroll sideways; once they click into editing it goes back to 1:1 with scrolling, so cells stay easy to hit. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
+The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the pencil icon in the corner) to go back to viewing. On a narrow card the whole diagram is **scaled down to fit the width**, so readers see everything at a glance instead of having to scroll sideways; once they click into editing it goes back to 1:1 with scrolling, so cells stay easy to hit. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
 
 Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the fourth icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
 
@@ -38,7 +38,7 @@ el.addEventListener('timingbench:change', e => {
 |---|---|
 | Default state | read-only (waveform only, no buttons) |
 | Enter editing | click the waveform (the clicked cell is selected for you) |
-| Leave editing | `Esc`, or the hint in the bottom-right corner |
+| Leave editing | `Esc`, or the pencil icon in the bottom-right corner (it turns into a check mark while editing) |
 | Auto height | the card reports its real (post-scaling) height via `postMessage`; `embed.js` applies it |
 | Narrow cards | the read-only diagram scales to fit the card width; editing restores 1:1 |
 | Host events | `timingbench:ready` · `timingbench:change` · `timingbench:mode` |
