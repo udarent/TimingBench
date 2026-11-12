@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **WaveJSON ⇄ editable timing diagrams.** Edit the diagram and the source is rewritten; edit the source and the diagram redraws — both stay in sync.
 
-`0.5.0` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/)
+`0.5.0` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
 
 There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
 
@@ -20,7 +20,7 @@ Two lines, no build step, no dependency in your project:
 
 The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the hint in the corner) to go back to viewing. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
 
-Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/), then click the fourth icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
+Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the fourth icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
 
 Need programmatic control?
 
@@ -70,7 +70,7 @@ Open the page and you get this source next to its editable timing diagram. Click
 
 | Goal | How |
 |---|---|
-| Try it now | [Online editor](https://udarent.github.io/TimingBench/) · phones / tablets switch to the touch layout automatically |
+| Try it now | [Online editor](https://udarent.github.io/TimingBench/editor.html) · phones / tablets switch to the touch layout automatically |
 | Run locally | `git clone https://github.com/udarent/TimingBench.git && cd TimingBench && npm start` → <http://127.0.0.1:5173/> |
 | Self-host | Put this entire directory on any static server; for GitHub Pages choose `main` / `/ (root)`, no CI needed |
 | Preview touch UI on desktop | Append `?touch=1` to the URL |

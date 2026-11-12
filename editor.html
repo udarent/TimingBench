@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TimingBench</title>
+<meta name="author" content="udarent">
+<meta name="email" content="helloyuechen@163.com">
+<meta name="version" content="0.5.0">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+<nav class="tabbar" id="tabbar" role="tablist" aria-label="视图切换">
+  <button type="button" role="tab" data-view="diagram" aria-selected="true">时序图</button>
+  <button type="button" role="tab" data-view="src" aria-selected="false">源码</button>
+  <span class="tb-title">TimingBench</span>
+</nav>
+<div class="app" id="app" data-view="diagram">
+  <div class="pane src">
+    <div class="gutter" id="gutter" aria-hidden="true"></div>
+    <textarea id="code" spellcheck="false" wrap="off" aria-label="WaveJSON 源码"></textarea>
+    <div class="errdot" id="errdot" hidden></div>
+  </div>
+  <div class="pane diagram">
+    <div class="svgwrap" id="svgwrap" aria-label="可编辑时序图画布"></div>
+  </div>
+</div>
+<div class="touchbar" id="touchbar" role="toolbar" aria-label="触摸操作栏">
+  <button type="button" data-tb="undo"><span class="ico">↶</span>撤销</button>
+  <button type="button" data-tb="redo"><span class="ico">↷</span>重做</button>
+  <span class="tbsep"></span>
+  <button type="button" data-panel="obj" aria-pressed="false"><span class="ico">✎</span>对象</button>
+  <button type="button" data-panel="col" aria-pressed="false"><span class="ico">▦</span>列</button>
+  <button type="button" data-tb="link" aria-pressed="false"><span class="ico">◇</span>连线</button>
+  <button type="button" data-tb="cancel"><span class="ico">✕</span>取消</button>
+</div>
+<div class="tbpanel" id="tbpanel"></div>
+<button type="button" class="embedhint" id="embedhint">点击波形进入编辑</button>
+<div class="toast" id="toast" aria-live="polite"></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

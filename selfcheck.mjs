@@ -106,8 +106,11 @@ function check() {
   // 版本一致 + 静态站点入口自洽（GitHub Pages 以仓库根为站点根）
   const version = JSON.parse(read('package.json')).version;
   ok(read('VERSION').trim() === version, 'VERSION 与 package.json 不一致');
-  const html = read('index.html');
-  ok(html.includes('content="' + version + '"'), 'index.html 版本不一致');
+  // 站点两页：index.html = 极简介绍页（Pages 首页），editor.html = 编辑器。
+  const landing = read('index.html');
+  const html = read('editor.html');
+  ok(html.includes('content="' + version + '"'), 'editor.html 版本不一致');
+  ok(landing.includes('content="' + version + '"'), 'index.html 版本不一致');
   // 双语 README：英文为主文件、中文独立成篇，两边互链且版本号同步
   const enReadme = read('README.md'), zhName = 'README.zh-CN.md';
   const hasZh = fs.existsSync(path.join(ROOT, zhName));
@@ -170,13 +173,26 @@ function check() {
   ok(kbRows(enKb) >= 18 && kbRows(zhKb) === kbRows(enKb),
     '双语快捷键表行数不一致或内容过短：en=' + kbRows(enKb) + ' zh=' + kbRows(zhKb));
   const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
-  ok(refs.length >= 2, 'index.html 未引用样式与入口脚本');
+  ok(refs.length >= 2, 'editor.html 未引用样式与入口脚本');
   for (const ref of refs) {
     if (/^(https?:|data:|#)/.test(ref)) continue;
-    ok(fs.existsSync(path.join(ROOT, ref)), 'index.html 引用的资源缺失：' + ref);
+    ok(fs.existsSync(path.join(ROOT, ref)), 'editor.html 引用的资源缺失：' + ref);
   }
-  ok(refs.every((r) => !r.startsWith('../')), 'index.html 存在跳出站点根的相对路径');
+  ok(refs.every((r) => !r.startsWith('../')), 'editor.html 存在跳出站点根的相对路径');
   ok(fs.existsSync(path.join(ROOT, '.nojekyll')), '缺少 .nojekyll');
+
+  // 首页是介绍页：极简、自包含（不引外部 CSS / JS）、必须有进编辑器的入口与演示动图
+  const lrefs = [...landing.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+  ok(lrefs.includes('editor.html'), '首页缺少进入编辑器的入口 editor.html');
+  ok(lrefs.some((r) => r === 'assets/bidirectional-demo.gif'), '首页未引用演示动图');
+  ok(!/<script/.test(landing), '首页不应加载脚本（极简介绍页保持纯静态自包含）');
+  ok(!/<link[^>]+stylesheet/.test(landing), '首页不应引外部样式表（自带内联样式）');
+  ok(/prefers-color-scheme/.test(landing), '首页未跟随系统明暗主题');
+  for (const ref of lrefs) {
+    if (/^(https?:|data:|#)/.test(ref)) continue;
+    ok(fs.existsSync(path.join(ROOT, ref)), '首页引用的资源缺失：' + ref);
+  }
+  ok(lrefs.every((r) => !r.startsWith('../')), '首页存在跳出站点根的相对路径');
 
   // 触摸版式的容器与入口：桌面隐藏、粗指针（或 ?touch=1）时由 main.js 装配
   for (const id of ['app', 'tabbar', 'touchbar', 'tbpanel', 'toast'])

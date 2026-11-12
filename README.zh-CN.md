@@ -4,7 +4,7 @@
 
 **WaveJSON ⇄ 可编辑时序图。** 改图形回写源码，改源码重绘图形，两侧实时同步。
 
-`0.5.0` · [MIT](LICENSE) · 纯静态 · 零构建 · 零依赖 · 完全本地运行 · [在线打开](https://udarent.github.io/TimingBench/)
+`0.5.0` · [MIT](LICENSE) · 纯静态 · 零构建 · 零依赖 · 完全本地运行 · [在线打开](https://udarent.github.io/TimingBench/editor.html)
 
 两侧只有一份语义：图形回写优先打最小补丁（注释、缩进、键序、引号原样保留），生成结果若与图形不等价就回滚，不会静默改坏你的源码。
 
@@ -20,7 +20,7 @@
 
 卡片**默认只读**——读者只看到波形；点一下就在原地变成可编辑，按 `Esc`（或点右下角提示条）回到查看。它跑在自己的 iframe 里，宿主页面的 CSS 进不来、它的样式也污染不到宿主。
 
-不想手写这段代码？在[工作台](https://udarent.github.io/TimingBench/)里画好图，点画布左上角第四个图标 `<>`，它会按当前源码生成上面那段片段，一键复制即可。
+不想手写这段代码？在[工作台](https://udarent.github.io/TimingBench/editor.html)里画好图，点画布左上角第四个图标 `<>`，它会按当前源码生成上面那段片段，一键复制即可。
 
 想用代码控制？
 
@@ -70,7 +70,7 @@ el.addEventListener('timingbench:change', e => {
 
 | 场景 | 做法 |
 |---|---|
-| 直接试 | [在线编辑器](https://udarent.github.io/TimingBench/) · 手机 / 平板自动切换触摸版式 |
+| 直接试 | [在线编辑器](https://udarent.github.io/TimingBench/editor.html) · 手机 / 平板自动切换触摸版式 |
 | 本地跑 | `git clone https://github.com/udarent/TimingBench.git && cd TimingBench && npm start` → <http://127.0.0.1:5173/> |
 | 自托管 | 把整个目录放到任意静态服务器；GitHub Pages 选 `main` / `/ (root)`，无需 CI |
 | 桌面预览触摸版式 | 地址后加 `?touch=1` |

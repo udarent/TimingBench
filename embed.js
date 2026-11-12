@@ -36,7 +36,7 @@
     var height = opts.height || el.getAttribute('data-height') || 240;
 
     var frame = document.createElement('iframe');
-    frame.src = BASE + 'index.html?embed=1' + (mode === 'edit' ? '&mode=edit' : '');
+    frame.src = BASE + 'editor.html?embed=1' + (mode === 'edit' ? '&mode=edit' : '');
     frame.title = opts.title || el.getAttribute('data-title') || 'TimingBench 时序图';
     frame.loading = 'lazy';
     frame.style.cssText = 'display:block;width:100%;border:0;height:' + (parseInt(height, 10) || 240) + 'px';
