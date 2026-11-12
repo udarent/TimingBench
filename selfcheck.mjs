@@ -293,7 +293,7 @@ function check() {
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',
     'src/editor/touch.js', 'src/editor/index.js', 'src/editor/share.js',
     'src/editor/embed-shell.js', 'src/editor/waveform.js', 'src/editor/mode.js',
-    'src/editor/geometry.js', 'src/main.js', 'embed.js'];
+    'src/editor/geometry.js', 'src/main.js', 'src/core/example.js', 'src/core/util.js', 'embed.js'];
   const cjk = new RegExp('[\\u4e00-\\u9fa5\\u3040-\\u30ff\\uac00-\\ud7af]');
   for (const f of runtimeFiles) {
     if (!fs.existsSync(path.join(ROOT, f))) continue;
