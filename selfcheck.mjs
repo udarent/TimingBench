@@ -197,6 +197,21 @@ function check() {
      /ctx\.wrap\.addEventListener\('scroll'/.test(editorSrc),
     '缺少旋屏重排或滚动跟随');
 
+  // 分层：波形层（渲染内核）与操作层（UI）必须解耦。
+  // ① waveform.js 只做「给定字符 → 图元字符串」，不得读视口尺寸或滚动位置；
+  // ② shapes.js 对 waveGlyph 的调用不得掺入 viewW / scrollLeft 等操作层变量；
+  // ③ 渲染内核模块不得反向依赖 UI 模块（shapes / interactions / touch / index），
+  //    保证「改 UI 不动波形」在依赖图上就成立。
+  const waveSrc = read('src/editor/waveform.js');
+  ok(!/clientWidth|clientHeight|innerWidth|innerHeight|scrollLeft|scrollTop/.test(waveSrc),
+    'waveform.js 读取了视口尺寸 / 滚动位置（渲染内核必须与 UI 解耦）');
+  ok(!/from ['"]\.\/(shapes|interactions|touch|index)\.js['"]/.test(waveSrc),
+    'waveform.js 反向依赖了 UI 模块（渲染内核必须保持底层）');
+  ok(/waveGlyph\(w,prevCh,x0,yT,yM,yB,CELL,/.test(shapesSrc),
+    'waveGlyph 调用参数被改动（不得掺入操作层的排版变量）');
+  ok(!/waveGlyph\([^)]*viewW|waveGlyph\([^)]*scrollLeft|waveGlyph\([^)]*barLeft/.test(shapesSrc),
+    'waveGlyph 被传入了操作层变量（波形层与 UI 已耦合）');
+
   // src/ 下所有 ES module 的相对 import 必须指向真实文件，避免残留失效引用
   function walk(dir) {
     let out = [];
