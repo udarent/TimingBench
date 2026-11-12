@@ -165,9 +165,18 @@ export function createShapes(ctx){
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     var contentH=actY+barH+20;
     var H=state.embedCard?contentH:Math.max(contentH, viewH), c, x;
-    state.barY=actY; state.barH=barH; state.viewW=viewW; state.contentH=contentH;
+    // 嵌入只读卡片：整张图按卡片宽度等比缩小，让波形一次全显示 —— 读者不会去横向拖一张
+    // 只读卡片。进入编辑后 fit=1，恢复 1:1 + 滚动，保证点选精度。
+    // 只改 svg 的渲染尺寸，viewBox 仍是内部坐标 ⇒ 所有图元几何、getBBox 与就地编辑的
+    // 坐标换算都不受影响，波形层指纹也不受影响。
+    var fit=(state.embedCard&&state.readonly)?Math.min(1, viewW/W):1;
+    var outW=fit<1?viewW:W;
+    var outH=fit<1?Math.round(H*outW/W):H;
+    state.barY=actY; state.barH=barH; state.viewW=viewW; state.fit=fit;
+    // 高度上报用缩放后的真实像素高，否则宿主会按原始高设 iframe，底部留一片空白。
+    state.contentH=state.embedCard?outH:contentH;
     state.W=W; state.H=H;
-    var o=['<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.linkMode?'linkMode':'')+'" role="img"><title>可编辑时序图</title>'];
+    var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.linkMode?'linkMode':'')+'" role="img"><title>可编辑时序图</title>'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
     if(!state.readonly) o.push(hudSVG(viewW));

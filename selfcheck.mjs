@@ -263,6 +263,16 @@ function check() {
     '片段应用双引号包裹 data-wavejson（单引号会让源码里的 &#39; 遍地都是）');
   ok(/data-cmd="embed"|'embed'/.test(shapesSrc),
     'HUD 未提供嵌入代码入口');
+  // 嵌入只读卡片必须按容器宽度等比缩小：否则 320/360px 手机上只能看到半张波形，
+  // 而读者不会去横向拖一张只读卡片。缩放只改 svg 渲染尺寸，viewBox 保持内部坐标。
+  ok(/state\.embedCard&&state\.readonly/.test(shapesSrc) && /var fit=/.test(shapesSrc),
+    '嵌入只读卡片缺少按容器宽度等比缩放（窄屏会只显示部分波形）');
+  ok(/outW=fit<1\?viewW:W/.test(shapesSrc) && /viewBox="0 0 '\+W\+' '\+H\+'"/.test(shapesSrc),
+    '缩放未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
+  // 只读态没有字符条，触摸引导 toast 不适用，也不该出现在英文宿主页面里
+  const touchSrc = read('src/editor/touch.js');
+  ok(/isReadonly && ctx\.isReadonly\(\)\) return/.test(touchSrc),
+    '只读态仍会弹触摸引导 toast');
 
   // src/ 下所有 ES module 的相对 import 必须指向真实文件，避免残留失效引用
   function walk(dir) {

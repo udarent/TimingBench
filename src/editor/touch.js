@@ -160,6 +160,12 @@ export function attachTouchUI(ctx, dom) {
     if (lk) lk.setAttribute('aria-pressed', String(state.linkMode));
   };
   ctx.closePanel = closePanel;
+  ctx.hideToast = function () { if (toast) { clearTimeout(toastTimer); toast.classList.remove('show'); } };
 
-  setTimeout(function () { say('点格子选中 → 点字符条写入；双敲或长按就地编辑'); }, 500);
+  setTimeout(function () {
+    // 只读（嵌入卡片默认态）没有字符条可点，这条引导不适用，也不该弹 ——
+    // 何况它是中文，会出现在英文宿主页面里。
+    if (ctx.isReadonly && ctx.isReadonly()) return;
+    say('点格子选中 → 点字符条写入；双敲或长按就地编辑');
+  }, 500);
 }

@@ -179,6 +179,7 @@ export function createEditor(dom){
       state.linkMode=false; state.connect=null; state.linkCursor=null;
       if(ctx.inlineCtx) ctx.closeInline(true);
       if(ctx.closePanel) ctx.closePanel();
+      if(ctx.hideToast) ctx.hideToast();
       if(ctx.wrap.blur) try{ ctx.wrap.blur(); }catch(e){}
     }
     document.documentElement.classList.toggle('is-readonly', on);
