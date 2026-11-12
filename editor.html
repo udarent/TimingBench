@@ -10,32 +10,29 @@
 <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
-<nav class="tabbar" id="tabbar" role="tablist" aria-label="视图切换">
-  <button type="button" role="tab" data-view="diagram" aria-selected="true">时序图</button>
-  <button type="button" role="tab" data-view="src" aria-selected="false">源码</button>
+<nav class="tabbar" id="tabbar" role="tablist" aria-label="Switch view">
+  <button type="button" role="tab" data-view="diagram" aria-selected="true" aria-label="Timing diagram" data-name="Timing diagram"><svg class="tabico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 16h3v-7h4v7h4V9h4v7h3"/></svg></button>
+  <button type="button" role="tab" data-view="src" aria-selected="false" aria-label="Source" data-name="Source"><svg class="tabico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg></button>
   <span class="tb-title">TimingBench</span>
 </nav>
 <div class="app" id="app" data-view="diagram">
   <div class="pane src">
     <div class="gutter" id="gutter" aria-hidden="true"></div>
-    <textarea id="code" spellcheck="false" wrap="off" aria-label="WaveJSON 源码"></textarea>
+    <textarea id="code" spellcheck="false" wrap="off" aria-label="WaveJSON source"></textarea>
     <div class="errdot" id="errdot" hidden></div>
   </div>
   <div class="pane diagram">
-    <div class="svgwrap" id="svgwrap" aria-label="可编辑时序图画布"></div>
+    <div class="svgwrap" id="svgwrap" aria-label="Editable timing diagram canvas"></div>
   </div>
 </div>
-<div class="touchbar" id="touchbar" role="toolbar" aria-label="触摸操作栏">
-  <button type="button" data-tb="undo"><span class="ico">↶</span>撤销</button>
-  <button type="button" data-tb="redo"><span class="ico">↷</span>重做</button>
-  <span class="tbsep"></span>
-  <button type="button" data-panel="obj" aria-pressed="false"><span class="ico">✎</span>对象</button>
-  <button type="button" data-panel="col" aria-pressed="false"><span class="ico">▦</span>列</button>
-  <button type="button" data-tb="link" aria-pressed="false"><span class="ico">◇</span>连线</button>
-  <button type="button" data-tb="cancel"><span class="ico">✕</span>取消</button>
+<div class="touchbar" id="touchbar" role="toolbar" aria-label="Touch toolbar">
+  <button type="button" data-tb="undo" aria-label="Undo" data-name="Undo"><span class="ico">↶</span></button>
+  <button type="button" data-tb="redo" aria-label="Redo" data-name="Redo"><span class="ico">↷</span></button>
+  <button type="button" data-tb="link" aria-pressed="false" aria-label="Link mode" data-name="Link mode"><span class="ico">◇</span></button>
+  <button type="button" data-tb="cancel" aria-label="Cancel" data-name="Cancel"><span class="ico">✕</span></button>
 </div>
 <div class="tbpanel" id="tbpanel"></div>
-<button type="button" class="embedhint" id="embedhint">点击波形进入编辑</button>
+<button type="button" class="embedhint" id="embedhint">Click to edit</button>
 <div class="toast" id="toast" aria-live="polite"></div>
 <script type="module" src="src/main.js"></script>
 </body>

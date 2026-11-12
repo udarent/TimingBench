@@ -38,12 +38,12 @@ export function attachShare(ctx) {
     panel = document.createElement('div');
     panel.className = 'shareMask';
     panel.innerHTML =
-      '<div class="sharePanel" role="dialog" aria-modal="true" aria-label="嵌入代码">' +
-        '<div class="shareHead"><span>嵌到你的页面</span>' +
-          '<button type="button" class="shareClose" aria-label="关闭">✕</button></div>' +
-        '<p class="shareHint">把下面两行贴进你的页面，就会显示这张波形；读者点一下即可编辑。</p>' +
-        '<textarea class="shareCode" readonly spellcheck="false" aria-label="嵌入代码"></textarea>' +
-        '<div class="shareFoot"><button type="button" class="shareCopy">复制代码</button>' +
+      '<div class="sharePanel" role="dialog" aria-modal="true" aria-label="Embed code">' +
+        '<div class="shareHead"><span>Embed in your page</span>' +
+          '<button type="button" class="shareClose" aria-label="Close">✕</button></div>' +
+        '<p class="shareHint">Paste these two lines into your page. The diagram renders read-only; a click makes it editable.</p>' +
+        '<textarea class="shareCode" readonly spellcheck="false" aria-label="Embed snippet"></textarea>' +
+        '<div class="shareFoot"><button type="button" class="shareCopy">Copy</button>' +
           '<span class="shareTip" aria-live="polite"></span></div>' +
       '</div>';
     document.body.appendChild(panel);
@@ -63,7 +63,7 @@ export function attachShare(ctx) {
   function copy() {
     var text = codeEl.value;
     function done(ok) {
-      tipEl.textContent = ok ? '已复制' : '请手动全选复制';
+      tipEl.textContent = ok ? 'Copied' : 'Select and copy manually';
       tipEl.className = 'shareTip' + (ok ? ' ok' : '');
       setTimeout(function () { if (tipEl) tipEl.textContent = ''; }, 1800);
     }
@@ -72,7 +72,7 @@ export function attachShare(ctx) {
         navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallback(text)); });
         return;
       }
-    } catch (e) { /* 落到兜底 */ }
+    } catch (e) { /* fall through to the manual hint */ }
     done(fallback(text));
   }
 

@@ -4,6 +4,7 @@
 // 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
+import { TOUCH } from './mode.js';
 import { esc, cut } from '../core/util.js';
 
 var CELL=G.CELL, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD;
@@ -24,7 +25,7 @@ export function attachInteractions(ctx){
     var ed=ctx.inlineCtx, v=ed.input.value;
     ctx.inlineCtx=null;
     if(ed.fo&&ed.fo.parentNode) ed.fo.parentNode.removeChild(ed.fo);
-    if(doCommit){ try{ ed.apply(v); }catch(e){ ctx.notify('就地编辑失败：'+e.message,true); } }
+    if(doCommit){ try{ ed.apply(v); }catch(e){ ctx.notify('Inline edit failed: '+e.message,true); } }
     // 键盘结算（Enter / Esc）后把焦点还给画布，否则必须再点一次画布才能继续纯键盘编辑。
     // 失焦提交不抢焦点：用户可能正点进源码框。
     if(restoreFocus) ctx.focusCanvas();
@@ -44,7 +45,7 @@ export function attachInteractions(ctx){
     inp.setAttribute('class','inline-edit');
     inp.setAttribute('spellcheck','false'); inp.setAttribute('autocomplete','off');
     inp.value=(value===undefined||value===null)?'':String(value);
-    inp.title=opts.title||'Enter 确认 · Esc 取消 · 失焦自动提交';
+    inp.title=opts.title||'Enter to confirm · Esc to cancel';
     inp.placeholder=opts.placeholder||'';
     fo.appendChild(inp); svg.appendChild(fo);
     ctx.inlineCtx={apply:apply,input:inp,fo:fo};
@@ -54,7 +55,6 @@ export function attachInteractions(ctx){
     });
     inp.addEventListener('blur',function(){ closeInline(true); });
     try{ inp.focus(); inp.select(); }catch(e){}
-    if(opts.msg) ctx.notify(opts.msg);
   }
   function cellAt(e){
     var g=e.target;
@@ -82,22 +82,22 @@ export function attachInteractions(ctx){
   // 每个行内工具 / 图元徽标对应的就地编辑规格
   function rowSpec(l,act){
     switch(act){
-      case 'phase': return { val:String(l.phase), title:'相位 phase', label:'相位', meta:true, width:96,
+      case 'phase': return { val:String(l.phase), title:'phase', label:'phase', meta:true, width:96,
         makeOp:function(v){ var n=Number(v); return v!==''&&isFinite(n)?{t:'setPhase',lane:l.id,v:n}:null; } };
-      case 'period': return { val:String(l.period), title:'周期 period（≥1）', label:'周期', meta:true, width:96,
+      case 'period': return { val:String(l.period), title:'period (>=1)', label:'period', meta:true, width:96,
         makeOp:function(v){ var n=Number(v); return v!==''&&isFinite(n)&&n>=1?{t:'setPeriod',lane:l.id,v:n}:null; } };
-      case 'wave': return { val:Core.laneWave(l), title:'整行 wave 字符串', label:'整行 wave', wide:true,
+      case 'wave': return { val:Core.laneWave(l), title:'row wave', label:'row wave', wide:true,
         makeOp:function(v){ return {t:'setWave',lane:l.id,v:v}; } };
-      case 'data': return { val:Core.laneLabels(l).join(' '), title:'整行 data 标签（空格分隔，留空删除字段）', label:'整行 data', wide:true,
+      case 'data': return { val:Core.laneLabels(l).join(' '), title:'row data (space separated, empty removes)', label:'row data', wide:true,
         makeOp:function(v){ return {t:'setLabels',lane:l.id,v:v}; } };
-      case 'node': return { val:l.node.join('').replace(/\.+$/,''), title:'整行 node 标记串', label:'整行 node', wide:true,
+      case 'node': return { val:l.node.join('').replace(/\.+$/,''), title:'row node', label:'row node', wide:true,
         makeOp:function(v){ return {t:'setNodeStr',lane:l.id,v:v}; } };
     }
     return null;
   }
   function openRowEditor(laneId,act){
     var l=findLane(laneId); if(!l) return;
-    if(l.kind==='spacer'){ ctx.notify('空行（spacer）没有可编辑字段，可用悬停该行显现的工具增删',true); return; }
+    if(l.kind==='spacer'){ ctx.notify('Spacer rows have no editable field',true); return; }
     var spec=rowSpec(l,act); if(!spec) return;
     var anchor=spec.wide
       ? wrap.querySelector('rect.waveZone[data-lane="'+laneId+'"]')
@@ -107,24 +107,23 @@ export function attachInteractions(ctx){
     if(!anchor) return;
     openInline(anchor,spec.val,function(v){
       var op=spec.makeOp(v);
-      if(!op){ ctx.notify('输入无效：'+(act==='phase'?'相位需为数字':'周期需为 ≥1 的数字'),true); return; }
+      if(!op){ ctx.notify('Invalid input: '+(act==='phase'?'phase must be a number':'period must be a number >= 1'),true); return; }
       ctx.commit(op,spec.label+' → '+v);
-    },{ title:spec.title+' · Enter 确认 / Esc 取消', placeholder:spec.title, width:spec.width,
-        msg:'就地编辑 '+spec.label+'：输入框是时序图里的 foreignObject，Enter 或点击别处回写源码' });
+    },{ title:spec.title+' · Enter to confirm / Esc to cancel', placeholder:spec.title, width:spec.width });
   }
   function handleTool(act,laneId){
     if(act==='wave'||act==='data'||act==='node'){ openRowEditor(laneId,act); return; }
-    if(act==='del'){ state.selLane=null; ctx.commit({t:'deleteLane',lane:laneId},'删除该行'); return; }
+    if(act==='del'){ state.selLane=null; ctx.commit({t:'deleteLane',lane:laneId},'delete row'); return; }
     if(act==='add'||act==='spacer'){
       var at=0; state.ir.lanes.forEach(function(x,i){ if(x.id===laneId) at=i+1; });
       var id='ln'+Date.now().toString(36);
-      ctx.commit({t:'addLane',id:id,name:'new',at:at,kind:act==='spacer'?'spacer':'signal'},act==='spacer'?'新增空行（spacer）':'新增信号行');
+      ctx.commit({t:'addLane',id:id,name:'new',at:at,kind:act==='spacer'?'spacer':'signal'},act==='spacer'?'add spacer':'add signal row');
     }
   }
   function handleColAct(act,c){
-    if(act==='insert') ctx.commit({t:'insertTick',tick:c},'插入周期 @ t'+c);
-    else if(act==='delete') ctx.commit({t:'deleteTick',tick:c},'删除周期 @ t'+c);
-    else if(act==='gap') ctx.commit({t:'toggleGap',tick:c},'切换相位线 @ t'+c);
+    if(act==='insert') ctx.commit({t:'insertTick',tick:c},'insert cycle @ t'+c);
+    else if(act==='delete') ctx.commit({t:'deleteTick',tick:c},'delete cycle @ t'+c);
+    else if(act==='gap') ctx.commit({t:'toggleGap',tick:c},'toggle phase line @ t'+c);
   }
   function openEdgeEditor(i){
     var cur=state.ir&&state.ir.edges[i]; if(cur===undefined) return;
@@ -137,21 +136,19 @@ export function attachInteractions(ctx){
     openInline(anchor,cur,function(v){
       var t=v.trim(), arr=state.ir.edges.slice();
       if(!t) arr.splice(i,1); else arr[i]=t;
-      ctx.commit({t:'setEdges',v:arr},'编辑 edge → '+(t||'删除'));
-    },{ title:'edge · Enter 确认 / Esc 取消 / 清空即删除', placeholder:'a~>b t1', width:170,
-        msg:'就地编辑弧线：改完按 Enter 即回写源码的 edge 数组' });
+      ctx.commit({t:'setEdges',v:arr},'edit edge -> '+(t||'remove'));
+    },{ title:'edge · Enter to confirm / Esc to cancel / empty removes', placeholder:'a~>b t1', width:170 });
   }
 
   // 状态写入的唯一操作：给「选中格」一个字符，写入后自动右移
   function writeChar(v,dir){
     var sc=state.selCell;
-    if(!sc||!state.ir){ ctx.notify('请先选中一个波形格（Tab / F6 进入画布），再写入字符',true); return; }
+    if(!sc||!state.ir){ ctx.notify('Select a cell first (Tab / F6 focuses the canvas)',true); return; }
     var N=state.ir.ticks;
     state.ch=v;
     var nt=dir==='left'?Math.max(0,sc.tick-1):Math.min(sc.tick+1,N-1);
     state.selCell={lane:sc.lane,tick:nt};
-    ctx.commit({t:'setSlot',lanes:[sc.lane],tick:sc.tick,v:v},'写入 '+v+' @ t'+sc.tick,false,true);
-    ctx.notify('写入 '+v+' → 选中格'+(dir==='left'?'左移':'右移')+'到 t'+nt+'；继续敲字符可连写波形');
+    ctx.commit({t:'setSlot',lanes:[sc.lane],tick:sc.tick,v:v},'write '+v+' @ t'+sc.tick,false,true);
   }
 
   // 两点式连线：仅在 linkMode 下由 rect.cell 分派进来，端点与时序编辑是同一片格子。
@@ -167,11 +164,10 @@ export function attachInteractions(ctx){
     if(!state.connect){
       state.connect={lane:a.lane,tick:a.tick,node:a.node,li:li};
       ctx.redraw(); ctx.focusCanvas();
-      ctx.notify('连线：已选 t'+a.tick+' 的'+(a.node?'节点 '+a.node:'波形格')+' · 点第二个波形格完成（移动鼠标可预览，Esc 退出）');
       return;
     }
     var s=state.connect;
-    if(s.lane===a.lane&&s.tick===a.tick){ state.connect=null; ctx.redraw(); ctx.notify('已取消起点：请重新选一个波形格'); return; }
+    if(s.lane===a.lane&&s.tick===a.tick){ state.connect=null; ctx.redraw(); ctx.notify('Start point cleared, pick a cell again'); return; }
     if(!ctx.syncCode()){ state.connect=null; state.linkMode=false; state.linkCursor=null; ctx.redraw(); return; }
     var used={}, ops=[];
     state.ir.lanes.forEach(function(l){ (l.node||[]).forEach(function(ch){ if(ch&&ch!=='.') used[ch]=1; }); });
@@ -184,7 +180,7 @@ export function attachInteractions(ctx){
       return null;
     }
     var na=ensure(s), nb=ensure(a);
-    if(!na||!nb||na===nb){ state.connect=null; state.linkMode=false; state.linkCursor=null; ctx.redraw(); ctx.notify('连线失败：可用节点字符不足或两端相同',true); return; }
+    if(!na||!nb||na===nb){ state.connect=null; state.linkMode=false; state.linkCursor=null; ctx.redraw(); ctx.notify('Link failed: not enough node letters, or both ends are the same',true); return; }
     var arr=state.ir.edges.slice(), newHead=na+'~>'+nb, found=-1, oldHead='';
     arr.forEach(function(t,i){
       var h=String(t).trim().split(/\s+/)[0]||'';
@@ -196,8 +192,7 @@ export function attachInteractions(ctx){
     } else arr.push(newHead);
     ops.push({t:'setEdges',v:arr});
     state.connect=null; state.linkMode=false; state.linkCursor=null;
-    ctx.commit(ops,'两点连线 '+na+' → '+nb,false,true);
-    ctx.notify('连线完成：'+newHead+' → 已回写源码 node / edge（合并为一次撤销）');
+    ctx.commit(ops,'link '+na+' -> '+nb,false,true);
   }
 
   // 统一的格子双击：无论该格当前是 1 / 4 / x 还是尾部续写格，恒为编辑「这一格的波形字符」
@@ -211,10 +206,9 @@ export function attachInteractions(ctx){
     var sl=l.slots[tick], cur=sl?sl.w:(l.slots.length?l.slots[l.slots.length-1].w:'x');
     openInline(target,cur,function(v){
       var t=String(v).trim();
-      if(Core.ALL.indexOf(t)<0){ ctx.notify('波形字符只能是 '+Core.ALL.join('')+' 中的一个，已忽略输入',true); return; }
-      ctx.commit({t:'setSlot',lanes:[laneId],tick:tick,v:t},'就地改波形字符 → '+t);
-    },{ title:'波形字符 · Enter 确认 / Esc 取消', placeholder:'1 / 0 / x / 4 / P …', width:126,
-        msg:'双击任意格子都是同一个输入框：就地改这一格的波形字符（尾部续写格写入即续长 wave）' });
+      if(Core.ALL.indexOf(t)<0){ ctx.notify('Allowed wave characters: '+Core.ALL.join(''),true); return; }
+      ctx.commit({t:'setSlot',lanes:[laneId],tick:tick,v:t},'edit wave char -> '+t);
+    },{ title:'wave character · Enter to confirm / Esc to cancel', placeholder:'1 / 0 / x / 4 / P ...', width:126 });
   }
   function openNodeEditor(laneId,tick,curNode){
     var l=findLane(laneId); if(!l||l.kind==='spacer'||tick>=l.slots.length) return;
@@ -222,29 +216,26 @@ export function attachInteractions(ctx){
     var n=l.node[tick], cur=(curNode&&curNode!=='.')?curNode:(n&&n!=='.'?n:'');
     openInline(target,cur,function(v){
       var t=String(v).trim().charAt(0)||'.';
-      ctx.commit({t:'setNode',lane:laneId,tick:tick,v:t},'就地编辑节点标记 → '+(t==='.'?'清除':t));
-    },{ title:'节点标记（单字符）· Enter 确认 / Esc 取消', placeholder:'a', width:110,
-        msg:'选中格后 Shift+Enter 改该格 node 标记：单字符，留空清除' });
+      ctx.commit({t:'setNode',lane:laneId,tick:tick,v:t},'edit node marker -> '+(t==='.'?'clear':t));
+    },{ title:'node marker (single char) · Enter to confirm / Esc to cancel', placeholder:'a', width:110 });
   }
   function openLabelEditor(laneId,tick){
     var l=findLane(laneId); if(!l||l.kind==='spacer') return;
     var sl=l.slots[tick];
-    if(!sl||!sl.point||sl.gap||!Core.BUS.test(sl.w)){ ctx.notify('该格不是数据块，没有 data 标签',true); return; }
+    if(!sl||!sl.point||sl.gap||!Core.BUS.test(sl.w)){ ctx.notify('This cell is not a data block',true); return; }
     var target=cellTarget(laneId,tick); if(!target) return;
     openInline(target,sl.label||'',function(v){
       var t=String(v).trim();
-      ctx.commit({t:'setLabel',lane:laneId,tick:tick,v:t},'就地编辑数据标签 → '+(t||'空'));
-    },{ title:'数据标签 · Enter 确认 / Esc 取消 / 清空即删除', placeholder:'标签', width:140,
-        msg:'选中数据块后按 B 或点 ✎ 徽标改该格 data 标签：可含空格，清空即删除' });
+      ctx.commit({t:'setLabel',lane:laneId,tick:tick,v:t},'edit data label -> '+(t||'empty'));
+    },{ title:'data label · Enter to confirm / Esc to cancel / empty removes', placeholder:'label', width:140 });
   }
   function openInlineFor(s){
     if(s.edgeIdx!==undefined){ openEdgeEditor(s.edgeIdx); return; }
     if(s.nameLane){
       var l=findLane(s.nameLane); if(!l||l.kind==='spacer') return;
       var el=wrap.querySelector('text.laneName[data-lane="'+s.nameLane+'"] tspan.laneNameText');
-      openInline(el,l.name,function(v){ ctx.commit({t:'rename',lane:s.nameLane,v:v},'重命名 → '+v); },
-        { title:'信号名 · Enter 确认 / Esc 取消', placeholder:'信号名', width:140,
-          msg:'就地编辑信号名：改完按 Enter 或点击别处即回写源码' });
+      openInline(el,l.name,function(v){ ctx.commit({t:'rename',lane:s.nameLane,v:v},'rename -> '+v); },
+        { title:'signal name · Enter to confirm / Esc to cancel', placeholder:'name', width:140 });
       return;
     }
     if(s.lane===undefined||s.tick===undefined) return;
@@ -335,7 +326,7 @@ export function attachInteractions(ctx){
         e.preventDefault();
         var el=findLane(c.lane);
         if(!el||el.kind!=='signal'||!el.slots[c.tick]){
-          ctx.notify('该周期尚未在源码里定义，请选已定义的波形格作为端点',true); return;
+          ctx.notify('That period is not defined in the source yet',true); return;
         }
         state.linkCursor={lane:c.lane,tick:c.tick};
         handleAnchor({lane:c.lane,tick:c.tick,node:nodeChar(c.lane,c.tick)});
@@ -348,7 +339,7 @@ export function attachInteractions(ctx){
       var di=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===c.drag) di=i; });
       if(di<0) return;
       state.drag={ laneId:c.drag, from:di, to:di, base:{ir:state.ir,src:code.value,sel:state.sel} };
-      ctx.focusCanvas(); ctx.notify('拖动第 '+(di+1)+' 行：移到目标位置松手重排（Esc 取消）');
+      ctx.focusCanvas();
       return;
     }
     if(c.ch!==undefined){ if(dbl>1) return; e.preventDefault(); writeChar(c.ch); return; }
@@ -356,7 +347,13 @@ export function attachInteractions(ctx){
     if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
     if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
     if(c.meta){ if(dbl>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }
-    if(c.col!==undefined){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; ctx.redraw(); ctx.status(); return; }
+    if(c.col!==undefined){
+      if(dbl>1) return;
+      e.preventDefault(); state.sel=c.col;
+      // 触摸端：选中列就让出格子选中，底部上下文条随即换成列动作
+      if(TOUCH){ state.selCell=null; state.selLane=null; }
+      ctx.redraw(); ctx.status(); return;
+    }
     if(c.edgeIdx!==undefined){
       if(dbl>1){ e.preventDefault(); openEditorFor(c); return; }
       e.preventDefault(); state.selLane=null; ctx.redraw(); return;
@@ -367,7 +364,12 @@ export function attachInteractions(ctx){
       openEditorFor(c);
       return;
     }
-    if(c.nameLane||c.rowLane){ state.selLane=c.nameLane||c.rowLane; ctx.redraw(); return; }
+    if(c.nameLane||c.rowLane){
+      state.selLane=c.nameLane||c.rowLane;
+      // 触摸端：选中行就让出格子选中与列选中，底部上下文条换成行动作
+      if(TOUCH){ state.selCell=null; state.sel=null; }
+      ctx.redraw(); return;
+    }
     // 单击格子只选中，不写入；写入统一由 writeChar（键盘 / 字符条）完成
     e.preventDefault();
     if(isTouch){
@@ -418,7 +420,7 @@ export function attachInteractions(ctx){
     if(!c||c.lane===undefined||c.tick===undefined||c.lane!==ctx.painting.lane||ctx.painting.ticks.indexOf(c.tick)>=0) return;
     ctx.painting.ticks.push(c.tick); ctx.painting.moved=true;
     state.ch=ctx.painting.v; state.selCell={lane:c.lane,tick:c.tick};
-    ctx.commit({t:'setSlot',lanes:[c.lane],tick:c.tick,v:ctx.painting.v},'漫刷 @ t'+c.tick,true,true);
+    ctx.commit({t:'setSlot',lanes:[c.lane],tick:c.tick,v:ctx.painting.v},'paint @ t'+c.tick,true,true);
   });
   document.addEventListener('mouseup',function(){
     if(Date.now()<ignoreMouseUntil) return;
@@ -430,20 +432,18 @@ export function attachInteractions(ctx){
         var dir=steps>0?'down':'up';
         for(var k=0;k<Math.abs(steps);k++){
           var idx=from+(steps>0?k:-k), lane=state.ir.lanes[idx]; if(!lane) break;
-          ctx.commit({t:'moveLane',lane:lane.id,v:dir},'拖动重排',true,true);
+          ctx.commit({t:'moveLane',lane:lane.id,v:dir},'drag reorder',true,true);
         }
         state.undo.push(d.base); if(state.undo.length>60) state.undo.shift(); state.redo.length=0;
         state.selLane=state.ir.lanes[from+steps]?state.ir.lanes[from+steps].id:null;
-        ctx.notify('拖动重排：第 '+(from+1)+' 行 → 第 '+(from+steps+1)+' 行（整段合并为一次撤销）');
         ctx.status();
-      } else ctx.notify('拖动取消：行顺序未变');
+      }
       ctx.redraw(); ctx.focusCanvas(); ctx.painting=null; return;
     }
     if(!ctx.painting) return;
     var p=ctx.painting; ctx.painting=null;
     if(p.moved){
       state.undo.push(p.base); if(state.undo.length>60) state.undo.shift(); state.redo.length=0;
-      ctx.notify('漫刷完成：'+p.ticks.length+' 个槽合并为一次撤销');
     }
   });
 
@@ -536,12 +536,12 @@ export function attachInteractions(ctx){
   }
   function moveLaneByKeyboard(dir){
     var sc=ensureSel(); if(!sc) return;
-    ctx.commit({t:'moveLane',lane:sc.lane,v:dir},dir==='up'?'键盘上移一行':'键盘下移一行');
+    ctx.commit({t:'moveLane',lane:sc.lane,v:dir},dir==='up'?'move row up':'move row down');
     ctx.clampSel(); ctx.redraw();
   }
   function editEdge(next){
     var n=state.ir.edges.length;
-    if(!n){ ctx.notify('当前源码没有 edge 弧线：按 K 开启连线模式可新建',true); return; }
+    if(!n){ ctx.notify('No edges yet — press K to create one',true); return; }
     if(next) state.edgeIdx=((state.edgeIdx||0)+1)%n;
     if(state.edgeIdx>=n) state.edgeIdx=0;
     ctx.openEdgeEditor(state.edgeIdx);
@@ -550,7 +550,7 @@ export function attachInteractions(ctx){
     if(e.ctrlKey||e.metaKey||e.altKey) return false;
     var lane=findLane(sc.lane);
     function needSignal(){
-      if(!lane||lane.kind==='spacer'){ ctx.notify('当前是空行（spacer），请先用 ↑ / ↓ 移到信号行',true); return false; }
+      if(!lane||lane.kind==='spacer'){ ctx.notify('This is a spacer row — move to a signal row first',true); return false; }
       return true;
     }
     switch(k){
@@ -577,10 +577,10 @@ export function attachInteractions(ctx){
     var lc=state.linkCursor;
     if(k==='Enter'||k===' '||k==='Spacebar'){
       prevent(e);
-      if(!lc){ ctx.notify('没有可用作连线端点的信号行',true); return; }
+      if(!lc){ ctx.notify('No signal rows available as link endpoints',true); return; }
       var l=findLane(lc.lane);
       if(!l||l.kind!=='signal'||!l.slots[lc.tick]){
-        ctx.notify('该周期尚未在源码里定义，请移到已定义的波形格作为端点',true); return;
+        ctx.notify('That period is not defined in the source yet',true); return;
       }
       handleAnchor({lane:lc.lane,tick:lc.tick,node:nodeChar(lc.lane,lc.tick)});
       return;
@@ -617,7 +617,7 @@ export function attachInteractions(ctx){
     if(e.key==='Escape'&&state.drag){
       state.drag=null; var dl=svgRoot()&&svgRoot().querySelector('line.dropLine');
       if(dl&&dl.parentNode) dl.parentNode.removeChild(dl);
-      ctx.redraw(); ctx.notify('已取消拖动'); return;
+      ctx.redraw(); return;
     }
     if(e.key==='Escape'&&state.linkMode){ ctx.setLinkMode(false); return; }
     if((e.ctrlKey||e.metaKey)&&/^(z|y)$/i.test(e.key)&&!typing){

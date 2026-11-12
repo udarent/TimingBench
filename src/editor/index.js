@@ -37,7 +37,7 @@ export function createEditor(dom){
   function syncCode(){
     if(code.value!==state.ir.raw){
       try{ state.ir=Core.buildIR(code.value); state.parseOK=true; }
-      catch(e){ notify('代码尚未解析完成，图形编辑已推迟：'+e.message,true); return false; }
+      catch(e){ notify('Source not parsed yet, diagram edit deferred: '+e.message,true); return false; }
     }
     return true;
   }
@@ -59,8 +59,8 @@ export function createEditor(dom){
     var res=Core.patchSource(state.ir,next);
     var parsed;
     try{ parsed=Core.buildIR(res.src); }
-    catch(e){ notify('生成代码无法解析：'+e.message,true); return; }
-    if(Core.canon(parsed)!==Core.canon(next)){ notify('I2 不变量失败：生成代码与 IR 语义不一致，已回滚',true); return; }
+    catch(e){ notify('Generated source does not parse: '+e.message,true); return; }
+    if(Core.canon(parsed)!==Core.canon(next)){ notify('I2 invariant failed: generated source diverges from IR, rolled back',true); return; }
     if(!skipUndo){ state.undo.push(before); if(state.undo.length>60) state.undo.shift(); state.redo.length=0; }
     state.ir=parsed; state.ratio=res.ratio; code.value=res.src; state.parseOK=true;
     if(typeof selLaneAfter==='string'&&selLaneAfter.charAt(0)==='@'){
@@ -86,9 +86,9 @@ export function createEditor(dom){
   function fromCode(src){
     var ir;
     try{ ir=Core.buildIR(src); }
-    catch(e){ state.parseOK=false; ctx.status(); notify('草稿态：'+e.message+(e.pos!==undefined?'（偏移 '+e.pos+'）':'')+'；保留上一次有效图形。',true); return; }
+    catch(e){ state.parseOK=false; ctx.status(); notify('Draft: '+e.message+(e.pos!==undefined?' (offset '+e.pos+')':'')+'; keeping the last valid diagram',true); return; }
     state.ir=ir; state.parseOK=true; state.sel=null; state.ratio=1; state.connect=null; state.rev++;
-    ctx.redraw(); ctx.status(); notify('代码 → IR → 图形');
+    ctx.redraw(); ctx.status();
   }
 
   function renderGutter(){
@@ -149,7 +149,6 @@ export function createEditor(dom){
     ctx.painting=null;
     if(ctx.inlineCtx) ctx.closeInline(true);
     ctx.redraw(); ctx.status();
-    notify(on?'连线模式：点两个波形格作端点；键盘方向键移光标、Enter 选端点（Esc 退出）':'已退出连线模式，恢复时序编辑');
   }
 
   function doCmd(act){
@@ -162,7 +161,7 @@ export function createEditor(dom){
     back.push({ir:state.ir,src:code.value,sel:state.sel});
     state.ir=p.ir; state.sel=p.sel; code.value=p.src; state.parseOK=true; state.ratio=1;
     state.selCell=null; state.connect=null; state.rev++;
-    ctx.redraw(); ctx.status(); notify(act==='undo'?'撤销':'重做');
+    ctx.redraw(); ctx.status();
   }
 
   function focusCanvas(){ try{ ctx.wrap.focus({preventScroll:true}); }catch(e){ try{ ctx.wrap.focus(); }catch(e2){} } }

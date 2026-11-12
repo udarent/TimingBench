@@ -23,7 +23,7 @@
   })();
 
   function showError(el, msg) {
-    el.textContent = 'TimingBench 加载失败：' + msg;
+    el.textContent = 'TimingBench failed to load: ' + msg;
     el.style.cssText += ';padding:10px;border:1px solid #f0b4b4;border-radius:8px;color:#a32d2d;font:12px system-ui,sans-serif';
   }
 
@@ -37,7 +37,7 @@
 
     var frame = document.createElement('iframe');
     frame.src = BASE + 'editor.html?embed=1' + (mode === 'edit' ? '&mode=edit' : '');
-    frame.title = opts.title || el.getAttribute('data-title') || 'TimingBench 时序图';
+    frame.title = opts.title || el.getAttribute('data-title') || 'TimingBench diagram';
     frame.loading = 'lazy';
     frame.style.cssText = 'display:block;width:100%;border:0;height:' + (parseInt(height, 10) || 240) + 'px';
     frame.setAttribute('allowtransparency', 'true');

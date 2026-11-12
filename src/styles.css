@@ -85,8 +85,11 @@ svg{display:block;font-family:var(--sans)}
 .is-touch body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
 .is-touch .tabbar{display:flex;flex:0 0 48px;align-items:stretch;gap:6px;padding:5px 8px;
   background:var(--panel);border-bottom:1px solid var(--line);user-select:none}
-.is-touch .tabbar button{min-width:78px;padding:0 14px;border:1px solid var(--line);border-radius:10px;
-  background:var(--src-bg);color:var(--muted);font:14px var(--sans);touch-action:manipulation}
+.is-touch .tabbar button{min-width:52px;width:52px;padding:0;border:1px solid var(--line);border-radius:10px;
+  background:var(--src-bg);color:var(--muted);touch-action:manipulation;
+  display:flex;align-items:center;justify-content:center}
+.is-touch .tabbar .tabico{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
 .is-touch .tabbar button[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:600}
 .is-touch .tabbar .tb-title{margin-left:auto;align-self:center;font-size:12px;color:var(--muted)}
 .is-touch .app{flex:1 1 auto;height:auto;min-height:0;grid-template-rows:minmax(0,1fr)}
@@ -105,21 +108,27 @@ svg{display:block;font-family:var(--sans)}
    画布内的 HUD / 字符条不在这里，由 SVG 按波形画布宽度 W 排布并随波形变换。 */
 .is-touch .touchbar{display:flex;flex:0 0 60px;align-items:center;justify-content:center;gap:5px;padding:5px 6px;
   background:var(--panel);border-top:1px solid var(--line);overflow:hidden;user-select:none;touch-action:manipulation}
-.is-touch .touchbar button{flex:1 1 44px;min-width:44px;max-width:96px;min-height:48px;padding:4px 2px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+.is-touch .touchbar button{flex:1 1 44px;min-width:44px;max-width:96px;min-height:48px;padding:0;
+  display:flex;align-items:center;justify-content:center;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
-  font:11px/1.2 var(--sans);touch-action:manipulation}
-.is-touch .touchbar button .ico{font-size:17px;line-height:1.1}
+  touch-action:manipulation}
+.is-touch .touchbar button .ico{font-size:21px;line-height:1}
 .is-touch .touchbar button[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .touchbar button[disabled]{opacity:.4}
 .is-touch .tbsep{flex:0 0 1px;height:34px;background:var(--line);margin:0 2px}
 .is-touch .tbpanel{display:none;position:fixed;left:0;right:0;bottom:60px;z-index:20;
-  flex-wrap:wrap;gap:6px;padding:10px;max-height:46dvh;overflow:auto;
+  flex-wrap:wrap;gap:8px;padding:10px;max-height:46dvh;overflow:auto;
   background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.14)}
 .is-touch .tbpanel.open{display:flex}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:13px var(--sans);touch-action:manipulation}
+/* 上下文图标条：44×44 方块 + 居中线条图标；图标画的是「被操作对象的缩略图」 */
+.is-touch .tbpanel button.ctxbtn{min-width:44px;width:44px;height:44px;min-height:44px;padding:0;
+  display:flex;align-items:center;justify-content:center}
+.is-touch .tbpanel button.ctxbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.is-touch .tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel button:active{background:var(--accent-bg);border-color:var(--accent)}
 .is-touch .toast{display:none;position:fixed;left:50%;bottom:72px;transform:translateX(-50%);z-index:30;
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);

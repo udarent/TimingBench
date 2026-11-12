@@ -18,7 +18,7 @@ export function attachEmbed(ctx, opts) {
     try {
       if (window.parent && window.parent !== window)
         window.parent.postMessage(Object.assign({ source: 'timingbench', type: type }, payload || {}), origin);
-    } catch (e) { /* 跨域受限时静默：不影响本地编辑 */ }
+    } catch (e) { /* cross-origin write blocked: local editing is unaffected */ }
   }
 
   function emitSrc() {
@@ -29,7 +29,7 @@ export function attachEmbed(ctx, opts) {
   // ---- 只读 ↔ 编辑 ---------------------------------------------------------
   function setEditing(on) {
     ctx.setReadonly(!on);
-    if (hint) hint.textContent = on ? '编辑中 · Esc 或点此结束' : '点击波形进入编辑';
+    if (hint) hint.textContent = on ? 'Editing · Esc or click to finish' : 'Click to edit';
     hint && hint.classList.toggle('editing', !!on);
     post('mode', { editing: !!on });
   }

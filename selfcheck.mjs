@@ -274,6 +274,36 @@ function check() {
   ok(/isReadonly && ctx\.isReadonly\(\)\) return/.test(touchSrc),
     '只读态仍会弹触摸引导 toast');
 
+  // ---- 零常驻文字：桌面用 aria-label 替代 tooltip，触摸端用图标 + 长按出名称 ----
+  // <title> 在 SVG 里必然变成浏览器 tooltip，画布层一律不允许出现。
+  ok(!/<title>/.test(shapesSrc), '画布层仍在使用 <title>（会显示成 tooltip 文字）');
+  ok(/role="button" aria-label="'\+esc\(title\)/.test(shapesSrc),
+    '画布按钮缺少 aria-label（视觉无文字时读屏会失去名称）');
+  ok(/aria-label="Write '\+esc\(v\)/.test(shapesSrc), '字符条缺少 aria-label');
+  // 触摸端：操作栏 4 个符号、标签页 2 个图标，上下文条随选中对象自动切换
+  ok(!/data-panel=/.test(html), '触摸操作栏仍保留「对象 / 列」文字面板入口');
+  ok(touchSrc.indexOf("className = 'ctxbtn'") >= 0 && /function renderContext/.test(touchSrc),
+    '触摸端缺少上下文图标条（renderContext / ctxbtn）');
+  ok(/function bindLongName/.test(touchSrc) && /data-name/.test(touchSrc),
+    '触摸端缺少「长按出名称」');
+  ok(/ROW_ACTS = \['name'/.test(touchSrc) && /COL_ACTS = \['insert'/.test(touchSrc),
+    '上下文动作集缺失或被改成文字面板');
+
+  // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
+  const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',
+    'src/editor/touch.js', 'src/editor/index.js', 'src/editor/share.js',
+    'src/editor/embed-shell.js', 'src/editor/waveform.js', 'src/editor/mode.js',
+    'src/editor/geometry.js', 'src/main.js', 'embed.js'];
+  const cjk = new RegExp('[\\u4e00-\\u9fa5\\u3040-\\u30ff\\uac00-\\ud7af]');
+  for (const f of runtimeFiles) {
+    if (!fs.existsSync(path.join(ROOT, f))) continue;
+    const body = read(f).split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .map((line) => line.replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, ''))
+      .join('\n');
+    ok(!cjk.test(body), '运行时字符串出现中文（交付语言为英文）：' + f);
+  }
+
   // src/ 下所有 ES module 的相对 import 必须指向真实文件，避免残留失效引用
   function walk(dir) {
     let out = [];

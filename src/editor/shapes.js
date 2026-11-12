@@ -16,7 +16,7 @@ export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
   function hudBtn(x,cmd,txt,title,on,dim){
     var bw=T?44:26, br=T?8:5, fs=T?18:13;
-    return '<g class="hudBtn" data-cmd="'+cmd+'"><title>'+esc(title)+'</title>'+
+    return '<g class="hudBtn" data-cmd="'+cmd+'" role="button" aria-label="'+esc(title)+'">'+
       '<rect x="'+x+'" y="'+CMD_Y+'" width="'+bw+'" height="'+CMD_H+'" rx="'+br+'" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line)')+'" stroke-width="0.7" opacity="'+(dim?'.4':'1')+'"/>'+
       '<text x="'+(x+bw/2)+'" y="'+(CMD_Y+CMD_H/2)+'" text-anchor="middle" dominant-baseline="central" font-size="'+fs+'" fill="'+(on?'var(--accent)':'var(--ink)')+'">'+esc(txt)+'</text></g>';
   }
@@ -28,10 +28,10 @@ export function createShapes(ctx){
     o.push('<rect x="0" y="0" width="'+viewW+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
     var x=PAD;
     function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
-    cmd('undo','↶','撤销（Ctrl+Z）',!state.undo.length);
-    cmd('redo','↷','重做（Ctrl+Y）',!state.redo.length);
-    cmd('link','◇',state.linkMode?'连线中：点第二个波形格完成；键盘 K 退出、方向键移光标、Enter 选端点':'连线：点两个波形格，或按 K 后用方向键 + Enter 选端点',false,state.linkMode);
-    cmd('embed','<>','拿到这张图的嵌入代码：贴进你的页面，读者点一下就能改',false,false);
+    cmd('undo','↶','Undo (Ctrl+Z)',!state.undo.length);
+    cmd('redo','↷','Redo (Ctrl+Y)',!state.redo.length);
+    cmd('link','◇',state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
+    cmd('embed','<>','Embed code: a snippet you can paste into your page',false,false);
     o.push('</g>');
     return o.join('');
   }
@@ -40,31 +40,31 @@ export function createShapes(ctx){
 
   // 列头 + / − / |：悬停才显现；第 N 个「幽灵列头」只承担末尾追加周期
   function colBtn(c,cx,k,act,txt,title,on){
-    if(T) return '';   // 触摸端列操作移到操作栏的「列」面板，避免 11px 命中区
+    if(T) return '';   // 触摸端列操作移到选中列后出现的上下文图标条，避免 11px 命中区
     var x=cx-18+k*12.5, w=11;
-    return '<g class="colActBtn" data-cact="'+act+'" data-c="'+c+'"><title>'+esc(title)+'</title>'+
+    return '<g class="colActBtn" data-cact="'+act+'" data-c="'+c+'" role="button" aria-label="'+esc(title)+'">'+
       '<rect x="'+x+'" y="'+(COL_Y+22)+'" width="'+w+'" height="18" rx="3" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line2)')+'" stroke-width="0.6"/>'+
       '<text x="'+(x+w/2)+'" y="'+(COL_Y+31)+'" text-anchor="middle" dominant-baseline="central" font-size="10" fill="'+(on?'var(--accent)':'var(--muted)')+'">'+esc(txt)+'</text></g>';
   }
 
   // 行工具：只保留互不重复的修改；行重排已统一交给行首拖拽把手
   function rowTools(l,y,ACT_X){
-    if(T) return '';   // 触摸端行工具移到操作栏的「对象」面板
+    if(T) return '';   // 触摸端行工具移到选中行后出现的上下文图标条
     var o=[], x=ACT_X+4, isSp=l.kind==='spacer';
     function add(act,txt,w,title){
-      o.push('<g class="rowTool" data-act="'+act+'" data-lane="'+l.id+'" style="cursor:pointer"><title>'+esc(title)+'</title>'+
+      o.push('<g class="rowTool" data-act="'+act+'" data-lane="'+l.id+'" role="button" aria-label="'+esc(title)+'" style="cursor:pointer">'+
         '<rect x="'+x+'" y="'+(y+8)+'" width="'+w+'" height="20" rx="4" stroke="var(--line2)" stroke-width="0.6"/>'+
         '<text x="'+(x+w/2)+'" y="'+(y+18)+'" text-anchor="middle" dominant-baseline="central" fill="var(--ink)">'+esc(txt)+'</text></g>');
       x+=w+3;
     }
     if(!isSp){
-      add('wave','~',20,'整行 wave 字符串 · 单击就地编辑');
-      add('data','=',20,'整行 data 标签串 · 单击就地编辑');
-      add('node','◇',20,'整行 node 标记串 · 单击就地编辑');
+      add('wave','~',20,'Row wave string — click to edit');
+      add('data','=',20,'Row data labels — click to edit');
+      add('node','◇',20,'Row node markers — click to edit');
     }
-    add('add','+',20,'在此行下方新增信号');
-    add('spacer','∅',20,'在此行下方新增空行 spacer');
-    add('del','✕',20,'删除该行');
+    add('add','+',20,'Add a signal below this row');
+    add('spacer','∅',20,'Add a spacer below this row');
+    add('del','✕',20,'Delete this row');
     return '<g class="rowCtl">'+o.join('')+'</g>'+
       '<text class="rowHint" x="'+(ACT_X+8)+'" y="'+(y+23)+'" font-size="13" fill="var(--muted)">⋯</text>';
   }
@@ -72,18 +72,18 @@ export function createShapes(ctx){
   // 行首拖拽把手：行位置调整的唯一交互
   function dragHandle(l,y){
     if(T) return '';   // 触摸端改用「↑ 上移 / ↓ 下移」，不与原生滚动抢手势
-    return '<g class="rowDrag" data-drag="'+l.id+'"><title>按住拖动，把这一行放到别的位置</title>'+
+    return '<g class="rowDrag" data-drag="'+l.id+'" role="button" aria-label="Drag to reorder this row">'+
       '<rect x="'+(PAD+2)+'" y="'+(y+8)+'" width="16" height="32" rx="3" fill="transparent"/>'+
       '<text x="'+(PAD+10)+'" y="'+(y+24)+'" text-anchor="middle" dominant-baseline="central" font-size="13" fill="var(--muted)" pointer-events="none">⠿</text></g>';
   }
 
   // 数据标签的唯一编辑入口：长在总线块右下角的 ✎ 徽标，单击就地编辑 data 标签
   function cellLabelHit(l,i,x0,y,label){
-    if(T) return '';   // 触摸端数据标签由「对象」面板的「数据标签」按钮编辑
+    if(T) return '';   // 触摸端数据标签由长按/点标签徽标编辑，不在画布画 hover 徽标
     // 画在数据块下缘、格子底部：避开中心的标签文字与顶部的节点锚点
     var bx=x0+CELL-15, by=y+30, txt=label?String(label):'';
     return '<g class="cellLabel" data-lane="'+l.id+'" data-tick="'+i+'" data-label="1">'+
-      '<title>单击编辑该数据块标签 · 当前：'+(txt?esc(cut(txt,18)):'（空）')+' · 清空即删除</title>'+
+      ''+
       '<rect x="'+bx+'" y="'+by+'" width="13" height="11" fill="transparent"/>'+
       '<g class="badge"><rect x="'+bx+'" y="'+by+'" width="13" height="11" rx="3" fill="var(--panel)" stroke="var(--line2)" stroke-width="0.7"/>'+
       '<text x="'+(bx+6.5)+'" y="'+(by+8)+'" text-anchor="middle" font-size="9" fill="var(--muted)">✎</text></g></g>';
@@ -102,7 +102,7 @@ export function createShapes(ctx){
       if(!a||!b) return;
       var d='M'+a.x+','+a.y+' C'+(a.x+10)+','+(a.y-26)+' '+(b.x-10)+','+(b.y-26)+' '+b.x+','+b.y;
       // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
-      o.push('<g class="edgeArc" data-eidx="'+i+'"><title>双击编辑 edge：'+esc(s)+' · 清空即删除</title>'+
+      o.push('<g class="edgeArc" data-eidx="'+i+'" role="button" aria-label="Edit edge '+esc(s)+'">'+
         '<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>'+
         '<path d="'+d+'" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="'+(T?20:8)+'" pointer-events="'+(state.linkMode?'none':'stroke')+'"/>');
       var rest=s.slice(head.length).trim();
@@ -132,7 +132,7 @@ export function createShapes(ctx){
       Core.ALL.forEach(function(v,i){
         var on=state.ch===v;
         var bx=barLeft+(i%perRow)*CHIP_STEP, by=y+6+Math.floor(i/perRow)*(CHIP_H+6), cy=by+CHIP_H/2;
-        o.push('<g class="charChip'+(on?' on':'')+'" data-ch="'+esc(v)+'"><title>写入 '+esc(v)+' · '+esc(chipDesc(v))+' · 背景图案即写入后该格的波形</title>'+
+        o.push('<g class="charChip'+(on?' on':'')+'" data-ch="'+esc(v)+'" role="button" aria-label="Write '+esc(v)+' — '+esc(chipDesc(v))+'">'+
           '<rect x="'+bx+'" y="'+by+'" width="'+CHIP_W+'" height="'+CHIP_H+'" rx="5" fill="var(--panel)" stroke="var(--line2)" stroke-width="0.7"/>'+
           '<g class="chipWave" transform="translate('+bx+','+by+')">'+chipGlyph(v)+'</g>'+
           '<text x="'+(bx+CHIP_W/2)+'" y="'+cy+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?15:11)+'" font-family="var(--mono)" fill="'+(on?'var(--accent)':'var(--ink)')+'">'+esc(v)+'</text></g>');
@@ -176,7 +176,7 @@ export function createShapes(ctx){
     // 高度上报用缩放后的真实像素高，否则宿主会按原始高设 iframe，底部留一片空白。
     state.contentH=state.embedCard?outH:contentH;
     state.W=W; state.H=H;
-    var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.linkMode?'linkMode':'')+'" role="img"><title>可编辑时序图</title>'];
+    var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 0 '+W+' '+H+'" class="'+(state.linkMode?'linkMode':'')+'" role="img" aria-label="Timing diagram editor">'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
     if(!state.readonly) o.push(hudSVG(viewW));
@@ -184,15 +184,15 @@ export function createShapes(ctx){
     for(c=0;c<=N;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
       var gapc=ghost?false:ir.lanes.some(function(l){ return l.kind==='signal'&&l.slots[c]&&l.slots[c].gap; });
-      o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'"><title>列 '+c+(ghost?' · 末尾追加周期':' · 悬停显现列操作')+'</title>');
+      o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'" role="img" aria-label="Column '+c+(ghost?' — append a cycle':'')+'">');
       // 整列列头透明命中区：让悬停 / 点击落在列头上，而不是落到背景矩形
       o.push('<rect x="'+(XS+c*CELL+1)+'" y="'+(COL_Y-2)+'" width="'+(CELL-2)+'" height="'+(TOP-COL_Y-2)+'" fill="transparent"/>');
       var cw=T?Math.min(CELL-2,44):30, ch=T?28:20;
       o.push('<rect x="'+(cx-cw/2)+'" y="'+COL_Y+'" width="'+cw+'" height="'+ch+'" rx="4" fill="'+(selc?'var(--accent-bg)':'transparent')+'" stroke="'+(selc?'var(--accent)':'var(--line)')+'" stroke-width="0.5" '+(ghost?'stroke-dasharray="2 2"':'')+'/>');
       o.push('<text x="'+cx+'" y="'+(COL_Y+ch/2)+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?13:11)+'" fill="'+(selc?'var(--accent)':'var(--muted)')+'">'+c+'</text>');
-      o.push('<g class="colAct">'+colBtn(c,cx,0,'insert','+',ghost?'在末尾追加一个周期':'在列 '+c+' 前插入一个周期'));
-      if(!ghost) o.push(colBtn(c,cx,1,'delete','−','删除列 '+c+' 对应的周期')+
-        colBtn(c,cx,2,'gap','|','切换列 '+c+' 的相位线（该列唯一入口）',gapc));
+      o.push('<g class="colAct">'+colBtn(c,cx,0,'insert','+',ghost?'Append a cycle at the end':'Insert a cycle before column '+c));
+      if(!ghost) o.push(colBtn(c,cx,1,'delete','−','Delete the cycle of column '+c)+
+        colBtn(c,cx,2,'gap','|','Toggle the phase line on column '+c,gapc));
       o.push('</g></g>');
     }
     ir.lanes.forEach(function(l,li){
@@ -221,7 +221,7 @@ export function createShapes(ctx){
         var isPoint=s?(s.point&&!s.gap):false, prevCh=isPoint?lastPoint:null;
         if(isPoint) lastPoint=w;
         var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,CELL,{label:s&&isPoint?s.label:null});
-        o.push(s?glyph:'<g class="tailSlot"><title>源码 wave 未定义该周期 · 按 repeater 延续 · 点此可续写</title>'+glyph+'</g>');
+        o.push(s?glyph:'<g class="tailSlot" role="img" aria-label="Undefined period — tap to extend">'+glyph+'</g>');
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
           ' x="'+(x0+1)+'" y="'+(y+3)+'" width="'+(CELL-2)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
@@ -239,7 +239,7 @@ export function createShapes(ctx){
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
       var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });
-      if(lci>=0&&state.linkCursor.tick<N) o.push('<rect class="linkCursor" x="'+(XS+state.linkCursor.tick*CELL+1)+'" y="'+(TOP+lci*ROW_H+3)+'" width="'+(CELL-2)+'" height="'+(ROW_H-10)+'" rx="3"><title>连线端点光标 · 方向键移动 · Enter 选为端点</title></rect>');
+      if(lci>=0&&state.linkCursor.tick<N) o.push('<rect class="linkCursor" x="'+(XS+state.linkCursor.tick*CELL+1)+'" y="'+(TOP+lci*ROW_H+3)+'" width="'+(CELL-2)+'" height="'+(ROW_H-10)+'" rx="3" role="img" aria-label="Link endpoint cursor"></rect>');
     }
     if(!state.linkMode&&state.selCell){
       var sli=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.selCell.lane) sli=k; });

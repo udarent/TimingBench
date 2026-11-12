@@ -73,14 +73,16 @@ var CHIP_W=G.CHIP_W;
 
   // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph
   function chipGlyph(v){ return waveGlyph(v,null,0,TOUCH?7:5,TOUCH?22:13,TOUCH?37:21,CHIP_W,{arrowX:3}); }
+  // 字符说明只用于 aria-label（视觉上不再出现 tooltip）。英文是首选语言。
   function chipDesc(v){
-    if(Core.BUS.test(v)) return (v==='='||v==='2')?'总线数据块（白）':'总线数据块 · 配色 '+(Number(v)+5);
+    if(Core.BUS.test(v)) return (v==='='||v==='2')?'bus data block (white)':'bus data block, colour '+(Number(v)+5);
     if(Core.CLOCK.test(v)) return {
-      p:'时钟 · 上升沿起始', P:'时钟 · 上升沿起始 + 箭头',
-      n:'时钟 · 下降沿起始', N:'时钟 · 下降沿起始 + 箭头',
-      h:'高电平 · 起始上升沿', H:'高电平 · 上升沿 + 箭头',
-      l:'低电平 · 起始下降沿', L:'低电平 · 下降沿 + 箭头'}[v];
-    return {'1':'高电平','0':'低电平','x':'未知态（斜线阴影）','z':'高阻（中间实线）','u':'上拉（高电平虚线）','d':'下拉（低电平虚线）'}[v]||'波形字符';
+      p:'clock, rising start', P:'clock, rising start with arrow',
+      n:'clock, falling start', N:'clock, falling start with arrow',
+      h:'high, rising edge', H:'high, rising edge with arrow',
+      l:'low, falling edge', L:'low, falling edge with arrow'}[v];
+    return {'1':'high','0':'low','x':'unknown (hatched)','z':'high-Z (mid line)',
+      'u':'pull-up (dashed high)','d':'pull-down (dashed low)'}[v]||'wave character';
   }
 
 export { waveGlyph, waveGap, chipGlyph, chipDesc };
