@@ -232,7 +232,15 @@ function check() {
   ok(read('src/main.js').includes('is-touch'), 'main.js 未装配触摸版式开关');
   // 卡片口径：操作层（HUD / 字符条）按可视宽度排布并钉在可视区，只有纵向可增长；
   // 波形层仍按内容撑宽、可横向滚动 / 缩放。禁止退回「按整张画布宽度排字符条」或「不钉住」。
-  ok(!/overflow-x:auto/.test(cssSrc), '触摸操作栏仍允许横向滚动（窄屏会溢出）');
+  // 只约束「操作栏 / 上下文条」这类动作按钮：它们必须全部落在可视宽内。
+  // 字符停靠条是有意的横向滚动（23 个字符一条排不下，等价于输入法候选条），不在约束范围。
+  ok(!/\.is-touch \.touchbar\{[^}]*overflow-x:auto/.test(cssSrc) &&
+     !/\.is-touch \.tbpanel\{[^}]*overflow-x:auto/.test(cssSrc),
+    '触摸操作栏仍允许横向滚动（窄屏会溢出）');
+  // 字符停靠条：必须固定在卡片底部（不随画布滚动）、命中区 ≥44px
+  ok(/\.is-touch \.chardock\.open\{[^}]*position:fixed/.test(cssSrc) &&
+     /\.chardock \.chipbtn[^{]*\{[^}]*height:44px/.test(cssSrc),
+    '字符停靠条未固定在卡片底部或命中区不足 44px');
   ok(/flex:1 1 44px/.test(cssSrc) && /min-width:44px/.test(cssSrc),
     '触摸操作栏按钮未按屏宽自适应或命中区不足 44px');
   ok(/viewW/.test(shapesSrc) && /Math\.floor\(\(viewW-barLeft-PAD\)\/CHIP_STEP\)/.test(shapesSrc),

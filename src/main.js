@@ -15,6 +15,8 @@ const ctx = createEditor({
   tabbar:   document.getElementById('tabbar'),
   touchbar: document.getElementById('touchbar'),
   tbpanel:  document.getElementById('tbpanel'),
+  chardock: document.getElementById('chardock'),
+  charmore: document.getElementById('charmore'),
   toast:    document.getElementById('toast')
 });
 

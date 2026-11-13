@@ -154,6 +154,38 @@ svg{display:block;font-family:var(--sans)}
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
   font:12px/1.5 var(--sans);box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none}
 .is-touch .toast.show{display:block}
+/* 字符停靠条：选中格才出现，钉在卡片底部（非嵌入时让开 60px 的操作栏）。
+   与旧版「画在 SVG 里再随滚动反向位移」的字符条相比，它不随画布滚动、不盖波形，
+   命中区稳定在 44px —— 手机上一根手指不会被它带着跑。 */
+.chardock,.charmore{display:none}
+.is-touch .chardock.open{display:flex;position:fixed;left:0;right:0;bottom:60px;z-index:22;
+  align-items:center;gap:6px;height:56px;padding:6px 8px;
+  background:var(--panel);border-top:1px solid var(--line);
+  overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
+  touch-action:pan-x;user-select:none}
+.is-embed .chardock.open{bottom:0}
+.is-touch .charmore.open{display:flex;position:fixed;left:0;right:0;bottom:116px;z-index:23;
+  flex-wrap:wrap;gap:6px;padding:8px;max-height:min(62dvh,260px);overflow:auto;
+  background:var(--panel);border-top:1px solid var(--line);
+  box-shadow:0 -6px 18px rgba(0,0,0,.12)}
+.is-embed .charmore.open{bottom:56px}
+.is-touch .chardock .chipbtn,.is-touch .charmore .chipbtn{position:relative;flex:0 0 48px;
+  width:48px;height:44px;min-width:48px;padding:0;border:1px solid var(--line);border-radius:10px;
+  background:var(--src-bg);color:var(--ink);touch-action:manipulation;overflow:hidden}
+.is-touch .chardock .chipbtn svg,.is-touch .charmore .chipbtn svg{position:absolute;inset:0;
+  width:100%;height:100%;--wave-ink:var(--muted);opacity:.85;pointer-events:none}
+.is-touch .chardock .chipbtn span,.is-touch .charmore .chipbtn span{position:relative;
+  font:600 15px var(--mono);text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
+.is-touch .chardock .chipbtn.on,.is-touch .charmore .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
+.is-touch .chardock .chipbtn.on svg,.is-touch .charmore .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
+.is-touch .chardock .chipbtn.on span,.is-touch .charmore .chipbtn.on span{color:var(--accent)}
+.is-touch .chardock .chipbtn:active,.is-touch .charmore .chipbtn:active{background:var(--accent-bg);border-color:var(--accent)}
+.is-touch .chardock .chipbtn.more,.is-touch .chardock .chipbtn.clear{flex:0 0 44px;width:44px;min-width:44px}
+.is-touch .chardock .chipbtn.more span,.is-touch .chardock .chipbtn.clear span{font-size:18px;color:var(--muted)}
+/* 右边缘淡出：提示这排还能横向滑（23 个字符一排放不下） */
+.is-touch .chardock.open::after{content:"";position:sticky;right:0;flex:0 0 18px;
+  align-self:stretch;margin-left:-18px;
+  background:linear-gradient(to right,rgba(0,0,0,0),var(--panel));pointer-events:none}
 /* 首屏手势引导：指尖从右下滑到格子 → 点一下 + 轻涟漪 → 再点一下（双敲进就地编辑）。
    画在页面固定层上，播完由 JS 移除；不占画布、不进波形层、不写任何文字。 */
 .gesture{position:fixed;z-index:35;width:0;height:0;pointer-events:none}
@@ -191,9 +223,13 @@ svg{display:block;font-family:var(--sans)}
 .is-embed body{overflow:auto}
 .is-embed .tabbar,.is-embed .touchbar,.is-embed .tbpanel{display:none!important}
 .is-embed .pane.src{display:none!important}
-.is-embed .app{grid-template-rows:minmax(0,1fr);height:auto;min-height:0}
-.is-embed .pane.diagram{display:block}
-.is-embed .svgwrap{position:relative;inset:auto;overflow:auto;min-height:120px}
+/* 卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
+   之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，
+   下面几行会被裁掉且没有可滚动容器（纵向根本没有滚动条），手机上等于「看不见也点不到」。
+   只读态内容本来就等比缩到卡片宽、不会溢出，所以看不出差别。 */
+.is-embed .app{grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
+.is-embed .pane.diagram{display:block;height:100%}
+.is-embed .svgwrap{position:absolute;inset:0;overflow:auto;min-height:0}
 /* 内容比卡片窄时水平居中（宽于卡片时仍从左侧起排、可横向滚动） */
 .is-embed .svgwrap svg{margin-inline:auto}
 /* 只读态：画布只承担查看，光标不暗示可编辑 */
@@ -220,6 +256,10 @@ svg{display:block;font-family:var(--sans)}
   .is-embed .embedhint{width:38px;height:38px;border-radius:10px}
   .is-embed .embedhint .hintico{width:20px;height:20px}
 }
+/* 编辑态底部有字符停靠条：提示按钮得让开，否则正好压在停靠条最右边那颗上 */
+.is-touch.is-embed:not(.is-readonly) .embedhint{bottom:64px}
+/* 字符面板展开时先收起退出按钮，否则它浮在面板格子上，看着像其中一颗 */
+.is-touch.more-open .embedhint{display:none}
 
 /* ---------------------------------------------------------------------------
    嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。

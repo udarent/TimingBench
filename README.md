@@ -110,7 +110,7 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 
 | Goal | Desktop | Touch |
 |---|---|---|
-| Write a waveform | Click a cell → type / click the character bar; hold and drag horizontally to paint | Tap a cell → tap the character bar (wraps into multiple rows of large chips, no horizontal scrolling) |
+| Write a waveform | Click a cell → type / click the character bar; hold and drag horizontally to paint | Tap a cell → a character dock slides up at the bottom: `0 1 x z` + `⋯` for all 23, 48 px targets |
 | Inline edit | Double-click the target (or `Enter` on a selected cell) | Double-tap the same target within 330 ms, or long-press for 480 ms |
 | Connect an arc | Click ◇ Link → click two waveform cells (dashed preview follows the pointer) → the mode exits once the arc is drawn | Tap ◇ Link in the bottom bar → tap two waveform cells (a toast confirms the first tap) |
 | Rows / cycles / phase gaps | Hover the right edge of a row or a column number for `+` `−` `\|` | 14 always-visible buttons in the "Object" panel + 4 in the "Column" panel |
@@ -119,7 +119,7 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 | Cancel current mode | `Esc` | `✕ Cancel` in the bottom bar |
 | See source / diagram | Both panes visible at once | Switch with the "Diagram / Source" tabs |
 
-TimingBench is built to work as a **waveform card**: every control you need sits inside the visible card. Touch hit targets follow the 44 CSS px guideline (cells 46×50, character chips 44×44, action-bar buttons ≥44), and hover-only mini controls are removed. The waveform itself is one scalable, pannable object and may be wider than the card — scroll or pinch-zoom it. The operation layer (HUD and character chips) is pinned to the card: the HUD stays at the top-left, the chips wrap at the card's **visible width** and grow downward into multiple rows, so no button ever requires horizontal scrolling. The bottom bar shares the card width evenly. At 320 px the 23 chips stack into 4 rows and every control stays reachable without scrolling sideways. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
+TimingBench is built to work as a **waveform card**: every control you need sits inside the visible card. Touch hit targets follow the 44 CSS px guideline (cells 46×50, dock chips 48×44, action-bar buttons ≥44), and hover-only mini controls are removed. On touch the 23 characters live in a **docked bar** at the bottom of the card (not floating over the waveform), so the buttons never move while you scroll the diagram. The waveform itself is one scalable, pannable object and may be wider than the card — scroll or pinch-zoom it. The operation layer (HUD and character chips) is pinned to the card: the HUD stays at the top-left, the chips wrap at the card's **visible width** and grow downward into multiple rows, so no button ever requires horizontal scrolling. The bottom bar shares the card width evenly. At 320 px the 23 chips stack into 4 rows and every control stays reachable without scrolling sideways. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
 
 No mouse at all? Every row / cycle / arc / structure action in this table has a key — see the shortcuts below. The canvas shows a focus ring only when reached by keyboard.
 

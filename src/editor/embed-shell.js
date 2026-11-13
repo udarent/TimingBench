@@ -3,6 +3,7 @@
 // 与宿主页面 postMessage 双向同步（源码 / 只读态 / 高度）。
 // 不碰渲染内核与编辑语义 —— 只控制「哪些层画、哪些事件放行」。
 import { EMBED, EDIT_ON_START } from './embed.js';
+import { G } from './geometry.js';
 import { decodePayload } from './payload.js';
 
 // 只有 iframe、没有脚本的宿主（Obsidian 笔记、只能贴 HTML 的编辑器）走 URL 片段带内容：
@@ -43,8 +44,10 @@ export function attachEmbed(ctx, opts) {
   // ---- 只读 ↔ 编辑 ---------------------------------------------------------
   // 提示条是一个图标按钮：铅笔 = 点一下可编辑，对勾 = 编辑中、点一下结束。
   // 视觉上零常驻文字，语义只走 aria-label（嵌入页是英文优先）。
-  function setEditing(on) {
+  function setEditing(on, anchor) {
+    var wasReadonly = state.readonly;
     ctx.setReadonly(!on);
+    if (anchor && wasReadonly && on) anchorCell(anchor);
     if (hint) {
       hint.setAttribute('aria-label', on ? 'Finish editing and go back to read-only' : 'Edit this timing diagram');
       hint.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -52,7 +55,44 @@ export function attachEmbed(ctx, opts) {
     }
     post('mode', { editing: !!on });
   }
-  ctx.requestEdit = function () { setEditing(true); };
+  ctx.requestEdit = function (anchor) { setEditing(true, anchor); };
+
+  // 从只读切到编辑，缩放会从「整图缩进卡片」跳成 1:1 —— 如果不管滚动位置，
+  // 手指下面那块内容会整体挪走，第二次点按就落到别的格子上（手机端最难受的地方）。
+  // 这里把被点的格子「钉」在原来的屏幕位置上：知道它的内部坐标、知道手指在视口里的位置，
+  // 反解出该有的 scrollLeft / scrollTop。编辑态是 1:1，所以内部坐标与像素一一对应。
+  // 纵向到底是谁在滚，不能想当然：独立编辑器里是 .svgwrap（inset:0 + overflow:auto），
+  // 嵌入卡片里 .svgwrap 的高度被内容撑开、自己滚不动，真正滚的是 body（body{overflow:auto}）
+  // —— 这时改 wrap.scrollTop 和 window.scrollBy 都没反应。往上找第一个真能滚的祖先。
+  function verticalScroller(el) {
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+      var oy = '';
+      try { oy = window.getComputedStyle(n).overflowY; } catch (e) { oy = ''; }
+      if (/(auto|scroll)/.test(oy) && n.scrollHeight > n.clientHeight + 2) return n;
+    }
+    var doc = document.scrollingElement || document.documentElement;
+    if (doc && doc.scrollHeight > doc.clientHeight + 2) return doc;
+    return null;
+  }
+
+  function anchorCell(anchor) {
+    if (!anchor || !anchor.cell) return;
+    var st = ctx.state, ir = st.ir, wrap = ctx.wrap;
+    if (!ir || !wrap) return;
+    var li = -1;
+    ir.lanes.forEach(function (l, i) { if (l.id === anchor.cell.lane) li = i; });
+    if (li < 0) return;
+    var cx = G.XS + anchor.cell.tick * G.CELL + G.CELL / 2;
+    var cy = G.TOP + li * G.ROW_H + G.ROW_H / 2;
+    var r = wrap.getBoundingClientRect();
+    var vx = (anchor.x || 0) - r.left, vy = (anchor.y || 0) - r.top;
+    var maxL = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    wrap.scrollLeft = Math.min(maxL, Math.max(0, cx - vx));
+    // 纵向：位移量在两种滚动容器下是同一个数（内容坐标差），只是要施加到会动的那个上
+    var dy = cy - vy;
+    var vs = verticalScroller(wrap);
+    if (vs) vs.scrollTop = Math.min(vs.scrollHeight - vs.clientHeight, Math.max(0, vs.scrollTop + dy));
+  }
 
   // 点提示条可来回切换：只读时进编辑，编辑态时回只读
   if (hint) {

@@ -1,11 +1,16 @@
-// 触摸端 UI 装配：标签页、底部操作栏、上下文操作面板、轻提示。
+// 触摸端 UI 装配：标签页、底部操作栏、上下文操作面板、字符停靠条、轻提示。
 // 只在 coarse 指针（或 ?touch=1）时生效；桌面版式与「无常驻文字」口径不受影响。
 // 本模块不产生新的编辑命令 —— 所有按钮复用 interactions.js 暴露的同一组动作。
 import { TOUCH } from './mode.js';
+import { Core } from '../core/ir.js';
+import { G } from './geometry.js';
+import { chipGlyph, chipDesc } from './waveform.js';
+import { esc } from '../core/util.js';
 
 export function attachTouchUI(ctx, dom) {
   if (!TOUCH) return;
   var bar = dom.touchbar, panel = dom.tbpanel, toast = dom.toast;
+  var dock = dom.chardock, more = dom.charmore;
   var tabbar = dom.tabbar, app = dom.app;
   if (!bar || !panel) return;                 // 验收页等只带四个基础节点的装配体直接跳过
   var state = ctx.state;
@@ -192,6 +197,89 @@ export function attachTouchUI(ctx, dom) {
   bindLongName(bar);
   if (tabbar) bindLongName(tabbar);
 
+
+  // ---- 字符停靠条 ---------------------------------------------------------
+  // 触摸端不再把 23 个字符画进 SVG 里（那条东西会钉在画布底部、随着滚动被反复 transform，
+  // 在嵌入卡片那种矮框里几乎盖掉整张波形，手指一动它跟着变 —— 也就是「按钮在浮动」）。
+  // 改成停在卡片底部的 HTML 条：固定高度、不随画布滚动、命中区 44px 起。
+  // 第一排只放最常用的几个 + 「⋯」，其余 23 个进一个可收起的面板，避免横向滑好几屏。
+  var QUICK = ['0', '1', 'x', 'z'];
+  var dockKey = null, moreOpen = false;
+
+  function chipButton(v) {
+    return '<svg viewBox="0 0 ' + G.CHIP_W + ' ' + G.CHIP_H + '" aria-hidden="true">' + chipGlyph(v) + '</svg>' +
+      '<span>' + esc(v) + '</span>';
+  }
+  function makeChip(v) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chipbtn' + (state.ch === v ? ' on' : '');
+    b.setAttribute('data-ch', v);
+    var name = v + ' — ' + chipDesc(v);
+    b.setAttribute('data-name', name);
+    b.setAttribute('aria-label', 'Write ' + name);
+    b.innerHTML = chipButton(v);
+    return b;
+  }
+  function renderDock() {
+    if (!dock) return;
+    var visible = !state.readonly && !state.linkMode && !!state.selCell && !ctx.inlineCtx;
+    if (!visible) {
+      if (dockKey !== null) { dockKey = null; dock.textContent = ''; dock.classList.remove('open'); }
+      if (more) { more.classList.remove('open'); more.textContent = ''; }
+      moreOpen = false;
+      return;
+    }
+    var key = state.selCell.lane + '@' + state.selCell.tick + '|' + state.ch + '|' + moreOpen;
+    if (key === dockKey) return;                 // 同一状态不重建，避免点一下闪一下
+    dockKey = key;
+    dock.textContent = '';
+    // 当前字符不在快捷四个里时，把它临时顶到第一位 —— 免得「选中是什么」看不出来
+    var quick = QUICK.slice();
+    if (state.ch && quick.indexOf(state.ch) < 0) quick.unshift(state.ch);
+    quick.forEach(function (v) { dock.appendChild(makeChip(v)); });
+    if (more) {
+      var mb = document.createElement('button');
+      mb.type = 'button';
+      mb.className = 'chipbtn more' + (moreOpen ? ' on' : '');
+      mb.setAttribute('data-more', '1');
+      mb.setAttribute('data-name', 'more characters');
+      mb.setAttribute('aria-label', 'More characters');
+      mb.setAttribute('aria-expanded', String(moreOpen));
+      mb.innerHTML = '<span>⋯</span>';
+      dock.appendChild(mb);
+
+      more.textContent = '';
+      if (moreOpen) {
+        Core.ALL.forEach(function (v) { more.appendChild(makeChip(v)); });
+        more.classList.add('open');
+      } else more.classList.remove('open');
+      document.documentElement.classList.toggle('more-open', moreOpen);
+    }
+    var xb = document.createElement('button');
+    xb.type = 'button';
+    xb.className = 'chipbtn clear';
+    xb.setAttribute('data-clear', '1');
+    xb.setAttribute('data-name', 'done');
+    xb.setAttribute('aria-label', 'Done editing this cell');
+    xb.innerHTML = '<span>✕</span>';
+    dock.appendChild(xb);
+    dock.classList.add('open');
+    bindLongName(dock);
+    if (moreOpen && more) bindLongName(more);
+  }
+  function onDockClick(e) {
+    var b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if (!b) return;
+    if (b.getAttribute('data-more')) { moreOpen = !moreOpen; dockKey = null; renderDock(); return; }
+    if (b.getAttribute('data-clear')) { state.selCell = null; moreOpen = false; ctx.redraw(); return; }
+    var ch = b.getAttribute('data-ch');
+    if (ch) { moreOpen = false; ctx.writeChar(ch); }
+  }
+  if (dock) dock.addEventListener('click', onDockClick);
+  if (more) more.addEventListener('click', onDockClick);
+  ctx.closeCharDock = function () { moreOpen = false; dockKey = null; renderDock(); };
+
   ctx.afterRedraw = function () {
     var u = bar.querySelector('[data-tb="undo"]'), r = bar.querySelector('[data-tb="redo"]');
     if (u) u.disabled = !state.undo.length;
@@ -199,6 +287,7 @@ export function attachTouchUI(ctx, dom) {
     var lk = bar.querySelector('[data-tb="link"]');
     if (lk) lk.setAttribute('aria-pressed', String(state.linkMode));
     renderContext();
+    renderDock();
   };
   ctx.closePanel = hideContext;
   ctx.hideToast = function () { if (toast) { clearTimeout(toastTimer); toast.classList.remove('show'); } };

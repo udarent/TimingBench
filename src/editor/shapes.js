@@ -30,8 +30,12 @@ export function createShapes(ctx){
     function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
     cmd('undo','↶','Undo (Ctrl+Z)',!state.undo.length);
     cmd('redo','↷','Redo (Ctrl+Y)',!state.redo.length);
-    cmd('link','◇',state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
-    cmd('embed','<>','Embed code: a snippet you can paste into your page',false,false);
+    // 触摸端的嵌入卡片只有三四百像素宽：四个图标就是 190px 的浮层，压在波形上很碍事，
+    // 而且「生成嵌入代码」在嵌入卡片里本身没意义。只留撤销 / 重做这两件事。
+    if(!(T&&state.embedCard)){
+      cmd('link','◇',state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
+      cmd('embed','<>','Embed code: a snippet you can paste into your page',false,false);
+    }
     o.push('</g>');
     return o.join('');
   }
@@ -189,8 +193,11 @@ export function createShapes(ctx){
     var barLeft=(XS+Core.ALL.length*CHIP_STEP+PAD<=viewW)?XS:PAD;
     var perRow=Math.max(1, Math.min(Core.ALL.length, Math.floor((viewW-barLeft-PAD)/CHIP_STEP)));
     var rows=Math.ceil(Core.ALL.length/perRow);
-    // 只读态不画字符条，也不需要为它预留高度（否则卡片底部会留一条空白）
-    var barH=state.readonly?0:Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H));
+    // 只读态不画字符条，也不需要为它预留高度（否则卡片底部会留一条空白）。
+    // 触摸端改由 HTML 停靠条承担（touch.js 的 renderDock），画布只为它预留高度：
+    // 这样选中格可以滚到停靠条上方，条本身也不再盖在波形上、更不会随滚动被反复位移。
+    var DOCK_H=56;
+    var barH=state.readonly?0:(T?(state.selCell?DOCK_H:ACT_H):Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H)));
     // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     var contentH=actY+barH+20;
@@ -268,7 +275,7 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     o.push(edgeArcs(ir));
-    if(!state.readonly) o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
+    if(!state.readonly&&!T) o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
       var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });

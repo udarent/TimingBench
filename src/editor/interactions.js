@@ -153,6 +153,25 @@ export function attachInteractions(ctx){
     var nt=dir==='left'?Math.max(0,sc.tick-1):Math.min(sc.tick+1,N-1);
     state.selCell={lane:sc.lane,tick:nt};
     ctx.commit({t:'setSlot',lanes:[sc.lane],tick:sc.tick,v:v},'write '+v+' @ t'+sc.tick,false,true);
+    // 触摸端：每次写入后把新选中格带进可视区（底部停靠条占掉的那一条不算可视区）
+    if(TOUCH&&ctx.revealSel) ctx.revealSel();
+  }
+
+  // 把选中格挪进可视区：横向居中、纵向避开底部停靠条。
+  // 只在「已经在编辑态、选中又变了」时调用 —— 从只读切进编辑那一下由嵌入壳做锚定，
+  // 两者都动滚动就会互相打架，手指底下的东西会跳。
+  function revealSel(){
+    var sc=state.selCell; if(!sc||!state.ir||!wrap.clientWidth) return;
+    var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===sc.lane) li=i; });
+    if(li<0) return;
+    var cx=XS+sc.tick*CELL+CELL/2, cy=TOP+li*ROW_H+ROW_H/2;
+    var vw=wrap.clientWidth, vh=wrap.clientHeight-Math.max(0,state.barH||0);
+    var maxL=Math.max(0,wrap.scrollWidth-vw), maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
+    var left=wrap.scrollLeft, top=wrap.scrollTop;
+    if(cx<left+CELL*0.6||cx>left+vw-CELL*0.6) left=Math.min(maxL,Math.max(0,cx-vw/2));
+    if(cy<top+ROW_H*0.6||cy>top+vh-ROW_H*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
+    if(left!==wrap.scrollLeft) wrap.scrollLeft=left;
+    if(top!==wrap.scrollTop) wrap.scrollTop=top;
   }
 
   // 两点式连线：仅在 linkMode 下由 rect.cell 分派进来，端点与时序编辑是同一片格子。
@@ -266,6 +285,7 @@ export function attachInteractions(ctx){
   // 触摸端不调 preventDefault，原生滚动与双指缩放照常可用；双击由「同目标 330ms
   // 内两次点按」识别，长按 480ms 是就地编辑的备用入口。
   var lastTap=null, longPress=null, longTimer=null, ignoreMouseUntil=0;
+  var pendingTap=null;   // 只读态下按下但还没确认的那一下（触摸端）
 
   function hitKey(c){
     if(!c) return '';
@@ -308,14 +328,16 @@ export function attachInteractions(ctx){
     if(e.button!==undefined&&e.button!==0) return;
     // 只读态：点一下波形进入编辑，并顺手选中被点的格子（字符条随即出现）；
     // 本次点击不产生任何编辑 —— 避免在宿主页面里误改图。
+    // 触摸端不在这里切模式：手指一按就进编辑的话，「想滑动看看」会被当成编辑，
+    // 而且模式一切、缩放就从「整图缩进卡片」跳成 1:1，手指底下的内容会换掉。
+    // 所以触摸端先记下来，等 pointerup 确认位移够小、时间够短（真的是一次 tap）再切。
     if(state.readonly){
       e.preventDefault&&e.preventDefault();
       var rc=cellAt(e);
-      if(rc&&rc.lane!==undefined&&rc.tick!==undefined&&!rc.cmd){
-        state.selCell={lane:rc.lane,tick:rc.tick};
-        state.selLane=rc.lane; state.sel=null;
-      }
-      if(ctx.requestEdit) ctx.requestEdit();
+      var hit=rc&&rc.lane!==undefined&&rc.tick!==undefined&&!rc.cmd?{lane:rc.lane,tick:rc.tick}:null;
+      if(isTouch){ pendingTap={x:e.clientX||0,y:e.clientY||0,cell:hit,t:Date.now()}; return; }
+      if(hit){ state.selCell=hit; state.selLane=hit.lane; state.sel=null; }
+      if(ctx.requestEdit) ctx.requestEdit(hit?{x:e.clientX,y:e.clientY,cell:hit}:null);
       return;
     }
     // 就地输入框也在 SVG 里，点它自己不能触发结算
@@ -477,6 +499,8 @@ export function attachInteractions(ctx){
   wrap.addEventListener('pointermove',function(e){
     if(e.pointerType==='mouse') return;
     if(longPress&&(Math.abs((e.clientX||0)-longPress.x)>12||Math.abs((e.clientY||0)-longPress.y)>12)) clearLong();
+    // 只读态：手指一移动就说明是在滑动看图，不是点按 —— 撤销候选 tap
+    if(pendingTap&&(Math.abs((e.clientX||0)-pendingTap.x)>12||Math.abs((e.clientY||0)-pendingTap.y)>12)) pendingTap=null;
     // 触摸端也跟手画连线预览曲线：记录第一个端点后，曲线末端跟着手指走
     if(state.connect){
       var svg=svgRoot();
@@ -486,9 +510,20 @@ export function attachInteractions(ctx){
       }
     }
   });
-  function endPointer(e){ if(e.pointerType!=='mouse') clearLong(); }
+  function endPointer(e){
+    if(e.pointerType!=='mouse') clearLong();
+    var p=pendingTap; pendingTap=null;
+    if(!p||!state.readonly) return;
+    // 真的是一次点按（没移动、不超过 500ms）才切进编辑
+    var dx=Math.abs((e.clientX||0)-p.x), dy=Math.abs((e.clientY||0)-p.y);
+    if(dx>12||dy>12||Date.now()-p.t>500) return;
+    if(p.cell){ state.selCell={lane:p.cell.lane,tick:p.cell.tick}; state.selLane=p.cell.lane; state.sel=null; }
+    if(ctx.requestEdit) ctx.requestEdit({x:p.x,y:p.y,cell:p.cell});
+  }
   document.addEventListener('pointerup',endPointer);
-  document.addEventListener('pointercancel',endPointer);
+  document.addEventListener('pointercancel',function(e){
+    if(e.pointerType!=='mouse'){ clearLong(); pendingTap=null; }
+  });
 
   // 没有 Pointer Events 的老浏览器：用 touch 事件回退，命中点交给 elementFromPoint
   if(typeof window!=='undefined'&&!window.PointerEvent){
@@ -689,6 +724,8 @@ export function attachInteractions(ctx){
   // 触摸操作栏复用的动作（同一命令、同一 EditOp，不新增第二套编辑路径）
   ctx.openRowEditor=openRowEditor;
   ctx.openCellCharEditor=openCellCharEditor;
+  ctx.writeChar=writeChar;
+  ctx.revealSel=revealSel;
   ctx.openLabelEditor=openLabelEditor;
   ctx.openNodeEditor=openNodeEditor;
   ctx.openEdgeEditor=openEdgeEditor;
