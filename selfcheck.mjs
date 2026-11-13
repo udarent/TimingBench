@@ -237,6 +237,12 @@ function check() {
   ok(!/\.is-touch \.touchbar\{[^}]*overflow-x:auto/.test(cssSrc) &&
      !/\.is-touch \.tbpanel\{[^}]*overflow-x:auto/.test(cssSrc),
     '触摸操作栏仍允许横向滚动（窄屏会溢出）');
+  // 嵌入卡片里不能把上下文条一起藏掉：触摸端没有行工具 / 拖拽把手，
+  // 选中行后的 up·down·改名·加行全在 #tbpanel，藏了等于把行重排整组关掉。
+  ok(!/\.is-embed[^{}]*\.tbpanel[^{}]*\{[^}]*display:\s*none/.test(cssSrc),
+    '嵌入态把上下文条（#tbpanel）隐藏了 —— 触摸端在卡片里将无法上下移动行');
+  ok(/\.is-embed \.tbpanel\{[^}]*bottom:0/.test(cssSrc),
+    '嵌入态的上下文条未贴卡片底部（卡片里没有 60px 操作栏，留着会浮一条空隙）');
   // 字符停靠条：必须固定在卡片底部（不随画布滚动）、命中区 ≥44px
   ok(/\.is-touch \.chardock\.open\{[^}]*position:fixed/.test(cssSrc) &&
      /\.chardock \.chipbtn[^{]*\{[^}]*height:44px/.test(cssSrc),

@@ -144,11 +144,21 @@ export function attachTouchUI(ctx, dom) {
   }
 
   var ctxKind = null, ctxKey = null;
+  // 嵌入卡片里 #tbpanel 是唯一能改行 / 列的地方（触摸端不画行工具与拖拽把手），
+  // 所以它和右下角那个铅笔 / 对勾按钮会抢同一块地方：把面板实测高度写进 --ctx-h，
+  // CSS 据此把退出按钮抬到面板上方，谁也不压谁。
+  function markContext(open) {
+    var de = document.documentElement;
+    if (!open) { de.classList.remove('ctx-open'); de.style.removeProperty('--ctx-h'); return; }
+    de.classList.add('ctx-open');
+    de.style.setProperty('--ctx-h', (panel.offsetHeight || 0) + 'px');
+  }
   function hideContext() {
     if (ctxKind === null) return;
     ctxKind = null; ctxKey = null;
     panel.classList.remove('open');
     panel.textContent = '';
+    markContext(false);
   }
   // 上下文条内容跟着「最后选中的对象」走：选中格子时字符条在 SVG 里，这里让位。
   function renderContext() {
@@ -172,6 +182,9 @@ export function attachTouchUI(ctx, dom) {
     });
     panel.classList.add('open');
     bindLongName(panel);
+    markContext(true);
+    // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮
+    if (kind === 'row' && ctx.revealLane) ctx.revealLane(state.selLane, panel.offsetHeight);
   }
   panel.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;

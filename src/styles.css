@@ -221,7 +221,12 @@ svg{display:block;font-family:var(--sans)}
 .embedhint{display:none}
 /* 宿主一般会按 postMessage 的 height 设 iframe 高度；未接时退化为可滚动，避免内容被裁 */
 .is-embed body{overflow:auto}
-.is-embed .tabbar,.is-embed .touchbar,.is-embed .tbpanel{display:none!important}
+/* 嵌入卡片里没有标签页与操作栏（卡片只承担「看 / 就地改」两件事），
+   但**上下文条必须保留** —— 触摸端没有 hover，选中行 / 列后的 up·down·改名·加行
+   全在 #tbpanel 里，隐藏它等于把行重排、行编辑、列操作整组功能关掉。 */
+.is-embed .tabbar,.is-embed .touchbar{display:none!important}
+/* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；面板挡住波形是瞬时的（选完即收） */
+.is-embed .tbpanel{bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
 .is-embed .pane.src{display:none!important}
 /* 卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
    之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，
@@ -258,6 +263,9 @@ svg{display:block;font-family:var(--sans)}
 }
 /* 编辑态底部有字符停靠条：提示按钮得让开，否则正好压在停靠条最右边那颗上 */
 .is-touch.is-embed:not(.is-readonly) .embedhint{bottom:64px}
+/* 上下文条（选中行 / 列）弹出时同理：让开它的实际高度，别压住面板里的按钮。
+   高度由 touch.js 量出来写进 --ctx-h（面板内容随行 / 列变化，写死数值会错位）。 */
+.is-touch.is-embed.ctx-open .embedhint{bottom:calc(var(--ctx-h,0px) + 8px)}
 /* 字符面板展开时先收起退出按钮，否则它浮在面板格子上，看着像其中一颗 */
 .is-touch.more-open .embedhint{display:none}
 

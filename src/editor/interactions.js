@@ -174,6 +174,21 @@ export function attachInteractions(ctx){
     if(top!==wrap.scrollTop) wrap.scrollTop=top;
   }
 
+  // 触摸端选中一行后，上下文条会从底部升起；把这一行滚到「条上方」的可视区里，
+  // 否则矮卡片（嵌入 340px）里被选中的行正好藏在面板后面，点 up / down 时看不见效果。
+  function revealLane(laneId,bottomPad){
+    if(!state.ir||!wrap.clientWidth) return;
+    var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===laneId) li=i; });
+    if(li<0) return;
+    var cy=TOP+li*ROW_H+ROW_H/2;
+    var vh=wrap.clientHeight-Math.max(0,state.barH||0)-Math.max(0,bottomPad||0);
+    if(vh<ROW_H*2) vh=ROW_H*2;                 // 卡片太矮时至少保证两行之内的判断可用
+    var maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
+    var top=wrap.scrollTop;
+    if(cy<top+ROW_H*0.6||cy>top+vh-ROW_H*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
+    if(top!==wrap.scrollTop) wrap.scrollTop=top;
+  }
+
   // 两点式连线：仅在 linkMode 下由 rect.cell 分派进来，端点与时序编辑是同一片格子。
   // 点第一个格子 → 预览曲线跟随鼠标 → 点第二个格子，node + edge 合并一次提交；
   // 成线（或失败）后自动退出连线模式，回到普通时序编辑。
@@ -726,6 +741,7 @@ export function attachInteractions(ctx){
   ctx.openCellCharEditor=openCellCharEditor;
   ctx.writeChar=writeChar;
   ctx.revealSel=revealSel;
+  ctx.revealLane=revealLane;
   ctx.openLabelEditor=openLabelEditor;
   ctx.openNodeEditor=openNodeEditor;
   ctx.openEdgeEditor=openEdgeEditor;
