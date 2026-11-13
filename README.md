@@ -26,12 +26,11 @@ Don't want to hand-write that snippet? Draw your diagram in the [editor](https:/
 
 ```html
 <iframe src="https://udarent.github.io/TimingBench/editor.html?embed=1#wj=PAYLOAD"
-        width="100%" height="380"
-        style="border:0;border-radius:10px;display:block"
-        loading="lazy" title="Timing diagram"></iframe>
+        style="width:100%;height:auto;aspect-ratio:560 / 376;border:0;border-radius:10px;display:block"
+        height="376" loading="lazy" title="Timing diagram"></iframe>
 ```
 
-`#wj=` carries the WaveJSON itself (base64url, so no escaping and no server round-trip), which means the snippet is self-contained: copy the note, send the file, publish it — the diagram renders anywhere that allows an iframe. The trade-offs are that the height is fixed (edit `height="…"` by hand) and there is no `timingbench:change` event, since no loader is running. In Obsidian, paste it as a raw HTML block, **not** inside a code fence.
+`#wj=` carries the WaveJSON itself (base64url, so no escaping and no server round-trip), which means the snippet is self-contained: copy the note, send the file, publish it — the diagram renders anywhere that allows an iframe. `aspect-ratio` keeps the frame at the diagram's own proportions, so the card **never leaves a blank strip** under the picture however wide your note is (a fixed `height="…"` used to do exactly that on narrow screens); `height` is only a fallback for old browsers, and the ratio in your own snippet should match your diagram (the `<>` panel writes the right numbers). The remaining trade-off is that there is no `timingbench:change` event, since no loader is running. In Obsidian, paste it as a raw HTML block, **not** inside a code fence.
 
 In this form the snippet gives you a fully interactive card: read-only until clicked, then editable in place — the same editor, just without the loader. Want it editable from the start? Add `&mode=edit` before the `#`: `…?embed=1&mode=edit#wj=…`.
 

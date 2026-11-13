@@ -309,8 +309,12 @@ function check() {
   // 而读者不会去横向拖一张只读卡片。缩放只改 svg 渲染尺寸，viewBox 保持内部坐标。
   ok(/state\.embedCard&&state\.readonly/.test(shapesSrc) && /var fit=/.test(shapesSrc),
     '嵌入只读卡片缺少按容器宽度等比缩放（窄屏会只显示部分波形）');
-  ok(/outW=fit<1\?viewW:W/.test(shapesSrc) && /viewBox="0 0 '\+W\+' '\+H\+'"/.test(shapesSrc),
-    '缩放未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
+  // 只缩不放会导致宽笔记里左右各留一条（卡片宽度 > 画布宽时 fit 被 1 卡住），
+  // 所以现在按卡片宽铺满、上限 2 倍；viewBox 仍必须是内部坐标，几何与就地编辑换算才不错位。
+  ok(/var fit=\(state\.embedCard&&state\.readonly\)\?Math\.min\(2, viewW\/W\):1/.test(shapesSrc) &&
+     /outW=fit<1\?viewW:Math\.round\(W\*fit\)/.test(shapesSrc) &&
+     /viewBox="0 0 '\+W\+' '\+H\+'"/.test(shapesSrc),
+    '缩放未按卡片宽铺满或未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
   // 只读态没有字符条，触摸引导 toast 不适用，也不该出现在英文宿主页面里
   const touchSrc = read('src/editor/touch.js');
   ok(/isReadonly && ctx\.isReadonly\(\)\) return/.test(touchSrc),

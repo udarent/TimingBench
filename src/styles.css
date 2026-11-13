@@ -236,6 +236,12 @@ svg{display:block;font-family:var(--sans)}
 .is-embed .pane.diagram{display:block;height:100%}
 .is-embed .svgwrap{position:absolute;inset:0;overflow:auto;min-height:0}
 /* 内容比卡片窄时水平居中（宽于卡片时仍从左侧起排、可横向滚动） */
+/* 只读卡片：让 SVG 自己按视口等比适配（viewBox 不变，preserveAspectRatio 默认 xMidYMid meet）。
+   原因有两个：① 纯 iframe 的高度由宿主的 aspect-ratio 决定，而内部几何常量会随指针类型变
+   （粗指针整体放大），片段在桌面生成、手机里看时比例会差几个百分点 —— 交给浏览器 meet
+   就是「永远完整显示，最多几像素边距」，不会裁掉任何一行；② 旧片段写死了过大的 height，
+   也不会再把图钉在顶部、下面空一大片。 */
+.is-embed.is-readonly .svgwrap svg{width:100%;height:100%;margin:0}
 .is-embed .svgwrap svg{margin-inline:auto}
 /* 只读态：画布只承担查看，光标不暗示可编辑 */
 .is-embed.is-readonly .svgwrap{cursor:default}
@@ -243,9 +249,12 @@ svg{display:block;font-family:var(--sans)}
 .is-embed.is-readonly .rowCtl,.is-embed.is-readonly .rowHint,.is-embed.is-readonly .rowDrag,
 .is-embed.is-readonly .colAct,.is-embed.is-readonly .cellLabel{display:none}
 .is-embed.is-readonly .svgwrap:focus-visible{outline:none}
-/* 提示条：常驻右下角的图标按钮 —— 铅笔＝点一下进入编辑，对勾＝编辑中、点一下结束。
-   零常驻文字：图形自己表达状态，语义只在 aria-label 与 hover 的着色上。 */
-.is-embed .embedhint{display:flex;position:fixed;right:8px;bottom:8px;z-index:40;
+/* 退出 / 进入编辑的图标按钮：钉在卡片**右上角**，压在波形图的一个角上 ——
+   以前钉在右下角，一旦卡片比内容高（写死 height 的旧片段在窄笔记里就是这样），
+   它就悬在「波形图与底部之间的一片空白」里，看起来像独占了一条空间。
+   右上角是内容自带的区域（只读态没有 HUD、编辑态 HUD 在左上），不会再出现空白带。
+   铅笔＝点一下进入编辑，对勾＝编辑中、点一下结束；零常驻文字，语义只在 aria-label。 */
+.is-embed .embedhint{display:flex;position:fixed;left:8px;top:8px;z-index:40;
   align-items:center;justify-content:center;width:30px;height:30px;padding:0;
   border:1px solid var(--line);border-radius:8px;
   background:var(--panel);color:var(--muted);
@@ -261,13 +270,10 @@ svg{display:block;font-family:var(--sans)}
   .is-embed .embedhint{width:38px;height:38px;border-radius:10px}
   .is-embed .embedhint .hintico{width:20px;height:20px}
 }
-/* 编辑态底部有字符停靠条：提示按钮得让开，否则正好压在停靠条最右边那颗上 */
-.is-touch.is-embed:not(.is-readonly) .embedhint{bottom:64px}
-/* 上下文条（选中行 / 列）弹出时同理：让开它的实际高度，别压住面板里的按钮。
-   高度由 touch.js 量出来写进 --ctx-h（面板内容随行 / 列变化，写死数值会错位）。 */
-.is-touch.is-embed.ctx-open .embedhint{bottom:calc(var(--ctx-h,0px) + 8px)}
-/* 字符面板展开时先收起退出按钮，否则它浮在面板格子上，看着像其中一颗 */
-.is-touch.more-open .embedhint{display:none}
+/* 只读态放左上角：那里是列头行左侧的空白（行名上方），不压任何图元；
+   编辑态 HUD 占着左上，所以切到右上角 —— 只与最后一个列头的那两个小按钮重叠。
+   两个状态都不占底部空间，也不会再出现「按钮独占一条空白」的观感。 */
+.is-embed:not(.is-readonly) .embedhint{left:auto;right:8px}
 
 /* ---------------------------------------------------------------------------
    嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。

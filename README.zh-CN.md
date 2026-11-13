@@ -26,12 +26,11 @@
 
 ```html
 <iframe src="https://udarent.github.io/TimingBench/editor.html?embed=1#wj=PAYLOAD"
-        width="100%" height="380"
-        style="border:0;border-radius:10px;display:block"
-        loading="lazy" title="Timing diagram"></iframe>
+        style="width:100%;height:auto;aspect-ratio:560 / 376;border:0;border-radius:10px;display:block"
+        height="376" loading="lazy" title="Timing diagram"></iframe>
 ```
 
-`#wj=` 后面就是 WaveJSON 本体（base64url，因此不用转义、也不经过服务器）。这意味着片段是**自包含**的：转发笔记、发文件、发布出去，只要对方允许 iframe 就能看到图。代价是高度得写死（自己改 `height="…"`），也没有 `timingbench:change` 事件 —— 没有加载器在跑。Obsidian 里要作为**原始 HTML 块**直接贴进笔记，不能放在代码围栏里。
+`#wj=` 后面就是 WaveJSON 本体（base64url，因此不用转义、也不经过服务器）。这意味着片段是**自包含**的：转发笔记、发文件、发布出去，只要对方允许 iframe 就能看到图。`aspect-ratio` 让高度按图自身的比例跟着容器宽度走，**下方不会再留一条空白**（写死 `height="…"` 在窄屏上就会空出一大截）；`height` 只是老浏览器的兜底，比例值要与你的图一致（`<>` 面板生成的就是对的）。剩下的代价是没有 `timingbench:change` 事件 —— 没有加载器在跑。Obsidian 里要作为**原始 HTML 块**直接贴进笔记，不能放在代码围栏里。
 
 这种形态同样是完整可交互的卡片：默认只读，点一下就地编辑 —— 同一个编辑器，只是少了加载器。想一进来就可编辑？把 `&mode=edit` 加在 `#` 前面：`…?embed=1&mode=edit#wj=…`。
 

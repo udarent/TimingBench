@@ -45,12 +45,17 @@ export function attachShare(ctx) {
 
   // 形态二：纯 iframe。没有脚本可用时（Obsidian 笔记、只允许 HTML 的编辑器），
   // 内容改用 base64url 放在 URL 片段里 —— 片段不发给服务器，也不会被查询串截断。
-  function iframeSnippet(src, h) {
+  // 高度不能写死：只读卡片按容器宽度等比缩放，同一个 height 在窄笔记里会空出上百像素
+  // （作者在 Obsidian 手机端看到的「波形图与编辑按钮之间一大片空白」就是这么来的）。
+  // 改用 aspect-ratio = 内部 W/H：高度随容器宽度走，图正好铺满，不留空白。
+  // height 属性留作不支持 aspect-ratio 的老浏览器兜底。
+  function iframeSnippet(src, box) {
     var url = baseUrl() + 'editor.html?embed=1#wj=' + encodePayload(src);
+    var w = (box && box.w) || 560, h = (box && box.h) || 376;
     return '<iframe src="' + attrText(url) + '"\n' +
-      '        width="100%" height="' + h + '"\n' +
-      '        style="border:0;border-radius:10px;display:block"\n' +
-      '        loading="lazy" title="Timing diagram"></iframe>';
+      '        style="width:100%;height:auto;aspect-ratio:' + w + ' / ' + h +
+                ';border:0;border-radius:10px;display:block"\n' +
+      '        height="' + h + '" loading="lazy" title="Timing diagram"></iframe>';
   }
 
   var HINTS = {
@@ -58,7 +63,8 @@ export function attachShare(ctx) {
             'editable, and the card reports its own height so it never needs a fixed one.',
     iframe: 'No script needed. Paste this as a raw HTML block — in Obsidian, straight into the note ' +
             '(not inside a code fence). The content travels in the URL, so it renders anywhere ' +
-            'that allows an iframe; the height is fixed, tweak it if you change the diagram.'
+            'that allows an iframe. Height follows the container width (aspect-ratio), so there is ' +
+            'no blank strip under the diagram; editing happens inside the card and scrolls.'
   };
 
   function build() {
@@ -144,8 +150,8 @@ export function attachShare(ctx) {
     if (panel) { codeEl && codeEl.select(); return; }
     build();
     var src = (ctx.code && ctx.code.value) || '';
-    var h = contentHeight();
-    snippets = { script: scriptSnippet(src, h), iframe: iframeSnippet(src, h) };
+    var box = (ctx.state && ctx.state.roBox) || { w: 560, h: 376 };
+    snippets = { script: scriptSnippet(src, contentHeight()), iframe: iframeSnippet(src, box) };
     showKind('script');
     try { codeEl.focus({ preventScroll: true }); } catch (e) { try { codeEl.focus(); } catch (e2) {} }
   };
