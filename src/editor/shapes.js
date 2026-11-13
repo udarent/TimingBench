@@ -335,10 +335,12 @@ export function createShapes(ctx){
       var cw=T?Math.min(CELL-2,44):30, ch=T?28:20;
       o.push('<rect x="'+(cx-cw/2)+'" y="'+COL_Y+'" width="'+cw+'" height="'+ch+'" rx="4" fill="'+(selc?'var(--accent-bg)':'transparent')+'" stroke="'+(selc?'var(--accent)':'var(--line)')+'" stroke-width="0.5" '+(ghost?'stroke-dasharray="2 2"':'')+'/>');
       o.push('<text x="'+cx+'" y="'+(COL_Y+ch/2)+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?13:11)+'" fill="'+(selc?'var(--accent)':'var(--muted)')+'">'+c+'</text>');
-      o.push('<g class="colAct">'+colBtn(c,cx,0,'insert','+',ghost?'Append a cycle at the end':'Insert a cycle before column '+c));
-      if(!ghost) o.push(colBtn(c,cx,1,'delete','−','Delete the cycle of column '+c)+
-        colBtn(c,cx,2,'gap','|','Toggle the phase line on column '+c,gapc));
-      o.push('</g></g>');
+      // 列动作（+ − |）已收进上下文条：这里只在能力表允许时画（目前四场景都是 off，
+      // 桌面改成「选中列 → 右侧面板」）。
+      if(can('colAct')) o.push('<g class="colAct">'+colBtn(c,cx,0,'insert','+',ghost?'Append a cycle at the end':'Insert a cycle before column '+c)+
+        (!ghost ? colBtn(c,cx,1,'delete','−','Delete the cycle of column '+c)+
+        colBtn(c,cx,2,'gap','|','Toggle the phase line on column '+c,gapc) : '')+'</g>');
+      o.push('</g>');
     }
     if(isEmpty) o.push(emptyRow(W));
     ir.lanes.forEach(function(l,li){

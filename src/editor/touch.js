@@ -196,7 +196,7 @@ export function attachTouchUI(ctx, dom) {
     // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮。
     // 这次滚动是程序自己发起的，要记下目标位置 —— 否则紧随其后的 scroll 事件会被
     // 当成「用户想看更多」，把刚打开的面板立刻收掉（选中靠下的行时表现为面板一闪就没）。
-    if (kind === 'row' && ctx.revealLane) {
+    if (kind === 'row' && ctx.revealLane && TOUCH) {
       var top0 = ctx.wrap ? ctx.wrap.scrollTop : 0;
       ctx.revealLane(state.selLane, panel.offsetHeight);
       // 只有真的滚动了才记；横纵两个方向都要记 —— 用户随后横向滑动画布时 scrollTop 不变，

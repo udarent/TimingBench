@@ -141,6 +141,17 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .touchbar button .ico{font-size:21px;line-height:1}
 .is-touch .touchbar button[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .touchbar button[disabled]{opacity:.4}
+/* 桌面：上下文条钉在右侧（触摸端钉底部，规则在下面 .is-touch 段里）。
+   行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头按钮都已撤掉。 */
+.tbpanel.open{display:flex;position:fixed;right:10px;top:50%;transform:translateY(-50%);
+  width:196px;flex-wrap:wrap;gap:4px;padding:8px;z-index:24;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 6px 20px rgba(0,0,0,.14)}
+.tbpanel button.ctxbtn{width:34px;height:34px;min-width:34px;padding:0;border:1px solid var(--line);
+  border-radius:7px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
+  cursor:pointer}
+.tbpanel button.ctxbtn svg{width:17px;height:17px;fill:none;stroke:currentColor}
+.tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel{display:none;position:fixed;left:0;right:0;bottom:60px;z-index:20;
   flex-wrap:wrap;gap:8px;padding:10px;max-height:46dvh;overflow:auto;
   background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.14)}

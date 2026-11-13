@@ -30,8 +30,11 @@ export var CAP = {
   // 画布 HUD：撤销 / 重做 / 连线（/ 生成嵌入代码，卡片里去掉）
   hud:        { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
   colhead:    { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
-  colAct:     { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
-  rowTool:    { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
+  // 列操作 / 行工具不再画在画布上（桌面列头只有编号、行末不再常驻 5 个按钮）：
+  // 两者都收进下面同一个上下文条，选中行 / 列时出现。列头那三颗 11×14px 的按钮
+  // 命中率本来就差，收进面板后还能顺带把 ACT_W 的用途说清楚。
+  colAct:     { deskEdit: OFF, deskView: OFF, touchEdit: SW,  touchView: OFF },
+  rowTool:    { deskEdit: OFF, deskView: OFF, touchEdit: SW,  touchView: OFF },
   rowDrag:    { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
   cellLabel:  { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
   laneMeta:   { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
@@ -42,7 +45,8 @@ export var CAP = {
   // （宽度决定折叠），不是能力差异。顺带删掉了 SVG 字符条那段「滚动时反向位移把 chips
   // 钉回可视区」的历史包袱，以及 `charChips` 图元。
   dock:       { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
-  tbpanel:    { deskEdit: SW, deskView: OFF, touchEdit: ON,  touchView: OFF }
+  // 上下文条：四场景同一套图标（触摸钉底部、桌面钉右侧），是行 / 列动作的唯一入口。
+  tbpanel:    { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF }
 };
 
 // HUD 图标的顺序。之前这里是两句写死的 cmd()，外加一个 `if (!(T && embedCard))` 把
