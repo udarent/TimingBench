@@ -93,7 +93,6 @@ var CHIP_W=G.CHIP_W;
 
   // 段内所有格共用「段首字符」的 bus 配色：`.` 与 `=` 是延续符，自己没有颜色
   function busClassOf(ch){ return BUS_CLASS[ch]||'bus2'; }
-  function isBusCont(ch){ return ch==='.'||ch==='='; }
 
   // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph
   function chipGlyph(v){ return waveGlyph(v,null,0,TOUCH?7:5,TOUCH?22:13,TOUCH?37:21,CHIP_W,{arrowX:3}); }
@@ -109,4 +108,4 @@ var CHIP_W=G.CHIP_W;
       'u':'pull-up (dashed high)','d':'pull-down (dashed low)'}[v]||'wave character';
   }
 
-export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, isBusCont };
+export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf };

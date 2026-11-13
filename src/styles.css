@@ -139,7 +139,6 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .touchbar button .ico{font-size:21px;line-height:1}
 .is-touch .touchbar button[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .touchbar button[disabled]{opacity:.4}
-.is-touch .tbsep{flex:0 0 1px;height:34px;background:var(--line);margin:0 2px}
 .is-touch .tbpanel{display:none;position:fixed;left:0;right:0;bottom:60px;z-index:20;
   flex-wrap:wrap;gap:8px;padding:10px;max-height:46dvh;overflow:auto;
   background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.14)}
