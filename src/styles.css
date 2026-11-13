@@ -306,3 +306,12 @@ svg{display:block;font-family:var(--sans)}
 .shareCopy:hover{background:var(--accent);color:var(--panel)}
 .shareTip{font:12px var(--sans);color:var(--muted)}
 .shareTip.ok{color:var(--ok)}
+/* 手机上这块面板没有 hover 可用，关闭 / 页签 / 复制一律按触摸口径放大到 44px 命中区；
+   遮罩留白收窄，让片段文本框在小屏上更宽（片段本来就长，横向多一列字符都是收益）。 */
+.is-touch .shareMask{padding:16px}
+.is-touch .shareHead{padding:10px 8px 10px 14px}
+.is-touch .shareClose{min-width:44px;min-height:44px;font-size:18px;padding:0}
+.is-touch .shareTabs{padding:10px 14px 0}
+.is-touch .shareTab{min-height:44px;padding:8px 16px;font-size:13.5px}
+.is-touch .shareCode{font-size:12.5px}
+.is-touch .shareCopy{min-height:44px;padding:10px 20px;font-size:13.5px}

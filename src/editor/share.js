@@ -10,6 +10,11 @@ export function attachShare(ctx) {
   if (typeof document === 'undefined') return;
   var panel = null, codeEl = null, tipEl = null, hintEl = null;
   var snippets = {}, kind = 'script';
+  // 面板打开的时刻。触摸 tap 会在 pointerup 之后补发一次合成 mousedown，
+  // 落点正是刚插入的遮罩本身 —— 不设这道时间窗，遮罩会立刻按「点空白关闭」把自己关掉，
+  // 手机上表现为「点了生成嵌入代码按钮没反应」（面板确实建了，只是 16ms 后就没了）。
+  var openedAt = 0;
+  var OPEN_GUARD = 400;
 
   // 站点基址：从当前页面地址推导，自托管 / 本地 / Pages 都能得到正确前缀
   function baseUrl() {
@@ -89,7 +94,17 @@ export function attachShare(ctx) {
     hintEl = panel.querySelector('.shareHint');
 
     panel.querySelector('.shareClose').addEventListener('click', close);
-    panel.addEventListener('mousedown', function (e) { if (e.target === panel) close(); });
+    // 点遮罩空白关闭。用 pointerdown 覆盖鼠标与触摸两条路径，并挡掉「打开瞬间的那一次」：
+    // 触摸端补发的合成 mousedown 不可靠（老设备上 pointerdown 反而更早更稳）。
+    panel.addEventListener('pointerdown', function (e) {
+      if (Date.now() - openedAt < OPEN_GUARD) return;
+      if (e.target === panel) close();
+    });
+    // 老浏览器没有 Pointer Events 时退回 mousedown，同样带时间窗
+    panel.addEventListener('mousedown', function (e) {
+      if (Date.now() - openedAt < OPEN_GUARD) return;
+      if (e.target === panel) close();
+    });
     panel.querySelector('.shareCopy').addEventListener('click', copy);
     panel.querySelector('.shareTabs').addEventListener('click', function (e) {
       var b = e.target && e.target.closest ? e.target.closest('button[data-kind]') : null;
@@ -143,12 +158,15 @@ export function attachShare(ctx) {
     if (!panel) return;
     if (panel.parentNode) panel.parentNode.removeChild(panel);
     panel = null; codeEl = null; tipEl = null;
+    openedAt = 0;
     ctx.focusCanvas();
   }
 
   ctx.openEmbedCode = function () {
     if (panel) { codeEl && codeEl.select(); return; }
     build();
+    // 时间窗从「刚插入」算起：触摸 tap 的合成 mousedown 会在其后几十毫秒内到达
+    openedAt = Date.now();
     var src = (ctx.code && ctx.code.value) || '';
     var box = (ctx.state && ctx.state.roBox) || { w: 560, h: 376 };
     snippets = { script: scriptSnippet(src, contentHeight()), iframe: iframeSnippet(src, box) };
