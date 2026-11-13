@@ -189,32 +189,6 @@ export function createShapes(ctx){
     return o.join('');
   }
 
-  // 底部上下文条：普通状态选中格才出现字符条；连线模式整条留白（两种操作互斥，
-  // 也不再画任何指示圆点）。
-  // 卡片口径：字符条按**可视宽度**换行（只扩纵向、不超横向），整组钉在可视区底部 ——
-  // 内容矮于视口时仍落在画布底部；内容高于视口时向上吸附，随纵向滚动保持可见。
-  function actionBar(y,W,perRow,viewW,barH,barLeft){
-    var sy=wrap.scrollTop, oy=Math.min(0, sy+wrap.clientHeight-barH-8-y);
-    var o=['<g class="charChips" transform="translate('+wrap.scrollLeft+','+oy+')">'];
-    if(!state.linkMode&&state.selCell){
-      // 底板只在字符条真正出现时铺，避免无选中时挡住底部波形
-      o.push('<rect x="0" y="'+y+'" width="'+viewW+'" height="'+barH+'" fill="var(--bg)"/>');
-    }
-    o.push('<line x1="'+PAD+'" y1="'+y+'" x2="'+(viewW-PAD)+'" y2="'+y+'" stroke="var(--line)" stroke-width="0.5"/>');
-    if(!state.linkMode&&state.selCell){
-      Core.ALL.forEach(function(v,i){
-        var on=state.ch===v;
-        var bx=barLeft+(i%perRow)*CHIP_STEP, by=y+6+Math.floor(i/perRow)*(CHIP_H+6), cy=by+CHIP_H/2;
-        o.push('<g class="charChip'+(on?' on':'')+'" data-ch="'+esc(v)+'" role="button" aria-label="Write '+esc(v)+' — '+esc(chipDesc(v))+'">'+
-          '<rect x="'+bx+'" y="'+by+'" width="'+CHIP_W+'" height="'+CHIP_H+'" rx="5" fill="var(--panel)" stroke="var(--line2)" stroke-width="0.7"/>'+
-          '<g class="chipWave" transform="translate('+bx+','+by+')">'+chipGlyph(v)+'</g>'+
-          '<text x="'+(bx+CHIP_W/2)+'" y="'+cy+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?15:11)+'" font-family="var(--mono)" fill="'+(on?'var(--accent)':'var(--ink)')+'">'+esc(v)+'</text></g>');
-      });
-    }
-    o.push('</g>');
-    return o.join('');
-  }
-
   // 零行空态：没有信号行时画一块可点的虚线占位行（加号 + 淡方波），
   // 点它即新增第一条信号行。图形自己表达「这里能加一行」，画布上仍不出现任何文字，
   // 语义只走 aria-label。这里只画操作层的占位元素，不碰波形层图元与指纹。
@@ -307,19 +281,14 @@ export function createShapes(ctx){
     var actY=bottom+4;
     // 可视宽度够放下整排时，仍从波形起点 XS 起排（与格子对齐，保持原版式观感）；
     // 放不下才退到卡片左缘用满整行宽度，靠多行纵向堆叠消化。
-    var barLeft=(XS+Core.ALL.length*CHIP_STEP+PAD<=viewW)?XS:PAD;
-    var perRow=Math.max(1, Math.min(Core.ALL.length, Math.floor((viewW-barLeft-PAD)/CHIP_STEP)));
-    var rows=Math.ceil(Core.ALL.length/perRow);
     // 只读态不画字符条，也不需要为它预留高度（否则卡片底部会留一条空白）。
     // 触摸端改由 HTML 停靠条承担（touch.js 的 renderDock），画布只为它预留高度：
     // 这样选中格可以滚到停靠条上方，条本身也不再盖在波形上、更不会随滚动被反复位移。
     var DOCK_H=56;
     // 底栏高度是**布局派生**：谁在这个场景里承担字符输入，就为谁留高度。
-    // 桌面 = 画布内字符条（actionBar，选中格时多行铺开）；触摸 = HTML 停靠条（dock，56）；
+    // 字符输入只剩 HTML 停靠条（dock）：选中格时给 #chardock 让出高度，
     // 两者都关（只读）= 0，否则卡片底部会留一条谁也点不到的空白。
-    var barH=can('actionBar')
-      ? Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H))
-      : (can('dock') ? (state.selCell?DOCK_H:ACT_H) : 0);
+    var barH=can('dock')?(state.selCell?DOCK_H:ACT_H):0;
     // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
@@ -438,7 +407,6 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     o.push(edgeArcs(ir));
-    if(can('actionBar')) o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
       var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });
@@ -457,11 +425,6 @@ export function createShapes(ctx){
     var sx=wrap.scrollLeft, sy=wrap.scrollTop;
     var hud=wrap.querySelector('g.hudBar');
     if(hud) hud.setAttribute('transform','translate('+sx+','+sy+')');
-    var chips=wrap.querySelector('g.charChips');
-    if(chips&&state.barY!=null){
-      var oy=Math.min(0, sy+wrap.clientHeight-state.barH-8-state.barY);
-      chips.setAttribute('transform','translate('+sx+','+oy+')');
-    }
   }
 
   ctx.redraw=redraw;

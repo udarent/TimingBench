@@ -163,6 +163,29 @@ svg{display:block;font-family:var(--sans)}
    与旧版「画在 SVG 里再随滚动反向位移」的字符条相比，它不随画布滚动、不盖波形，
    命中区稳定在 44px —— 手机上一根手指不会被它带着跑。 */
 .chardock,.charmore{display:none}
+/* 桌面：字符停靠条与触摸端是**同一个组件**（#chardock / .chipbtn），只是摆放与尺寸
+   按指针定。原先桌面在 SVG 里另画一条 23 颗的 charChips —— 两套渲染、两套布局、
+   两套点击，还有一段「滚动时反向位移把 chips 钉回可视区」的补偿。现在一套。
+   桌面放得下 23 颗就全平铺（不折叠），触摸端 4 颗 + ⋯，由 JS 按 TOUCH 决定数量。 */
+.chardock.open{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:22;
+  align-items:center;justify-content:flex-start;gap:4px;height:40px;padding:4px 8px;
+  background:var(--panel);border-top:1px solid var(--line);user-select:none;
+  /* 23 颗 × 30px ≈ 690：窄卡片（如 520 的 iframe）放不下时必须横向滚动，
+     不能居中溢出 —— 居中会让第一颗跑到负坐标，用户看不到也点不到。 */
+  overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
+.is-embed .chardock.open{bottom:0}
+.chardock .chipbtn{position:relative;flex:0 0 30px;width:30px;height:28px;min-width:30px;padding:0;
+  border:1px solid var(--line);border-radius:6px;background:var(--src-bg);color:var(--ink);overflow:hidden}
+.chardock .chipbtn svg{position:absolute;inset:0;width:100%;height:100%;
+  --wave-ink:var(--muted);opacity:.85;pointer-events:none}
+.chardock .chipbtn span{position:relative;font:600 12px var(--mono);
+  text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
+.chardock .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
+.chardock .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
+.chardock .chipbtn.on span{color:var(--accent)}
+.chardock .chipbtn:hover{border-color:var(--accent)}
+.chardock .chipbtn.clear{flex:0 0 26px;width:26px;min-width:26px}
+.chardock .chipbtn.clear span{font-size:14px;color:var(--muted)}
 .is-touch .chardock.open{display:flex;position:fixed;left:0;right:0;bottom:60px;z-index:22;
   align-items:center;gap:6px;height:56px;padding:6px 8px;
   background:var(--panel);border-top:1px solid var(--line);

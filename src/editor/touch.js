@@ -9,11 +9,15 @@ import { chipGlyph, chipDesc } from './waveform.js';
 import { esc } from '../core/util.js';
 
 export function attachTouchUI(ctx, dom) {
-  if (!TOUCH) return;
+  // 这个模块现在四场景都装配：字符停靠条（#chardock）是**唯一**的字符输入控件，
+  // 桌面也用它（原先桌面在 SVG 里另画一条 23 颗的字符条）。触摸专属的只有下面三处：
+  // 标签页 / 底部操作栏、长按出英文名（bindLongName）、首屏手势引导（guide）。
+  // 其余（上下文条渲染、停靠条渲染、afterRedraw 同步）在桌面同样需要，只是 CSS 决定摆哪。
   var bar = dom.touchbar, panel = dom.tbpanel, toast = dom.toast;
   var dock = dom.chardock, more = dom.charmore;
   var tabbar = dom.tabbar, app = dom.app;
-  if (!bar || !panel) return;                 // 验收页等只带四个基础节点的装配体直接跳过
+  // 不再因为「没有底部操作栏 / 上下文条容器」整块退出：字符停靠条（dock）在桌面
+  // 与验收页里也要工作，缺哪个节点就跳过哪部分（下面各函数自带空值保护）。
   var state = ctx.state;
   var toastTimer = null;
 
@@ -129,6 +133,7 @@ export function attachTouchUI(ctx, dom) {
   // 长按 480ms 出名称：触摸端没有 hover，这是 title 的等价物，
   // 也是「零常驻文字」下的辨识兜底。移动超过 12px 视为滚动，取消。
   function bindLongName(root) {
+    if (!TOUCH) return;                              // 桌面用 title / aria-label，不做长按提示
     var els = root.querySelectorAll('[data-name]');
     for (var i = 0; i < els.length; i++) (function (el) {
       var t = null, x0 = 0, y0 = 0;
@@ -166,6 +171,7 @@ export function attachTouchUI(ctx, dom) {
   }
   // 上下文条内容跟着「最后选中的对象」走：选中格子时字符条在 SVG 里，这里让位。
   function renderContext() {
+    if (!panel) return;                           // 不跑编辑器的页面（如验收页）没有上下文条容器
     if (state.linkMode || ctx.inlineCtx || state.selCell) { hideContext(); return; }
     var kind = null, acts = null, key = null;
     if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS; key = state.sel; }
@@ -199,14 +205,14 @@ export function attachTouchUI(ctx, dom) {
         ? { left: ctx.wrap.scrollLeft, top: ctx.wrap.scrollTop } : null;
     }
   }
-  panel.addEventListener('click', function (e) {
+  if (panel) panel.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
     if (!b) return;
     // 不收起面板：多个动作常需连点（如连按上移），重绘后 renderContext 会按新状态更新。
     doAct(b.getAttribute('data-act'));
   });
 
-  bar.addEventListener('click', function (e) {
+  if (bar) bar.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button') : null;
     if (!b || b.disabled) return;
     var k = b.getAttribute('data-tb');
@@ -236,8 +242,9 @@ export function attachTouchUI(ctx, dom) {
   // closeCharDock 会主动把 dockKey 置 null，用 dockKey 当开关会让清理条件失效，
   // 表现为「Esc 清掉了选中，底部字符条还挂着 6 个按钮」。
   function hideDock() {
+    // 无条件清空：原先靠 dockOpen 早退，一旦 renderDock 半途失败（或从别的场景切进来）
+    // 就会留下一排点不动的按钮。清空是幂等的，代价只是一次 innerHTML 赋值。
     dockKey = null; moreOpen = false;
-    if (!dockOpen) return;
     dockOpen = false;
     if (dock) { dock.textContent = ''; dock.classList.remove('open'); }
     if (more) { more.textContent = ''; more.classList.remove('open'); }
@@ -268,10 +275,12 @@ export function attachTouchUI(ctx, dom) {
     dockKey = key;
     dock.textContent = '';
     // 当前字符不在快捷四个里时，把它临时顶到第一位 —— 免得「选中是什么」看不出来
-    var quick = QUICK.slice();
-    if (state.ch && quick.indexOf(state.ch) < 0) quick.unshift(state.ch);
+    // 桌面一条放得下 23 颗（30px × 23 ≈ 690），全平铺；触摸端只放 4 颗 + 「⋯」折叠。
+    // 这是宽度决定的**布局**差异，不是能力差异 —— 控件与写入逻辑是同一份。
+    var quick = TOUCH ? QUICK.slice() : Core.ALL.slice();
+    if (TOUCH && state.ch && quick.indexOf(state.ch) < 0) quick.unshift(state.ch);
     quick.forEach(function (v) { dock.appendChild(makeChip(v)); });
-    if (more) {
+    if (more && TOUCH) {                              // 只有触摸端需要折叠入口
       var mb = document.createElement('button');
       mb.type = 'button';
       mb.className = 'chipbtn more' + (moreOpen ? ' on' : '');
@@ -315,10 +324,11 @@ export function attachTouchUI(ctx, dom) {
   ctx.closeCharDock = hideDock;
 
   ctx.afterRedraw = function () {
-    var u = bar.querySelector('[data-tb="undo"]'), r = bar.querySelector('[data-tb="redo"]');
+    // 不跑编辑器的页面（或桌面精简容器）可能没有底部操作栏：只同步存在的部分。
+    var u = bar && bar.querySelector('[data-tb="undo"]'), r = bar && bar.querySelector('[data-tb="redo"]');
     if (u) u.disabled = !state.undo.length;
     if (r) r.disabled = !state.redo.length;
-    var lk = bar.querySelector('[data-tb="link"]');
+    var lk = bar && bar.querySelector('[data-tb="link"]');
     if (lk) lk.setAttribute('aria-pressed', String(state.linkMode));
     renderContext();
     renderDock();
@@ -344,6 +354,7 @@ export function attachTouchUI(ctx, dom) {
   // 画在页面固定层上（不在 SVG 里，所以不占画布、不进波形层、也不会被重绘抹掉），
   // 播完由 JS 整块移除；对读屏是 aria-hidden —— 触摸手势本来就不需要文字说明。
   function guide() {
+    if (!TOUCH) return;                              // 首屏手势动画只对触摸端有意义
     if (ctx.isReadonly && ctx.isReadonly()) return;   // 嵌入卡片只读态没有「点格子」这回事
     var cell = ctx.wrap && ctx.wrap.querySelector('rect.cell');
     if (!cell) return;

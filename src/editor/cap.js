@@ -36,8 +36,12 @@ export var CAP = {
   cellLabel:  { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
   laneMeta:   { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   spacerMark: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
-  actionBar:  { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
-  dock:       { deskEdit: SW, deskView: OFF, touchEdit: ON,  touchView: OFF },
+  // 字符输入只剩一套实现：HTML 停靠条（`#chardock`）。桌面原来在 SVG 里画一条 23 颗的
+  // 字符条（旧 `actionBar`），触摸端是固定停靠条 —— 同一件事两套渲染、两套布局、两套点击。
+  // 现在统一为前者：桌面放得下 23 颗就全平铺，触摸放 4 颗 + `⋯`，这是**布局**差异
+  // （宽度决定折叠），不是能力差异。顺带删掉了 SVG 字符条那段「滚动时反向位移把 chips
+  // 钉回可视区」的历史包袱，以及 `charChips` 图元。
+  dock:       { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   tbpanel:    { deskEdit: SW, deskView: OFF, touchEdit: ON,  touchView: OFF }
 };
 

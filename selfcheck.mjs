@@ -250,11 +250,15 @@ function check() {
     '字符停靠条未固定在卡片底部或命中区不足 44px');
   ok(/flex:1 1 44px/.test(cssSrc) && /min-width:44px/.test(cssSrc),
     '触摸操作栏按钮未按屏宽自适应或命中区不足 44px');
-  ok(/viewW/.test(shapesSrc) && /Math\.floor\(\(viewW-barLeft-PAD\)\/CHIP_STEP\)/.test(shapesSrc),
-    '字符条未按可视宽度换行（会横向溢出卡片）');
-  ok(/g class="hudBar"/.test(shapesSrc) && /g class="charChips"/.test(shapesSrc) &&
-     /syncPinned/.test(shapesSrc) && /wrap\.scrollLeft/.test(shapesSrc),
-    'HUD / 字符条未钉在卡片可视区（滚动后按钮会跑出视野）');
+  // 字符输入只剩一套实现（HTML 停靠条 #chardock）：桌面全平铺、触摸折叠 4+⋯。
+  // 折叠判据必须由 TOUCH 决定，不能写死数量 —— 23 颗 48px 在 390 宽屏上放不下。
+  const touchSrcEarly = read('src/editor/touch.js');
+  ok(/TOUCH \? QUICK\.slice\(\) : Core\.ALL\.slice\(\)/.test(touchSrcEarly) && /more && TOUCH/.test(touchSrcEarly),
+    '字符停靠条未按指针决定是否折叠（桌面全平铺 / 触摸 4+⋯）');
+  ok(!/charChips|actionBar/.test(shapesSrc),
+    'SVG 内字符条（charChips / actionBar）应已删除，字符输入只走 #chardock');
+  ok(/g class="hudBar"/.test(shapesSrc) && /syncPinned/.test(shapesSrc) && /wrap\.scrollLeft/.test(shapesSrc),
+    'HUD 未钉在卡片可视区（滚动后会跑出视野）');
   ok(/window\.addEventListener\('resize'/.test(editorSrc) &&
      /ctx\.wrap\.addEventListener\('scroll'/.test(editorSrc),
     '缺少旋屏重排或滚动跟随');
@@ -344,7 +348,8 @@ function check() {
   ok(!/<title>/.test(shapesSrc), '画布层仍在使用 <title>（会显示成 tooltip 文字）');
   ok(/role="button" aria-label="'\+esc\(title\)/.test(shapesSrc),
     '画布按钮缺少 aria-label（视觉无文字时读屏会失去名称）');
-  ok(/aria-label="Write '\+esc\(v\)/.test(shapesSrc), '字符条缺少 aria-label');
+  ok(/b\.setAttribute\('aria-label', 'Write ' \+ name\)/.test(touchSrc),
+    '字符停靠条缺少 aria-label');
   // 触摸端：操作栏 4 个符号、标签页 2 个图标，上下文条随选中对象自动切换
   ok(!/data-panel=/.test(html), '触摸操作栏仍保留「对象 / 列」文字面板入口');
   ok(touchSrc.indexOf("className = 'ctxbtn'") >= 0 && /function renderContext/.test(touchSrc),
