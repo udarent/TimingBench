@@ -4,6 +4,7 @@ import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
+import * as Cap from './cap.js';
 import { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf } from './waveform.js';
 
 var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元里的 T 是上沿 y 坐标，已移到 waveform.js）
@@ -14,6 +15,12 @@ var XS=G.XS, CHIPS_W=G.CHIPS_W;
 
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
+  // 当前场景（desk|touch × Edit|Card）。所有「画不画某个控件」的判据一律查 cap.js 的能力表：
+  // `can('rowTool')` 读起来就是「这个场景该不该画行工具」，比 `if(T||state.readonly)` 好审。
+  // 仍直接读 T / readonly 的地方都是**布局派生**（因为没画控件而少留的高度 / 少留的边距），
+  // 不是能力 —— 那条界线见 cap.js 顶部注释。
+  var SC='deskEdit';
+  function can(name){ return Cap.can(name,SC); }
 
   // ---- 行名区宽度自适应 ----------------------------------------------------
   // 行名区不该为「可能出现的长名字」常年留白：名字短就窄，长度决定宽度。
@@ -33,15 +40,15 @@ export function createShapes(ctx){
     measTxt.setAttribute('font-size',String(size));
     try{ return measTxt.getBBox().width; }catch(e){ return text.length*size*0.6; }
   }
-  // 最宽的一行行名（名字 + φ/T + [分组]）。只读态不画 φ/T，所以更窄 —— 这是内容差异，
-  // 不是「另一套版式」：两态用的是同一个算法，只是喂进去的文本不同。
-  function nameBlockWidth(ir,readonly){
-    var l, w, max=0;
+  // 最宽的一行行名（名字 + φ/T + [分组]）。只读态不画 φ/T（`laneMeta` 能力关闭），
+  // 所以更窄 —— 这是内容差异，不是「另一套版式」：两态用同一个算法，只是喂进去的文本不同。
+  function nameBlockWidth(ir){
+    var l, w, max=0, withMeta=can('laneMeta');
     for(var i=0;i<ir.lanes.length;i++){
       l=ir.lanes[i];
       if(l.kind==='spacer') continue;         // spacer 行不画行名
       w=measure(l.name,12);
-      if(!readonly){
+      if(withMeta){
         w+=measure(' φ'+l.phase,9)+measure(' T'+l.period,9);
       }
       if(l.groupPath&&l.groupPath.length) w+=measure(' ['+l.groupPath.join('/')+']',10);
@@ -57,20 +64,30 @@ export function createShapes(ctx){
   }
   // HUD 是卡片顶栏：坐标相对视口，随横向 / 纵向滚动反向位移，始终钉在可视区左上角。
   // 背景宽度取可视宽度而不是整张画布，避免顶栏拉成一条超出卡片的长带。
+  // 画哪几个图标由能力表给列表（cap.hudCmds）—— 「触摸卡片里该不该有连线」这个问题
+  // 从此只有一处答案，不再靠某个复合布尔表达式记得住。
+  var HUD_META={
+    undo:{txt:'↶',title:'Undo (Ctrl+Z)'},
+    redo:{txt:'↷',title:'Redo (Ctrl+Y)'},
+    link:{txt:'◇'},
+    embed:{txt:'<>',title:'Embed code: a snippet you can paste into your page'}
+  };
   function hudSVG(viewW){
     var sy=wrap.scrollTop;
     var o=['<g class="hudBar" transform="translate('+wrap.scrollLeft+','+sy+')">'];
     o.push('<rect x="0" y="0" width="'+viewW+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
     var x=PAD;
     function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
-    cmd('undo','↶','Undo (Ctrl+Z)',!state.undo.length);
-    cmd('redo','↷','Redo (Ctrl+Y)',!state.redo.length);
-    // 触摸端的嵌入卡片只有三四百像素宽：四个图标就是 190px 的浮层，压在波形上很碍事，
-    // 而且「生成嵌入代码」在嵌入卡片里本身没意义。只留撤销 / 重做这两件事。
-    if(!(T&&state.embedCard)){
-      cmd('link','◇',state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
-      cmd('embed','<>','Embed code: a snippet you can paste into your page',false,false);
-    }
+    Cap.hudCmds(SC, !!state.embedCard).forEach(function(c){
+      var m=HUD_META[c];
+      if(c==='link'){
+        cmd('link',m.txt,state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
+      }else if(c==='embed'){
+        cmd('embed',m.txt,m.title,false,false);
+      }else{
+        cmd(c,m.txt,m.title,!state[c].length);
+      }
+    });
     o.push('</g>');
     return o.join('');
   }
@@ -81,7 +98,7 @@ export function createShapes(ctx){
   // 竖直位置压在 COL_Y+16 … COL_Y+30 这一条：上边留给列号，下边正好抵到 TOP，
   // 不与第一行 laneRow 重叠 —— 否则按钮下沿会被行矩形盖住、点上去命中的是行。
   function colBtn(c,cx,k,act,txt,title,on){
-    if(T||state.readonly) return '';   // 触摸端移到上下文图标条；只读态不提供列操作
+    if(!can('colAct')) return '';   // 触摸端换成上下文图标条（swap）；只读态不提供列操作（off）
     var x=cx-18+k*12.5, w=11;
     return '<g class="colActBtn" data-cact="'+act+'" data-c="'+c+'" role="button" aria-label="'+esc(title)+'">'+
       '<rect x="'+x+'" y="'+(COL_Y+16)+'" width="'+w+'" height="14" rx="3" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line2)')+'" stroke-width="0.6"/>'+
@@ -91,7 +108,7 @@ export function createShapes(ctx){
   // 行工具：只保留互不重复的修改；行重排已统一交给行首拖拽把手
   // 只读卡片上整组撤掉：它们是编辑入口，点上去也只会被「点一下进编辑」拦下来。
   function rowTools(l,y,ACT_X){
-    if(T||state.readonly) return '';   // 触摸端行工具移到选中行后出现的上下文图标条
+    if(!can('rowTool')) return '';   // 触摸端换成上下文条（swap）；只读卡片整组撤掉（off）
     var o=[], x=ACT_X+4, isSp=l.kind==='spacer';
     function add(act,txt,w,title){
       o.push('<g class="rowTool" data-act="'+act+'" data-lane="'+l.id+'" role="button" aria-label="'+esc(title)+'" style="cursor:pointer">'+
@@ -114,7 +131,7 @@ export function createShapes(ctx){
   // 行首拖拽把手：行位置调整的唯一交互
   // 只读卡片不画：没有拖拽这回事，画出来只是个不能用的点心。
   function dragHandle(l,y){
-    if(T||state.readonly) return '';   // 触摸端改用「↑ 上移 / ↓ 下移」，不与原生滚动抢手势
+    if(!can('rowDrag')) return '';   // 触摸端换成 ↑ / ↓（swap，不与原生滚动抢手势）；只读不画（off）
     return '<g class="rowDrag" data-drag="'+l.id+'" role="button" aria-label="Drag to reorder this row">'+
       '<rect x="'+(PAD+2)+'" y="'+(y+8)+'" width="16" height="32" rx="3" fill="transparent"/>'+
       '<text x="'+(PAD+10)+'" y="'+(y+24)+'" text-anchor="middle" dominant-baseline="central" font-size="13" fill="var(--muted)" pointer-events="none">⠿</text></g>';
@@ -122,7 +139,7 @@ export function createShapes(ctx){
 
   // 数据标签的唯一编辑入口：长在总线块右下角的 ✎ 徽标，单击就地编辑 data 标签
   function cellLabelHit(l,i,x0,y,label){
-    if(T) return '';   // 触摸端数据标签由长按/点标签徽标编辑，不在画布画 hover 徽标
+    if(!can('cellLabel')) return '';   // 触摸端换成「长按格子 / 点标签徽标」（swap）；只读不画（off）
     // 画在数据块下缘、格子底部：避开中心的标签文字与顶部的节点锚点
     var bx=x0+CELL-15, by=y+30, txt=label?String(label):'';
     return '<g class="cellLabel" data-lane="'+l.id+'" data-tick="'+i+'" data-label="1">'+
@@ -219,19 +236,20 @@ export function createShapes(ctx){
     // 重绘会替换 SVG DOM；未提交的就地编辑先结算，再用最新 IR 重建整张图
     if(ctx.inlineCtx) ctx.closeInline(true);
     var ir=state.ir; if(!ir) return;
+    SC=Cap.sceneOf(state);                       // 先定场景，后面的判据全靠它
     // 只读态与编辑态共用同一套排版（格子、行高、字号、网格都不变）：只读卡片只是
     // 「少画编辑控件」，不是另一套版式。行名区宽度在这里按内容重算（两态同一算法），
     // 避免任何调用方改动过后残留旧值。
     // 行名左界：桌面被行首拖拽把手顶到 PAD+18，触摸端不画把手、左界只有 PAD。
-    var nameKey=state.readonly+'|'+ir.lanes.map(function(l){
+    var nameKey=SC+'|'+ir.lanes.map(function(l){
       return l.kind==='spacer'?'':(l.name+'/'+l.phase+'/'+l.period+'/'+(l.groupPath||[]).join('>'));
     }).join(';');
     if(nameKey!==measKey){                       // 内容没变就不重复测量（getBBox 会强制布局）
-      measKey=nameKey; measW=nameBlockWidth(ir,state.readonly);
+      measKey=nameKey; measW=nameBlockWidth(ir);
     }
-    // 行名可用左界：桌面编辑态有行首拖拽把手（18 宽）；触摸端与只读态都不画把手，
-    // 也就不该为它留位 —— 这和「不画列号行就不为它留高度」是同一条口径。
-    var leftBound=PAD+((T||state.readonly)?0:18);
+    // 行名可用左界：画不画拖拽把手由能力表回答（桌面编辑态 on，其余场景 off），
+    // 不画就不为它留位 —— 这和「不画列号行就不为它留高度」是同一条口径。
+    var leftBound=PAD+(can('rowDrag')?18:0);
     var minW=64, maxW=T?300:260;                 // 上下限：空图 / 超长名字（两态同值）
     // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T + 10px 的 [分组]」
     // tspan 拼接有 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
@@ -273,6 +291,10 @@ export function createShapes(ctx){
     })();
     var roH=roBottomY+4+roTrimBottom-roTrimTop;
     state.roBox={w:roW, h:roH};
+    // 下面这几处直接读 readonly / embedCard，是**布局**不是能力：
+    // 列号行不画（能力表关了 colhead）→ 画布宽度不再为右侧 ACT_W 留位；
+    // 只读卡片 → 顶部那一整条 HUD 区从 viewBox 里裁掉、整张图等比 fit。
+    // 换句话说：能力回答「有没有」，布局回答「因此省下多少」。别把两者合并。
     var W=state.readonly ? roW : Math.max(ACT_X+ACT_W+PAD, viewW, 560);
     var bottom=TOP+ir.lanes.length*ROW_H;
     // 零行时波形区高度为 0，占位行需要占一行高度，否则会被算到画布外
@@ -288,7 +310,12 @@ export function createShapes(ctx){
     // 触摸端改由 HTML 停靠条承担（touch.js 的 renderDock），画布只为它预留高度：
     // 这样选中格可以滚到停靠条上方，条本身也不再盖在波形上、更不会随滚动被反复位移。
     var DOCK_H=56;
-    var barH=state.readonly?0:(T?(state.selCell?DOCK_H:ACT_H):Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H)));
+    // 底栏高度是**布局派生**：谁在这个场景里承担字符输入，就为谁留高度。
+    // 桌面 = 画布内字符条（actionBar，选中格时多行铺开）；触摸 = HTML 停靠条（dock，56）；
+    // 两者都关（只读）= 0，否则卡片底部会留一条谁也点不到的空白。
+    var barH=can('actionBar')
+      ? Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H))
+      : (can('dock') ? (state.selCell?DOCK_H:ACT_H) : 0);
     // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
@@ -317,7 +344,7 @@ export function createShapes(ctx){
     var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 '+vbTop+' '+W+' '+vbH+'" preserveAspectRatio="xMidYMin meet" class="'+(state.linkMode?'linkMode':'')+'" role="img" aria-label="Timing diagram editor">'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
-    if(!state.readonly) o.push(hudSVG(viewW));
+    if(can('hud')) o.push(hudSVG(viewW));
     // 列网格：只读态没有列号行，所以从画面顶起；线型与编辑态一致（同一条竖线，不加虚线）。
     var gridTop=state.readonly?vbTop+4:(TOP-10);
     for(c=0;c<=N;c++){
@@ -326,7 +353,7 @@ export function createShapes(ctx){
     }
     // 列号 + 列操作按钮是「编辑定位器」：只读卡片不需要（上游 WaveDrom 也从不画列号），
     // 整组不画。零行空态同样不画：0 个周期时列号与「末尾追加」都没有意义。
-    if(!state.readonly) for(c=0;c<=N&&!isEmpty;c++){
+    if(can('colhead')) for(c=0;c<=N&&!isEmpty;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
       var gapc=ghost?false:ir.lanes.some(function(l){ return l.kind==='signal'&&l.slots[c]&&l.slots[c].gap; });
       o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'" role="img" aria-label="Column '+c+(ghost?' — append a cycle':'')+'">');
@@ -351,7 +378,7 @@ export function createShapes(ctx){
       if(l.kind==='spacer'){
         // 只读卡片上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
         // 否则读者会看到一条莫名其妙的「spacer」文字。
-        if(!state.readonly){
+        if(can('spacerMark')){
           o.push('<line x1="'+XS+'" y1="'+yM+'" x2="'+ACT_X+'" y2="'+yM+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2 5"/>');
           o.push('<text x="'+(XS+8)+'" y="'+(yM-6)+'" font-size="9" fill="var(--muted)">spacer</text>');
         }
@@ -360,8 +387,8 @@ export function createShapes(ctx){
       }
       // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉；分组名不是控件，两态都显示。
       var gname=l.groupPath.length?' <tspan fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>':'';
-      var meta=state.readonly?'':'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
-        '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
+      var meta=can('laneMeta')?'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
+        '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>':'';
       // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
@@ -389,7 +416,7 @@ export function createShapes(ctx){
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
           ' x="'+(x0+1)+'" y="'+(y+3)+'" width="'+(CELL-2)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
-        if(!state.readonly&&s&&s.point&&!s.gap&&Core.BUS.test(s.w)) laneBadges.push(cellLabelHit(l,i,x0,y,s.label));
+        if(can('cellLabel')&&s&&s.point&&!s.gap&&Core.BUS.test(s.w)) laneBadges.push(cellLabelHit(l,i,x0,y,s.label));
       }
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
       o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(N*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');
@@ -407,7 +434,7 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     o.push(edgeArcs(ir));
-    if(!state.readonly&&!T) o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
+    if(can('actionBar')) o.push(actionBar(actY,W,perRow,viewW,barH,barLeft));
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
       var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Core } from './src/core/ir.js';
 import { EXAMPLE } from './src/core/example.js';
 import { encodePayload, decodePayload } from './src/editor/payload.js';
+import * as Cap from './src/editor/cap.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -317,11 +318,20 @@ function check() {
     '缩放未按卡片宽铺满或未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
   // 只读卡片不能追加周期，末尾那一列也没有任何波形内容 —— 必须整列不画
   // （否则只留一个空编号框，悬停还会露出一个点不动的 +，且右侧白占一格宽度）。
-  // 列号 + 列操作整组都是「编辑定位器」，只读卡片一律不画（上游 WaveDrom 也从不画列号）
-  ok(/if\(!state\.readonly\) for\(c=0;c<=N&&!isEmpty;c\+\+\)/.test(shapesSrc),
-    '只读态仍在画列号 / 列操作（编辑定位器不该出现在只读卡片上）');
-  ok(/if\(T\|\|state\.readonly\) return ''/.test(shapesSrc),
+  // 列号 + 列操作整组都是「编辑定位器」，只读卡片一律不画（上游 WaveDrom 也从不画列号）。
+  // 判据改成直接读能力表：比在源码里找 `if(!state.readonly)` 这种字面量稳 —— 以后把
+  // 判据重命名 / 换写法都不会误报，而「只读卡片多了个编辑入口」一定报。
+  ok(!Cap.can('colhead','deskView') && !Cap.can('colhead','touchView'),
+    '只读态仍在画列号（能力表 colhead 在两个 View 场景应为 off）');
+  ok(!Cap.can('colAct','deskView') && !Cap.can('colAct','touchView'),
     '列操作按钮未在只读态关闭');
+  // 总口径：只读场景下，所有「编辑入口」能力都必须是 off —— 只读 = 编辑态渲染减去控件。
+  // 任何一条漏关，这里就报；新增能力也会被这条兜住（表里不写就没有默认值）。
+  {
+    const editEntries = ['hud','colhead','colAct','rowTool','rowDrag','cellLabel','laneMeta','spacerMark','actionBar'];
+    const leak = editEntries.filter((n) => Cap.can(n,'deskView') || Cap.can(n,'touchView'));
+    ok(leak.length === 0, '只读卡片仍启用了编辑入口：' + leak.join(' / '));
+  }
   ok(/var roW=Math\.max\(ACT_X\+PAD, 360\)/.test(shapesSrc),
     '只读画布宽度仍为幽灵列预留一格（右侧会多一条空白）');
   // 只读态没有字符条，触摸引导 toast 不适用，也不该出现在英文宿主页面里
@@ -388,7 +398,10 @@ function check() {
     ok(tricky, '载荷编解码在空串 / 非 ASCII / 长文本上往返不一致');
     ok(/^[A-Za-z0-9_-]*$/.test(encodePayload(EXAMPLE)), '载荷出现需要再转义的字符（不是 base64url）');
   }
-  ok(/ROW_ACTS = \['name'/.test(touchSrc) && /COL_ACTS = \['insert'/.test(touchSrc),
+  // 动作清单已集中到 cap.js（ACTS），touch.js 只引用；两边任一处脱钩都算失败。
+  ok(Cap.ACTS.row.length === 11 && Cap.ACTS.row.indexOf('name') >= 0 &&
+     Cap.ACTS.col.length === 4 && Cap.ACTS.col.indexOf('insert') >= 0 &&
+     /ROW_ACTS = Cap\.ACTS\.row/.test(touchSrc) && /COL_ACTS = Cap\.ACTS\.col/.test(touchSrc),
     '上下文动作集缺失或被改成文字面板');
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----

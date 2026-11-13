@@ -2,6 +2,7 @@
 // 只在 coarse 指针（或 ?touch=1）时生效；桌面版式与「无常驻文字」口径不受影响。
 // 本模块不产生新的编辑命令 —— 所有按钮复用 interactions.js 暴露的同一组动作。
 import { TOUCH } from './mode.js';
+import * as Cap from './cap.js';
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { chipGlyph, chipDesc } from './waveform.js';
@@ -78,8 +79,10 @@ export function attachTouchUI(ctx, dom) {
     spacer: 'add spacer', del: 'delete row',
     insert: 'insert cycle', delete: 'delete cycle', gap: 'phase line', append: 'append cycle'
   };
-  var ROW_ACTS = ['name','wave','data','nodeStr','phase','period','up','down','add','spacer','del'];
-  var COL_ACTS = ['insert','delete','gap','append'];
+  // 动作清单来自 cap.js 的 ACTS —— 与桌面行工具 / 列操作是同一份，避免「面板里少一个
+  // 动作」与「图元里多一个按钮」各说各话。图标与英文名留在本文件（只有触摸端用得上）。
+  var ROW_ACTS = Cap.ACTS.row;
+  var COL_ACTS = Cap.ACTS.col;
 
   function needCell() {
     if (state.selCell && state.ir) return state.selCell;
