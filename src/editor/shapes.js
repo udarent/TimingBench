@@ -4,7 +4,7 @@ import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
-import { waveGlyph, waveGap, chipGlyph, chipDesc } from './waveform.js';
+import { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf } from './waveform.js';
 
 var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元里的 T 是上沿 y 坐标，已移到 waveform.js）
 var CELL=G.CELL, NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
@@ -44,7 +44,7 @@ export function createShapes(ctx){
 
   // 列头 + / − / |：悬停才显现；第 N 个「幽灵列头」只承担末尾追加周期
   function colBtn(c,cx,k,act,txt,title,on){
-    if(T) return '';   // 触摸端列操作移到选中列后出现的上下文图标条，避免 11px 命中区
+    if(T||state.readonly) return '';   // 触摸端移到上下文图标条；只读态不提供列操作
     var x=cx-18+k*12.5, w=11;
     return '<g class="colActBtn" data-cact="'+act+'" data-c="'+c+'" role="button" aria-label="'+esc(title)+'">'+
       '<rect x="'+x+'" y="'+(COL_Y+22)+'" width="'+w+'" height="18" rx="3" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line2)')+'" stroke-width="0.6"/>'+
@@ -104,16 +104,28 @@ export function createShapes(ctx){
     ir.edges.forEach(function(e,i){
       var s=String(e), head=s.trim().split(/\s+/)[0]||'', a=map[head.charAt(0)], b=map[head.charAt(head.length-1)];
       if(!a||!b) return;
-      var d='M'+a.x+','+a.y+' C'+(a.x+10)+','+(a.y-26)+' '+(b.x-10)+','+(b.y-26)+' '+b.x+','+b.y;
+      var c2x=b.x-10, c2y=b.y-26;
+      var d='M'+a.x+','+a.y+' C'+(a.x+10)+','+(a.y-26)+' '+c2x+','+c2y+' '+b.x+','+b.y;
+      // 箭头（上游 `~>` 的终点就是一个实心三角）：沿末端切线方向摆，指到 b 点上。
+      // 不画箭头的话曲线末端只是一个圆头，读者分不清方向。
+      var ux=b.x-c2x, uy=b.y-c2y, ul=Math.sqrt(ux*ux+uy*uy)||1;
+      ux/=ul; uy/=ul;
+      var back=7.5, half=3.2;
+      var abx=b.x-ux*back, aby=b.y-uy*back, apx=-uy, apy=ux;
+      var arrow='M'+b.x+','+b.y+' L'+(abx+apx*half)+','+(aby+apy*half)+' L'+(abx-apx*half)+','+(aby-apy*half)+' z';
       // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
       o.push('<g class="edgeArc" data-eidx="'+i+'" role="button" aria-label="Edit edge '+esc(s)+'">'+
         '<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>'+
+        '<path d="'+arrow+'" fill="var(--accent)" opacity=".85" pointer-events="none"/>'+
         '<path d="'+d+'" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="'+(T?20:8)+'" pointer-events="'+(state.linkMode?'none':'stroke')+'"/>');
       var rest=s.slice(head.length).trim();
       if(rest){
         var mx=(a.x+b.x)/2, my=(a.y+b.y)/2-22, lw=Math.max(22,rest.length*6+10);
-        o.push('<rect x="'+(mx-lw/2)+'" y="'+(my-9)+'" width="'+lw+'" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>'+
-          '<text x="'+mx+'" y="'+(my+1)+'" text-anchor="middle" dominant-baseline="central" font-size="9" fill="var(--accent)" pointer-events="none">'+esc(cut(rest,18))+'</text>');
+        // 只读卡片不加白底衬（上游就是一个纯色小字，底下垫一块矩形反而像控件）；
+        // 编辑态保留，因为它是可双击改的入口，需要明确的命中感。
+        if(!state.readonly)
+          o.push('<rect x="'+(mx-lw/2)+'" y="'+(my-9)+'" width="'+lw+'" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>');
+        o.push('<text x="'+mx+'" y="'+(my+1)+'" text-anchor="middle" dominant-baseline="central" font-size="'+(state.readonly?11:9)+'" fill="var(--accent)" pointer-events="none">'+esc(cut(rest,18))+'</text>');
       }
       o.push('</g>');
     });
@@ -171,6 +183,11 @@ export function createShapes(ctx){
     // 重绘会替换 SVG DOM；未提交的就地编辑先结算，再用最新 IR 重建整张图
     if(ctx.inlineCtx) ctx.closeInline(true);
     var ir=state.ir; if(!ir) return;
+    // 只读卡片按「渲染器」排版：行名区收到刚好够放行名 + 竖排分组（上游 WaveDrom 只占 ~20%），
+    // 波形区因此更宽、整图更接近上游的观感。编辑态恢复设备几何 —— 那里还要放行工具与拖拽把手。
+    var roGeom=state.readonly&&state.embedCard;
+    XS=roGeom?100:G.XS;
+    NAME_W=roGeom?84:G.NAME_W;
     var N=ir.ticks, ACT_X=XS+N*CELL;
     // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
@@ -239,14 +256,19 @@ export function createShapes(ctx){
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
     if(!state.readonly) o.push(hudSVG(viewW));
-    for(c=0;c<=N;c++){ x=XS+c*CELL; o.push('<line x1="'+x+'" y1="'+(TOP-10)+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>'); }
-    // 零行空态不画列头：0 个周期时列号与「末尾追加」都没有意义，
-    // 而幽灵列头的 + 会正好压在占位行上。
-    for(c=0;c<=N&&!isEmpty;c++){
+    // 列网格：编辑态从列号行上方起、实线；只读态（没有列号行）从画面顶起、改为点线 ——
+    // 上游 WaveDrom 用的就是贯穿全高的点状竖线，实线会显得像表格。
+    var gridTop=state.readonly?vbTop+4:(TOP-10);
+    for(c=0;c<=N;c++){
+      x=XS+c*CELL;
+      o.push('<line class="colGrid" x1="'+x+'" y1="'+gridTop+'" x2="'+x+'" y2="'+bottom+'" stroke="'+
+        (state.readonly?'var(--line2)':'var(--line)')+'" stroke-width="0.5"'+
+        (state.readonly?' stroke-dasharray="1 3" opacity="0.45"':'')+'/>');
+    }
+    // 列号 + 列操作按钮是「编辑定位器」：只读卡片不需要（上游 WaveDrom 也从不画列号），
+    // 整组不画。零行空态同样不画：0 个周期时列号与「末尾追加」都没有意义。
+    if(!state.readonly) for(c=0;c<=N&&!isEmpty;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
-      // 只读卡片不能追加周期、那一列也没有任何波形内容 —— 留着只会是一个空编号框，
-      // 悬停还能看见一个「点不动的 +」。直接不画，画布右侧同时也少占一格宽度。
-      if(ghost&&state.readonly) continue;
       var gapc=ghost?false:ir.lanes.some(function(l){ return l.kind==='signal'&&l.slots[c]&&l.slots[c].gap; });
       o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'" role="img" aria-label="Column '+c+(ghost?' — append a cycle':'')+'">');
       // 整列列头透明命中区：让悬停 / 点击落在列头上，而不是落到背景矩形
@@ -260,6 +282,24 @@ export function createShapes(ctx){
       o.push('</g></g>');
     }
     if(isEmpty) o.push(emptyRow(W));
+    // 分组竖排（只读态）：上游 WaveDrom 用左侧「[ 括线 + 竖排组名」表示 [Master] 包住了哪几行。
+    // 编辑态不画 —— 那里用行名后缀 [Master]，因为它本身就是可点选的分组入口。
+    if(state.readonly){
+      var gi=0;
+      while(gi<ir.lanes.length){
+        var gp=ir.lanes[gi].groupPath;
+        if(!gp||!gp.length){ gi++; continue; }
+        var gj=gi, gkey=gp.join('/');
+        while(gj+1<ir.lanes.length && (ir.lanes[gj+1].groupPath||[]).join('/')===gkey) gj++;
+        var gy0=TOP+gi*ROW_H+5, gy1=TOP+(gj+1)*ROW_H-5, gx=PAD+18;
+        var gmid=(gy0+gy1)/2;
+        o.push('<g class="groupSpine" pointer-events="none">'+
+          '<path d="M'+(gx+5)+','+gy0+' H'+gx+' V'+gy1+' H'+(gx+5)+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.5"/>'+
+          '<text x="'+(gx-6)+'" y="'+gmid+'" transform="rotate(-90 '+(gx-6)+' '+gmid+')" text-anchor="middle" dominant-baseline="central" font-size="11" fill="var(--accent)">'+esc(gkey)+'</text>'+
+          '</g>');
+        gi=gj+1;
+      }
+    }
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*ROW_H;
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
@@ -268,24 +308,41 @@ export function createShapes(ctx){
       o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(ROW_H-2)+'" rx="3" fill="'+(hi?'var(--accent-bg)':'transparent')+'" style="cursor:pointer"/>');
       o.push(dragHandle(l,y));
       if(l.kind==='spacer'){
-        o.push('<line x1="'+XS+'" y1="'+yM+'" x2="'+ACT_X+'" y2="'+yM+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2 5"/>');
-        o.push('<text x="'+(XS+8)+'" y="'+(yM-6)+'" font-size="9" fill="var(--muted)">spacer</text>');
+        // 只读卡片上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
+        // 否则读者会看到一条莫名其妙的「spacer」文字。
+        if(!state.readonly){
+          o.push('<line x1="'+XS+'" y1="'+yM+'" x2="'+ACT_X+'" y2="'+yM+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2 5"/>');
+          o.push('<text x="'+(XS+8)+'" y="'+(yM-6)+'" font-size="9" fill="var(--muted)">spacer</text>');
+        }
         o.push(rowTools(l,y,ACT_X)); o.push('</g>');
         return;
       }
-      var gname=l.groupPath.length?' <tspan fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>':'';
+      // 分组与相位 / 周期都是「可点改」的编辑入口：只读卡片上它们只是噪音，一并撤掉
+      // （分组改由左侧竖排标注，见 groupSpine）。
+      var gname=(!state.readonly&&l.groupPath.length)?' <tspan fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>':'';
+      var meta=state.readonly?'':'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
+        '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-8)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
-        '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+
-        '<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
-        '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>'+gname+'</text>');
+        '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+gname+'</text>');
       // 相邻两状态点决定过渡沿：只有显式状态点才带，repeater 沿用上一状态画稳态
       // 画布按全局 N 个周期绘制；wave 较短的行，尾部缺失周期按 repeater 延续补画并留出可续写格子
       var lastPoint=null, lastW=l.slots.length?l.slots[l.slots.length-1].w:'x';
+      // bus 段合并：延续格（repeater / 超出行尾的补齐格）与相邻同段格之间不画斜边。
+      // 判据用 slot 的 point 标志 —— 它正是「用户写了字符」与「延续而来」的分界。
+      var wsAt=function(k){ var q=k<l.slots.length?l.slots[k]:null; return q?q.w:lastW; };
+      var ptAt=function(k){ var q=k<l.slots.length?l.slots[k]:null; return q?(q.point&&!q.gap):false; };
       for(i=0;i<N;i++){
         var s=i<l.slots.length?l.slots[i]:null, x0=XS+i*CELL, w=s?s.w:lastW;
         var isPoint=s?(s.point&&!s.gap):false, prevCh=isPoint?lastPoint:null;
         if(isPoint) lastPoint=w;
-        var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,CELL,{label:s&&isPoint?s.label:null});
+        var gopt={label:s&&isPoint?s.label:null};
+        if(Core.BUS.test(w)){
+          var ljoin=i>0&&!ptAt(i)&&Core.BUS.test(wsAt(i-1));
+          var rjoin=(i+1<N)&&!ptAt(i+1)&&Core.BUS.test(wsAt(i+1));
+          gopt.seg=ljoin?(rjoin?'mid':'end'):(rjoin?'start':'only');
+          gopt.cls=busClassOf(w);
+        }
+        var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,CELL,gopt);
         o.push(s?glyph:'<g class="tailSlot" role="img" aria-label="Undefined period — tap to extend">'+glyph+'</g>');
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
@@ -295,6 +352,14 @@ export function createShapes(ctx){
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
       o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(N*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');
       o.push(rowTools(l,y,ACT_X));
+      // node 字母：上游会把 `node: '..a...'` 的 a / b 画成小字母标在锚点处，
+      // 它是 edge 的可读锚点 —— 不画的话读者只看到一条曲线，不知道连的是哪两点。
+      // 这属于「图的内容」，与 data 标签同类，不受零常驻文字约束。
+      for(i=0;i<N&&i<l.node.length;i++){
+        var nc=l.node[i];
+        if(!nc||nc==='.') continue;
+        o.push('<text class="waveNode" x="'+(XS+i*CELL+CELL/2+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
+      }
       // 徽标留在行图元组内，才能用 .laneGrp:hover 控制显隐
       o.push(laneBadges.join(''));
       o.push('</g>');

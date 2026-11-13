@@ -317,8 +317,11 @@ function check() {
     '缩放未按卡片宽铺满或未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
   // 只读卡片不能追加周期，末尾那一列也没有任何波形内容 —— 必须整列不画
   // （否则只留一个空编号框，悬停还会露出一个点不动的 +，且右侧白占一格宽度）。
-  ok(/if\(ghost&&state\.readonly\) continue;/.test(shapesSrc),
-    '只读态仍会画末尾的「追加周期」列头（空编号框 + 点不动的加号）');
+  // 列号 + 列操作整组都是「编辑定位器」，只读卡片一律不画（上游 WaveDrom 也从不画列号）
+  ok(/if\(!state\.readonly\) for\(c=0;c<=N&&!isEmpty;c\+\+\)/.test(shapesSrc),
+    '只读态仍在画列号 / 列操作（编辑定位器不该出现在只读卡片上）');
+  ok(/if\(T\|\|state\.readonly\) return ''/.test(shapesSrc),
+    '列操作按钮未在只读态关闭');
   ok(/var roW=Math\.max\(ACT_X\+PAD, 360\)/.test(shapesSrc),
     '只读画布宽度仍为幽灵列预留一格（右侧会多一条空白）');
   // 只读态没有字符条，触摸引导 toast 不适用，也不该出现在英文宿主页面里

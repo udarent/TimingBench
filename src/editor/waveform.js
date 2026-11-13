@@ -41,8 +41,28 @@ var CHIP_W=G.CHIP_W;
     var o=[], x1=X+W, o2=opt||{}, ax=o2.arrowX===undefined?X:o2.arrowX;
     var px=X+3, ex=X+Math.min(W*0.24,9);
     if(Core.BUS.test(ch)){
-      var pts=[X+3,T,x1-3,T,x1,M,x1-3,B,X+3,B,X,M].join(',');
-      o.push('<polygon class="waveBus '+(BUS_CLASS[ch]||'bus2')+'" points="'+pts+'"/>');
+      // 段的左右两侧要不要画斜边，由「相邻格是否延续」决定（`=` 与 `.` 都是延续符）：
+      //   only  独立一段 → 左右都斜
+      //   start 段首（右边延续）→ 左斜右直
+      //   mid   段中 → 矩形，与两侧无缝拼接
+      //   end   段尾（左边延续）→ 左直右斜
+      // 上游 WaveDrom 就是这样合并的；逐格各画一个六边形会在延续处留下「两条斜边相接」
+      // 的接缝，看起来像两个断开的块。命中用的 rect.cell 仍是每格一个，不受影响。
+      var seg=o2.seg||'only';
+      var cls=o2.cls||BUS_CLASS[ch]||'bus2';
+      var lj=(seg==='mid'||seg==='end'), rj=(seg==='mid'||seg==='start');
+      var fp;
+      if(lj&&rj)   fp=[X,T,x1,T,x1,B,X,B];
+      else if(lj)  fp=[X,T,x1-3,T,x1,M,x1-3,B,X,B];
+      else if(rj)  fp=[X,M,X+3,T,x1,T,x1,B,X+3,B];
+      else         fp=[X+3,T,x1-3,T,x1,M,x1-3,B,X+3,B,X,M];
+      // 色块只负责填充（无描边）；轮廓另画一条 path，且**段内不画竖边** ——
+      // 两块各自带描边时，公共边会被描两遍，看上去仍有一条竖线把段切断。
+      o.push('<polygon class="waveBus '+cls+'" points="'+fp.join(',')+'" stroke="none"/>');
+      var bd='M'+X+','+T+' H'+x1+' M'+X+','+B+' H'+x1;
+      if(!lj) bd+=' M'+X+','+M+' L'+(X+3)+','+T+' M'+X+','+M+' L'+(X+3)+','+B;
+      if(!rj) bd+=' M'+(x1-3)+','+T+' L'+x1+','+M+' L'+(x1-3)+','+B;
+      o.push('<path class="waveBusInk" d="'+bd+'"/>');
       var lb=o2.label;
       if(lb!==null&&lb!==undefined&&lb!==''){
         var txt=String(lb);
@@ -71,6 +91,10 @@ var CHIP_W=G.CHIP_W;
     return '<g class="waveGlyph" data-w="'+esc(ch)+'" pointer-events="none">'+o.join('')+'</g>';
   }
 
+  // 段内所有格共用「段首字符」的 bus 配色：`.` 与 `=` 是延续符，自己没有颜色
+  function busClassOf(ch){ return BUS_CLASS[ch]||'bus2'; }
+  function isBusCont(ch){ return ch==='.'||ch==='='; }
+
   // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph
   function chipGlyph(v){ return waveGlyph(v,null,0,TOUCH?7:5,TOUCH?22:13,TOUCH?37:21,CHIP_W,{arrowX:3}); }
   // 字符说明只用于 aria-label（视觉上不再出现 tooltip）。英文是首选语言。
@@ -85,4 +109,4 @@ var CHIP_W=G.CHIP_W;
       'u':'pull-up (dashed high)','d':'pull-down (dashed low)'}[v]||'wave character';
   }
 
-export { waveGlyph, waveGap, chipGlyph, chipDesc };
+export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, isBusCont };

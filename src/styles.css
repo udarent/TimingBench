@@ -83,8 +83,15 @@ svg{display:block;font-family:var(--sans)}
 .waveHair{fill:none;stroke:var(--wave-ink);stroke-width:.65;opacity:.8}
 .waveDash{fill:none;stroke:var(--wave-ink);stroke-width:1.25;stroke-dasharray:2 2}
 .waveArrow{fill:var(--wave-ink);stroke:none}
-.waveBus{stroke:var(--wave-ink);stroke-width:1;stroke-linejoin:round}
+.waveBus{stroke:none}
+/* bus 段的轮廓单独一条 path：段内不画竖边，段与段之间才不会出现「被切一刀」的接缝 */
+.waveBusInk{fill:none;stroke:var(--wave-ink);stroke-width:1;stroke-linejoin:round;pointer-events:none}
 .waveLabel{fill:var(--ink);font-size:10px}
+/* 只读卡片按「渲染器」呈现（2026-11-13 起）：行名用强调色、字号贴近上游 WaveDrom
+   （14.67px → 14），数据标签同步放大。编辑态保持小字号，因为那里要挤编辑控件。 */
+.is-embed.is-readonly .laneName{fill:var(--accent);font-size:14px}
+.is-embed.is-readonly .waveLabel{font-size:12.5px}
+.is-embed.is-readonly .waveNode{font-weight:600}
 /* 源码 wave 比全局周期数短时，尾部按 repeater 延续画出可续写区 */
 .tailSlot{opacity:.78;pointer-events:none}
 .tailCell:hover{fill:var(--accent-bg)}
@@ -249,12 +256,12 @@ svg{display:block;font-family:var(--sans)}
 .is-embed.is-readonly .rowCtl,.is-embed.is-readonly .rowHint,.is-embed.is-readonly .rowDrag,
 .is-embed.is-readonly .colAct,.is-embed.is-readonly .cellLabel{display:none}
 .is-embed.is-readonly .svgwrap:focus-visible{outline:none}
-/* 退出 / 进入编辑的图标按钮：钉在卡片**右上角**，压在波形图的一个角上 ——
-   以前钉在右下角，一旦卡片比内容高（写死 height 的旧片段在窄笔记里就是这样），
-   它就悬在「波形图与底部之间的一片空白」里，看起来像独占了一条空间。
-   右上角是内容自带的区域（只读态没有 HUD、编辑态 HUD 在左上），不会再出现空白带。
+/* 退出 / 进入编辑的图标按钮：钉在卡片**右上角**，压在波形图的一个角上。
+   为什么不是左上：只读态不再画列号行，第一行行名紧贴顶部，左上角放按钮会正好压住它；
+   为什么不是右下：卡片比内容高时它会悬在空白带里（旧片段写死 height 时就是这样）。
+   右上角是波形末端，压住的是「持续电平」那一角，不丢信息。
    铅笔＝点一下进入编辑，对勾＝编辑中、点一下结束；零常驻文字，语义只在 aria-label。 */
-.is-embed .embedhint{display:flex;position:fixed;left:8px;top:8px;z-index:40;
+.is-embed .embedhint{display:flex;position:fixed;right:8px;top:8px;z-index:40;
   align-items:center;justify-content:center;width:30px;height:30px;padding:0;
   border:1px solid var(--line);border-radius:8px;
   background:var(--panel);color:var(--muted);
@@ -270,10 +277,7 @@ svg{display:block;font-family:var(--sans)}
   .is-embed .embedhint{width:38px;height:38px;border-radius:10px}
   .is-embed .embedhint .hintico{width:20px;height:20px}
 }
-/* 只读态放左上角：那里是列头行左侧的空白（行名上方），不压任何图元；
-   编辑态 HUD 占着左上，所以切到右上角 —— 只与最后一个列头的那两个小按钮重叠。
-   两个状态都不占底部空间，也不会再出现「按钮独占一条空白」的观感。 */
-.is-embed:not(.is-readonly) .embedhint{left:auto;right:8px}
+/* 两态都在右上，位置固定不动 —— 点进编辑时按钮不会跳，读者不用重新找它。 */
 
 /* ---------------------------------------------------------------------------
    嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。
