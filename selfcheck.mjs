@@ -338,6 +338,13 @@ function check() {
     '触摸端滑动超过 12px 未作废候选 tap');
   ok(/if\(!x&&!y\)\{ x=p\.x; y=p\.y; \}/.test(gestureSrc),
     '抬手事件缺坐标时未回退到按下坐标（会把正常点按误判为滑动）');
+  // 触摸后浏览器补发的兼容鼠标事件必须按「来源」判断，不能只靠时间窗：
+  // 长按 >800ms 再抬手时窗口已过期，合成 mousedown 会被当成桌面点击。
+  ok(/firesTouchEvents/.test(gestureSrc) && /function syntheticMouse\(/.test(gestureSrc),
+    '触摸端未按 sourceCapabilities 识别合成鼠标事件（长按抬手会被当成一次点击）');
+  // 触摸端长按打开的就地编辑框，不能被「焦点被画布抢走」导致的 blur 关掉
+  ok(/Date\.now\(\)-openedAt<1200/.test(gestureSrc) && /inp\.focus\(\)/.test(gestureSrc),
+    '就地编辑框缺少焦点抢回逻辑（触摸端一抬手输入框就消失）');
   // Esc 逐层：内层消费后外层不得接管
   ok(/if \(e\.defaultPrevented\) return;/.test(read('src/editor/embed-shell.js')),
     '嵌入壳未尊重内层已消费的 Esc（一次 Esc 会跨层退出）');

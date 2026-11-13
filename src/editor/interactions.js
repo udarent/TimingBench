@@ -56,7 +56,19 @@ export function attachInteractions(ctx){
       if(e.key==='Enter'){ e.preventDefault(); closeInline(true,true); }
       else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeInline(false,true); }
     });
-    inp.addEventListener('blur',function(){ closeInline(true); });
+    // 触摸端有个坑：长按 480ms 打开就地编辑后抬手，浏览器会把焦点交给被摸的画布，
+    // 一次 blur 就把刚出现的输入框关掉 —— 用户根本来不及打字。这里区分「焦点被画布抢走」
+    // 与「用户真的切走」（点源码框 / 切标签页 / 点其它控件），只对前者把焦点抢回来。
+    var openedAt=Date.now();
+    inp.addEventListener('blur',function(){
+      var ae=document.activeElement;
+      if(TOUCH&&Date.now()-openedAt<1200&&
+         (ae===document.body||ae===wrap||(ae&&wrap.contains(ae)))){
+        try{ inp.focus(); }catch(e){}
+        return;
+      }
+      closeInline(true);
+    });
     try{ inp.focus(); inp.select(); }catch(e){}
   }
   function cellAt(e){
@@ -467,8 +479,16 @@ export function attachInteractions(ctx){
     p.setAttribute('d','M'+ax+','+ay+' C'+(ax+10)+','+(ay-26)+' '+(mx-10)+','+(my-26)+' '+mx+','+my);
   }
 
+  // 触摸后浏览器会补发一套兼容鼠标事件。只靠 800ms 时间窗挡不住长按：按住 1.2 秒再抬手，
+  // 窗口早就过期，合成的 mousedown 会被当成桌面点击 —— 表现为「长按打开就地编辑，
+  // 一抬手编辑框被关掉、格子反而被选中」，只读卡片里更糟（长按抬手直接进了编辑态）。
+  // 有 sourceCapabilities 就按「这次事件是否由触摸产生」判断，时间窗只作老浏览器兜底。
+  function syntheticMouse(e){
+    if(e.sourceCapabilities&&e.sourceCapabilities.firesTouchEvents) return true;
+    return Date.now()<ignoreMouseUntil;
+  }
   wrap.addEventListener('mousedown',function(e){
-    if(Date.now()<ignoreMouseUntil) return;   // 触摸后浏览器合成的 mousedown 不再重复执行
+    if(syntheticMouse(e)) return;
     handleDown(e,false);
   });
   wrap.addEventListener('mousemove',function(e){
@@ -490,8 +510,8 @@ export function attachInteractions(ctx){
     state.ch=ctx.painting.v; state.selCell={lane:c.lane,tick:c.tick};
     ctx.commit({t:'setSlot',lanes:[c.lane],tick:c.tick,v:ctx.painting.v},'paint @ t'+c.tick,true,true);
   });
-  document.addEventListener('mouseup',function(){
-    if(Date.now()<ignoreMouseUntil) return;
+  document.addEventListener('mouseup',function(e){
+    if(e&&syntheticMouse(e)) return;
     if(state.drag){
       var d=state.drag; state.drag=null;
       var svg=svgRoot(), ln=svg&&svg.querySelector('line.dropLine'); if(ln&&ln.parentNode) ln.parentNode.removeChild(ln);
