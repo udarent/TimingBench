@@ -177,7 +177,10 @@ export function attachTouchUI(ctx, dom) {
     if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS; key = state.sel; }
     else if (state.selLane) { kind = 'row'; acts = ROW_ACTS; key = state.selLane; }
     if (!kind) { hideContext(); return; }
-    if (ctxKind === kind && ctxKey === key) return;   // 同一对象不重绘，避免闪烁
+    // 同一对象不重绘（避免连点闪烁）—— 但必须确认面板**当前真的是开着的**：
+    // 面板可能被 hideContext 清空过而 key 未变（清空路径不止一条），此时若只看 key
+    // 就会跳过重建，表现为「点了行、面板却空着」。
+    if (ctxKind === kind && ctxKey === key && panel.classList.contains('open') && panel.childNodes.length) return;
     ctxKind = kind; ctxKey = key;
     panel.textContent = '';
     acts.forEach(function (k) {
