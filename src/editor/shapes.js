@@ -14,6 +14,41 @@ var XS=G.XS, CHIPS_W=G.CHIPS_W;
 
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
+
+  // ---- 行名区宽度自适应 ----------------------------------------------------
+  // 行名区不该为「可能出现的长名字」常年留白：名字短就窄，长度决定宽度。
+  // 测量用离屏 SVG 真实文本（字体 / 字号与画布一致），不按字符数估算 —— 中英文混排、
+  // 分组名 `[Master]` 的 10px 小字都能精确算进去。测完即丢，画布上不留痕迹。
+  var measEl=null, measTxt=null, measKey='', measW=0;
+  function measure(text,size){
+    if(!measEl){
+      measEl=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      measEl.setAttribute('class','measure');
+      measEl.setAttribute('aria-hidden','true');
+      measTxt=document.createElementNS('http://www.w3.org/2000/svg','text');
+      measEl.appendChild(measTxt);
+      document.body.appendChild(measEl);
+    }
+    measTxt.textContent=text;
+    measTxt.setAttribute('font-size',String(size));
+    try{ return measTxt.getBBox().width; }catch(e){ return text.length*size*0.6; }
+  }
+  // 最宽的一行行名（名字 + φ/T + [分组]）。只读态不画 φ/T，所以更窄 —— 这是内容差异，
+  // 不是「另一套版式」：两态用的是同一个算法，只是喂进去的文本不同。
+  function nameBlockWidth(ir,readonly){
+    var l, w, max=0;
+    for(var i=0;i<ir.lanes.length;i++){
+      l=ir.lanes[i];
+      if(l.kind==='spacer') continue;         // spacer 行不画行名
+      w=measure(l.name,12);
+      if(!readonly){
+        w+=measure(' φ'+l.phase,9)+measure(' T'+l.period,9);
+      }
+      if(l.groupPath&&l.groupPath.length) w+=measure(' ['+l.groupPath.join('/')+']',10);
+      if(w>max) max=w;
+    }
+    return max;
+  }
   function hudBtn(x,cmd,txt,title,on,dim){
     var bw=T?44:26, br=T?8:5, fs=T?18:13;
     return '<g class="hudBtn" data-cmd="'+cmd+'" role="button" aria-label="'+esc(title)+'">'+
@@ -184,10 +219,28 @@ export function createShapes(ctx){
     // 重绘会替换 SVG DOM；未提交的就地编辑先结算，再用最新 IR 重建整张图
     if(ctx.inlineCtx) ctx.closeInline(true);
     var ir=state.ir; if(!ir) return;
-    // 只读态与编辑态共用同一套排版（行名区宽度、格子、行高都不变）：
-    // 只读卡片只是「少画编辑控件」，不是另一套版式。行名区在这里固定回设备几何，
-    // 避免任何调用方改动过后残留。
-    XS=G.XS; NAME_W=G.NAME_W;
+    // 只读态与编辑态共用同一套排版（格子、行高、字号、网格都不变）：只读卡片只是
+    // 「少画编辑控件」，不是另一套版式。行名区宽度在这里按内容重算（两态同一算法），
+    // 避免任何调用方改动过后残留旧值。
+    // 行名左界：桌面被行首拖拽把手顶到 PAD+18，触摸端不画把手、左界只有 PAD。
+    var nameKey=state.readonly+'|'+ir.lanes.map(function(l){
+      return l.kind==='spacer'?'':(l.name+'/'+l.phase+'/'+l.period+'/'+(l.groupPath||[]).join('>'));
+    }).join(';');
+    if(nameKey!==measKey){                       // 内容没变就不重复测量（getBBox 会强制布局）
+      measKey=nameKey; measW=nameBlockWidth(ir,state.readonly);
+    }
+    // 行名可用左界：桌面编辑态有行首拖拽把手（18 宽）；触摸端与只读态都不画把手，
+    // 也就不该为它留位 —— 这和「不画列号行就不为它留高度」是同一条口径。
+    var leftBound=PAD+((T||state.readonly)?0:18);
+    var minW=64, maxW=T?300:260;                 // 上下限：空图 / 超长名字（两态同值）
+    // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T + 10px 的 [分组]」
+    // tspan 拼接有 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
+    // 实测下来行名左缘正好落在 leftBound 上，既不压拖拽把手也不浪费宽度。
+    NAME_W=Math.max(minW,Math.min(maxW,Math.ceil(leftBound+measW+16)));
+    XS=NAME_W+8;                                 // 行名右缘（NAME_W-6）到波形 8px
+    // 其它模块（interactions 的键盘滚动定位、embed-shell 的进编辑锚定）读 G 的实时值
+    G.NAME_W=NAME_W; G.XS=XS;
+    G.CHIPS_W=XS+Core.ALL.length*CHIP_STEP+16;
     var N=ir.ticks, ACT_X=XS+N*CELL;
     // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
@@ -300,7 +353,9 @@ export function createShapes(ctx){
       var gname=l.groupPath.length?' <tspan fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>':'';
       var meta=state.readonly?'':'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
         '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
-      o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-8)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
+      // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，
+      // 这里只留字形本身的呼吸位，两处加起来正好 8px。
+      o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
         '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+gname+'</text>');
       // 相邻两状态点决定过渡沿：只有显式状态点才带，repeater 沿用上一状态画稳态
       // 画布按全局 N 个周期绘制；wave 较短的行，尾部缺失周期按 repeater 延续补画并留出可续写格子

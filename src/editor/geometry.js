@@ -6,7 +6,12 @@ import { TOUCH } from './mode.js';
 
 export const G = {
   CELL:      TOUCH ? 48 : 38,
-  NAME_W:    TOUCH ? 152 : 132,
+  // 行名区宽度与波形起点在运行时**按内容自适应**（shapes.js 每次 redraw 重算并写回
+  // G.NAME_W / G.XS），这里的值只是首帧兜底。算法：
+  //   NAME_W = clamp(64, 上限, leftBound + 最宽行名 + 16)，leftBound = PAD +（桌面编辑态 ? 18 : 0）
+  //   XS     = NAME_W + 8
+  // 只读态与触摸端不画拖拽把手，左界就只剩 PAD —— 名字短时行名区自然更窄。
+  NAME_W:    TOUCH ? 96 : 104,
   ROW_H:     TOUCH ? 60 : 48,
   TOP:       TOUCH ? 88 : 64,
   PAD:       16,
@@ -18,7 +23,8 @@ export const G = {
   CHIP_W:    TOUCH ? 44 : 28,
   CHIP_H:    TOUCH ? 44 : 26,
   CHIP_STEP: TOUCH ? 48 : 30,
-  XS:        TOUCH ? 168 : 148
+  // 波形起点：首帧兜底值 = 上面的 NAME_W + 8，同样在 redraw 里按内容重算。
+  XS:        TOUCH ? 104 : 112
 };
 
 // 桌面单行字符条的最小画布宽度；触摸端字符条换行，不再用它撑宽画布。

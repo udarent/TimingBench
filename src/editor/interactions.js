@@ -8,7 +8,8 @@ import { TOUCH } from './mode.js';
 import { esc, cut } from '../core/util.js';
 
 var CELL=G.CELL, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD;
-var XS=G.XS;
+// 行名区宽度按内容自适应 → 波形起点 XS 是运行时值，必须每次现读 G.XS，
+// 不能像以前那样在模块加载时缓存一份（名字变长变短后它会过期）。
 
 export function attachInteractions(ctx){
   var state=ctx.state, code=ctx.code, wrap=ctx.wrap;
@@ -176,7 +177,7 @@ export function attachInteractions(ctx){
     var sc=state.selCell; if(!sc||!state.ir||!wrap.clientWidth) return;
     var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===sc.lane) li=i; });
     if(li<0) return;
-    var cx=XS+sc.tick*CELL+CELL/2, cy=TOP+li*ROW_H+ROW_H/2;
+    var cx=G.XS+sc.tick*CELL+CELL/2, cy=TOP+li*ROW_H+ROW_H/2;
     var vw=wrap.clientWidth, vh=wrap.clientHeight-Math.max(0,state.barH||0);
     var maxL=Math.max(0,wrap.scrollWidth-vw), maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
     var left=wrap.scrollLeft, top=wrap.scrollTop;
@@ -475,7 +476,7 @@ export function attachInteractions(ctx){
     var svg=svgRoot(); if(!svg||!state.connect) return;
     var p=svg.querySelector('path.connectPreview');
     if(!p){ p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('class','connectPreview'); svg.appendChild(p); }
-    var a=state.connect, ax=XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+7;
+    var a=state.connect, ax=G.XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+7;
     p.setAttribute('d','M'+ax+','+ay+' C'+(ax+10)+','+(ay-26)+' '+(mx-10)+','+(my-26)+' '+mx+','+my);
   }
 
