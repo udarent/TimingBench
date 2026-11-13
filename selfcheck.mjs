@@ -332,9 +332,13 @@ function check() {
   // 总口径：只读场景下，所有「编辑入口」能力都必须是 off —— 只读 = 编辑态渲染减去控件。
   // 任何一条漏关，这里就报；新增能力也会被这条兜住（表里不写就没有默认值）。
   {
-    const editEntries = ['hud','colhead','colAct','rowTool','rowDrag','cellLabel','laneMeta','spacerMark','actionBar'];
+    const editEntries = ['hud','colhead','colAct','rowTool','rowDrag','cellLabel','laneMeta','spacerMark','dock','tbpanel','inlineEdit'];
     const leak = editEntries.filter((n) => Cap.can(n,'deskView') || Cap.can(n,'touchView'));
     ok(leak.length === 0, '只读卡片仍启用了编辑入口：' + leak.join(' / '));
+    // 就地编辑四场景同语义（桌面双击 / 触摸双敲），长按是叠加而非替代 —— 不该出现 swap。
+    ok(Cap.can('inlineEdit','deskEdit') && Cap.can('inlineEdit','touchEdit') &&
+       !Cap.isSwap('inlineEdit','deskEdit') && !Cap.isSwap('inlineEdit','touchEdit'),
+      '就地编辑在桌面 / 触摸应同为 on，且不是 swap');
   }
   ok(/var roW=Math\.max\(ACT_X\+PAD, 360\)/.test(shapesSrc),
     '只读画布宽度仍为幽灵列预留一格（右侧会多一条空白）');

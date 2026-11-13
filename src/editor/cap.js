@@ -46,7 +46,11 @@ export var CAP = {
   // 钉回可视区」的历史包袱，以及 `charChips` 图元。
   dock:       { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   // 上下文条：四场景同一套图标（触摸钉底部、桌面钉右侧），是行 / 列动作的唯一入口。
-  tbpanel:    { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF }
+  tbpanel:    { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
+  // 就地编辑：四场景同一语义 —— 「在格子上开一个小输入框改这一个值」，桌面双击、触摸双敲。
+  // 触摸端额外支持长按 480ms，但那是**叠加**不是替代：桌面没有长按的对应物（鼠标按住
+  // 不动没有意义），所以它不进这张表，也就不构成 swap。
+  inlineEdit: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF }
 };
 
 // HUD 图标的顺序。之前这里是两句写死的 cmd()，外加一个 `if (!(T && embedCard))` 把
