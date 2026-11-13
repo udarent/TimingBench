@@ -22,6 +22,19 @@
 
 不想手写这段代码？在[工作台](https://udarent.github.io/TimingBench/editor.html)里画好图，点画布左上角第四个图标 `<>`，它会按当前源码生成上面那段片段，一键复制即可。
 
+**宿主不让跑脚本？** 有些地方只渲染 HTML、从不执行 `<script>` —— Obsidian 笔记就是典型。这时用同一个 `<>` 面板里的 `iframe only` 页签，或者自己写：内容藏在 URL 里，不需要任何脚本。
+
+```html
+<iframe src="https://udarent.github.io/TimingBench/editor.html?embed=1#wj=PAYLOAD"
+        width="100%" height="380"
+        style="border:0;border-radius:10px;display:block"
+        loading="lazy" title="Timing diagram"></iframe>
+```
+
+`#wj=` 后面就是 WaveJSON 本体（base64url，因此不用转义、也不经过服务器）。这意味着片段是**自包含**的：转发笔记、发文件、发布出去，只要对方允许 iframe 就能看到图。代价是高度得写死（自己改 `height="…"`），也没有 `timingbench:change` 事件 —— 没有加载器在跑。Obsidian 里要作为**原始 HTML 块**直接贴进笔记，不能放在代码围栏里。
+
+这种形态同样是完整可交互的卡片：默认只读，点一下就地编辑 —— 同一个编辑器，只是少了加载器。想一进来就可编辑？把 `&mode=edit` 加在 `#` 前面：`…?embed=1&mode=edit#wj=…`。
+
 想用代码控制？
 
 ```js

@@ -235,6 +235,12 @@ svg{display:block;font-family:var(--sans)}
 .shareClose{border:0;background:transparent;color:var(--muted);font:14px/1 var(--sans);
   cursor:pointer;padding:4px 6px;border-radius:6px}
 .shareClose:hover{color:var(--accent);background:var(--accent-bg)}
+/* 两种嵌入形态的切换：脚本 + div（自动高度）与纯 iframe（内容随 URL 走） */
+.shareTabs{display:flex;gap:6px;padding:12px 14px 0}
+.shareTab{min-height:28px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;
+  background:var(--src-bg);color:var(--muted);font:12.5px var(--sans);cursor:pointer}
+.shareTab:hover{color:var(--accent);border-color:var(--accent)}
+.shareTab[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:500}
 .shareHint{margin:0;padding:12px 14px 0;font:12.5px/1.6 var(--sans);color:var(--muted)}
 .shareCode{margin:12px 14px 0;padding:10px 12px;height:calc(9 * 1.55em);resize:vertical;
   border:1px solid var(--line2);border-radius:8px;background:var(--src-bg);color:var(--ink);

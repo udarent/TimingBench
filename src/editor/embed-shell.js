@@ -3,6 +3,20 @@
 // 与宿主页面 postMessage 双向同步（源码 / 只读态 / 高度）。
 // 不碰渲染内核与编辑语义 —— 只控制「哪些层画、哪些事件放行」。
 import { EMBED, EDIT_ON_START } from './embed.js';
+import { decodePayload } from './payload.js';
+
+// 只有 iframe、没有脚本的宿主（Obsidian 笔记、只能贴 HTML 的编辑器）走 URL 片段带内容：
+//   editor.html?embed=1#wj=<base64url(WaveJSON)>
+// 片段不发给服务器，也不会被当查询串截断；用 URLSearchParams 取是为了将来能再加参数。
+// 解不出来就当没有 —— 保留默认示例，不报错、不白屏。
+function hashPayload() {
+  try {
+    var h = String(location.hash || '').replace(/^#/, '');
+    if (!h) return '';
+    var raw = new URLSearchParams(h).get('wj');
+    return raw ? decodePayload(raw) : '';
+  } catch (e) { return ''; }
+}
 
 export function attachEmbed(ctx, opts) {
   if (!EMBED || typeof window === 'undefined') return;
@@ -101,6 +115,13 @@ export function attachEmbed(ctx, opts) {
   });
 
   // 初始态：默认只读（?mode=edit 可直接进编辑）
+  // 内容来源优先级：宿主显式 setSource（走 data-wavejson / mount）> URL 片段 > 默认示例。
+  // 片段先落地，宿主的 setSource 到了自然会覆盖它。
+  var seeded = hashPayload();
+  if (seeded) {
+    if (ctx.code) ctx.code.value = seeded;
+    ctx.fromCode(seeded);
+  }
   setEditing(EDIT_ON_START);
   post('ready', { wavejson: ctx.code ? ctx.code.value : '', editing: EDIT_ON_START });
   setTimeout(reportHeight, 0);

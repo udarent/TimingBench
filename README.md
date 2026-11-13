@@ -22,6 +22,19 @@ The card is **read-only by default** — readers just see the waveform. Click it
 
 Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the fourth icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
 
+**No script allowed?** Some hosts only render raw HTML and never execute `<script>` — an Obsidian note, for example. Use the `iframe only` tab in that same `<>` panel, or build it yourself: the content travels inside the URL, so nothing else is needed.
+
+```html
+<iframe src="https://udarent.github.io/TimingBench/editor.html?embed=1#wj=PAYLOAD"
+        width="100%" height="380"
+        style="border:0;border-radius:10px;display:block"
+        loading="lazy" title="Timing diagram"></iframe>
+```
+
+`#wj=` carries the WaveJSON itself (base64url, so no escaping and no server round-trip), which means the snippet is self-contained: copy the note, send the file, publish it — the diagram renders anywhere that allows an iframe. The trade-offs are that the height is fixed (edit `height="…"` by hand) and there is no `timingbench:change` event, since no loader is running. In Obsidian, paste it as a raw HTML block, **not** inside a code fence.
+
+In this form the snippet gives you a fully interactive card: read-only until clicked, then editable in place — the same editor, just without the loader. Want it editable from the start? Add `&mode=edit` before the `#`: `…?embed=1&mode=edit#wj=…`.
+
 Need programmatic control?
 
 ```js

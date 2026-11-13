@@ -173,9 +173,13 @@ export function createShapes(ctx){
     var viewW=Math.max(240, Math.round(wrap.clientWidth||0)||360);
     var viewH=Math.max(0, Math.round(wrap.clientHeight||0));
     // 波形层仍按内容撑宽并允许横向滚动；但至少铺满卡片，便于钉住的顶栏 / 底栏有落脚宽度。
-    // 只读态（嵌入卡片默认）不画行工具，也就不再为它预留 ACT_W —— 否则卡片右侧会空出一条
-    // 永远点不到的带子，占掉缩放后本可以画波形的宽度。
-    var W=Math.max(ACT_X+(state.readonly?PAD:ACT_W)+PAD, viewW, 560), bottom=TOP+ir.lanes.length*ROW_H;
+    // 只读态（嵌入卡片默认）两项都不需要：既没有行工具（不预留 ACT_W），也没有钉住的顶栏 /
+    // 底栏（不需要铺满 viewW）。所以只按「内容宽」算，窄了就交给下面的 fit 等比缩小，
+    // 比卡片窄就保持 1:1 并靠 .svgwrap svg 的 margin-inline:auto 居中 —— 卡片右侧不会再空出一条。
+    var W=state.readonly
+      ? Math.max(ACT_X+PAD*2, 360)
+      : Math.max(ACT_X+ACT_W+PAD, viewW, 560);
+    var bottom=TOP+ir.lanes.length*ROW_H;
     // 零行时波形区高度为 0，占位行需要占一行高度，否则会被算到画布外
     var isEmpty=ir.lanes.length===0;
     if(isEmpty) bottom=TOP+ROW_H;

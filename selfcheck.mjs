@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Core } from './src/core/ir.js';
 import { EXAMPLE } from './src/core/example.js';
+import { encodePayload, decodePayload } from './src/editor/payload.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -313,6 +314,24 @@ function check() {
     '触摸端缺少上下文图标条（renderContext / ctxbtn）');
   ok(/function bindLongName/.test(touchSrc) && /data-name/.test(touchSrc),
     '触摸端缺少「长按出名称」');
+
+  // 纯 iframe 形态：内容靠 URL 片段带走，两种宿主共用一个编辑器页面
+  const shellSrc = read('src/editor/embed-shell.js');
+  ok(/iframeSnippet/.test(shareSrc) && /#wj=/.test(shareSrc),
+    '嵌入面板缺少「纯 iframe」形态或其载荷片段');
+  ok(/decodePayload/.test(shellSrc) && /wj/.test(shellSrc),
+    '嵌入壳未读取 URL 片段载荷（无脚本宿主会退化成默认示例）');
+  ok(fs.existsSync(path.join(ROOT, 'src/editor/payload.js')), '缺少载荷编解码模块 payload.js');
+  // 往返无损：这份载荷会直接进 iframe 的 src，坏一个字符整张图就没了
+  ok(decodePayload(encodePayload(EXAMPLE)) === EXAMPLE, '载荷编解码往返不一致（example）');
+  {
+    let tricky = true;
+    for (const t of ['', "{ signal: [ { name: 'a', wave: '01' } ] }", '中文注释 // ünïcode 🚀', 'x'.repeat(3000)]) {
+      if (decodePayload(encodePayload(t)) !== t) tricky = false;
+    }
+    ok(tricky, '载荷编解码在空串 / 非 ASCII / 长文本上往返不一致');
+    ok(/^[A-Za-z0-9_-]*$/.test(encodePayload(EXAMPLE)), '载荷出现需要再转义的字符（不是 base64url）');
+  }
   ok(/ROW_ACTS = \['name'/.test(touchSrc) && /COL_ACTS = \['insert'/.test(touchSrc),
     '上下文动作集缺失或被改成文字面板');
 
@@ -320,7 +339,7 @@ function check() {
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',
     'src/editor/touch.js', 'src/editor/index.js', 'src/editor/share.js',
     'src/editor/embed-shell.js', 'src/editor/waveform.js', 'src/editor/mode.js',
-    'src/editor/geometry.js', 'src/main.js', 'src/core/example.js', 'src/core/util.js', 'embed.js'];
+    'src/editor/geometry.js', 'src/editor/payload.js', 'src/main.js', 'src/core/example.js', 'src/core/util.js', 'embed.js'];
   const cjk = new RegExp('[\\u4e00-\\u9fa5\\u3040-\\u30ff\\uac00-\\ud7af]');
   for (const f of runtimeFiles) {
     if (!fs.existsSync(path.join(ROOT, f))) continue;

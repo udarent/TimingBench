@@ -37,7 +37,14 @@
   <p class="note">点击波形进入编辑；按 <code>Esc</code> 或点右下角的铅笔图标回到只读。</p>
   <div class="out" id="log">等待宿主事件…</div>
 
-  <h2>③ 想自己控制内容？用 JS</h2>
+  <h2>③ 宿主不让跑脚本？只用一个 iframe</h2>
+<pre>&lt;iframe src="https://udarent.github.io/TimingBench/editor.html?embed=1#wj=&lt;base64url(WaveJSON)&gt;"
+        width="100%" height="380"
+        style="border:0;border-radius:10px;display:block"
+        loading="lazy" title="Timing diagram"&gt;&lt;/iframe&gt;</pre>
+<p class="note">内容藏在 <code>#wj=</code> 后面的 base64url 里（不经过服务器、也不用转义），所以整段 HTML 是<strong>自包含</strong>的 —— 直接贴进 Obsidian 笔记这类只渲染 HTML、不执行 <code>&lt;script&gt;</code> 的地方即可。<br>代价：高度写死、没有 <code>timingbench:</code> 事件。在工作台点 <code>&lt;&gt;</code> 切到 <code>iframe only</code> 页签，它会按当前源码生成这段。Obsidian 里要作为<strong>原始 HTML 块</strong>贴，放进代码围栏只会显示成文本。</p>
+
+<h2>④ 想自己控制内容？用 JS</h2>
 <pre>const api = TimingBenchEmbed.mount(document.querySelector('#myCard'), {
   wavejson: '{ signal: [...] }',
   mode: 'view'          // 或 'edit' 直接可编辑
