@@ -4,6 +4,7 @@ import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
+import { EMBED } from './embed.js';
 import * as Cap from './cap.js';
 import { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf } from './waveform.js';
 
@@ -78,7 +79,10 @@ export function createShapes(ctx){
     o.push('<rect x="0" y="0" width="'+viewW+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
     var x=PAD;
     function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
-    Cap.hudCmds(SC, !!state.embedCard).forEach(function(c){
+    // 「是不是卡片」取 URL 事实（EMBED 常量），不取 state.embedCard：
+    // 后者由 embed-shell 在装配时置位，`?embed=1&mode=edit` 这种「一进来就编辑」的路径上
+    // 首帧还没置位 —— 用状态判断会让同一张卡片在两种进入方式下画出不同的 HUD（实测 4 个 vs 3 个）。
+    Cap.hudCmds(SC, EMBED).forEach(function(c){
       var m=HUD_META[c];
       if(c==='link'){
         cmd('link',m.txt,state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
