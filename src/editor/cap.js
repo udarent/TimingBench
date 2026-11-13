@@ -35,14 +35,11 @@ export var CAP = {
   // 命中率本来就差，收进面板后还能顺带把 ACT_W 的用途说清楚。
   colAct:     { deskEdit: SW,  deskView: OFF, touchEdit: SW,  touchView: OFF },
   rowTool:    { deskEdit: SW,  deskView: OFF, touchEdit: SW,  touchView: OFF },
-  // 行首拖拽把手撤掉：行重排统一为「选中行 → ↑ / ↓」（键盘 Ctrl+↑↓ 同理）。
-  // 触摸端从来就不画它（与原生滚动抢手势），桌面这次跟进，于是四场景一致 —— 同时
-  // leftBound 不再为那 18px 预留，行名区可以再窄一点（XS 随之变化，整页黄金值重算）。
-  rowDrag:    { deskEdit: OFF, deskView: OFF, touchEdit: OFF, touchView: OFF },
-  // 数据标签**不再画 ✎ 徽标**：徽标只有桌面能用（13×11 命中区手指点不中、且靠 hover 显形），
-  // 于是「改单格标签」变成桌面独有、触摸端没有对应物 —— 这正是 CAP 里最后一处 swap。
-  // 现在改标签走所有场景共用的上下文条（ACTS.cell），徽标连同命中分支一并删除；
-  // 桌面仍保留 `B` 快捷键，但那属于「叠加的快捷方式」，不进这张表。
+  // 行首拖拽把手（`rowDrag`）已在 0.9.13 删净 —— 图元、命中分支、拖拽结算一起走，
+  // 行重排的唯一通道是上下文条的 ↑ / ↓（键盘 `Ctrl+↑↓` 等价）。
+  // 数据标签的 ✎ 徽标（旧 `cellLabel`）已在 0.9.12 删净：13×11 命中区手指点不中、且靠
+  // hover 显形，只有桌面能用 —— 于是「改单格标签」曾是桌面独有。现在四场景共用上下文条
+  // （`ACTS.cell`），`B` 快捷键属于叠加的快捷方式、不进这张表。
   laneMeta:   { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   spacerMark: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   // 字符输入只剩一套实现：HTML 停靠条（`#chardock`）。桌面原来在 SVG 里画一条 23 颗的

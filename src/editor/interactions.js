@@ -78,7 +78,6 @@ export function attachInteractions(ctx){
       if(g.getAttribute){
         var ln=g.getAttribute('data-lane');
         if(g.classList&&g.classList.contains('hudBtn')) return {cmd:g.getAttribute('data-cmd')};
-        if(g.classList&&g.classList.contains('rowDrag')) return {drag:g.getAttribute('data-drag'),lane:g.getAttribute('data-drag')};
         if(g.classList&&g.classList.contains('charChip')) return {ch:g.getAttribute('data-ch')};
         if(g.classList&&g.classList.contains('emptyRow')) return {empty:1};
         if(g.classList&&g.classList.contains('rowTool')) return {tool:g.getAttribute('data-act'),lane:ln};
@@ -388,7 +387,15 @@ export function attachInteractions(ctx){
     // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
     var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
-    if(!c) return;
+    if(!c){
+      // 点到画布空白 = 清掉选中。四场景一致：桌面本来有 Esc，触摸端没有键盘 ——
+      // 这条手势就是触摸端唯一的「取消选中」，有了它底部那排撤销 / 重做 / 连线 / 取消的
+      // 常驻操作栏（#touchbar）才成为纯冗余（前三项 HUD 都有）。
+      if(state.selCell||state.selLane||(state.sel!==null&&state.sel!==undefined)){
+        state.selCell=null; state.sel=null; state.selLane=null; ctx.redraw();
+      }
+      return;
+    }
     // 零行空态占位行：整块就是一个「加第一条信号行」的按钮
     if(c.empty){
       if(dbl>1) return;
@@ -412,15 +419,6 @@ export function attachInteractions(ctx){
         state.linkCursor={lane:c.lane,tick:c.tick};
         handleAnchor({lane:c.lane,tick:c.tick,node:nodeChar(c.lane,c.tick)});
       }
-      return;
-    }
-    if(c.drag){
-      if(isTouch||dbl>1) return;   // 触摸端行重排交给操作栏，不与原生滚动抢手势
-      e.preventDefault();
-      var di=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===c.drag) di=i; });
-      if(di<0) return;
-      state.drag={ laneId:c.drag, from:di, to:di, base:{ir:state.ir,src:code.value,sel:state.sel} };
-      ctx.focusCanvas();
       return;
     }
     if(c.ch!==undefined){ if(dbl>1) return; e.preventDefault(); writeChar(c.ch); return; }
@@ -469,13 +467,6 @@ export function attachInteractions(ctx){
     ctx.focusCanvas();
     ctx.redraw();
   }
-  function showDropLine(to){
-    var svg=svgRoot(); if(!svg) return;
-    var ln=svg.querySelector('line.dropLine');
-    if(!ln){ ln=document.createElementNS('http://www.w3.org/2000/svg','line'); ln.setAttribute('class','dropLine'); svg.appendChild(ln); }
-    var y=TOP+to*ROW_H;
-    ln.setAttribute('x1',PAD); ln.setAttribute('x2',state.W-PAD); ln.setAttribute('y1',y); ln.setAttribute('y2',y);
-  }
   function showConnectPreview(mx,my){
     var svg=svgRoot(); if(!svg||!state.connect) return;
     var p=svg.querySelector('path.connectPreview');
@@ -498,11 +489,6 @@ export function attachInteractions(ctx){
   });
   wrap.addEventListener('mousemove',function(e){
     var svg=svgRoot();
-    if(state.drag&&svg){
-      var yy=e.clientY-svg.getBoundingClientRect().top;
-      var to=Math.max(0,Math.min(state.ir.lanes.length,Math.round((yy-TOP)/ROW_H)));
-      state.drag.to=to; showDropLine(to); return;
-    }
     if(state.connect&&svg){
       var r=svg.getBoundingClientRect();
       showConnectPreview(e.clientX-r.left,e.clientY-r.top);
@@ -517,22 +503,6 @@ export function attachInteractions(ctx){
   });
   document.addEventListener('mouseup',function(e){
     if(e&&syntheticMouse(e)) return;
-    if(state.drag){
-      var d=state.drag; state.drag=null;
-      var svg=svgRoot(), ln=svg&&svg.querySelector('line.dropLine'); if(ln&&ln.parentNode) ln.parentNode.removeChild(ln);
-      var from=d.from, to=d.to, steps=(to>from?to-1:to)-from;
-      if(steps&&state.ir){
-        var dir=steps>0?'down':'up';
-        for(var k=0;k<Math.abs(steps);k++){
-          var idx=from+(steps>0?k:-k), lane=state.ir.lanes[idx]; if(!lane) break;
-          ctx.commit({t:'moveLane',lane:lane.id,v:dir},'drag reorder',true,true);
-        }
-        state.undo.push(d.base); if(state.undo.length>60) state.undo.shift(); state.redo.length=0;
-        state.selLane=state.ir.lanes[from+steps]?state.ir.lanes[from+steps].id:null;
-        ctx.status();
-      }
-      ctx.redraw(); ctx.focusCanvas(); ctx.painting=null; return;
-    }
     if(!ctx.painting) return;
     var p=ctx.painting; ctx.painting=null;
     if(p.moved){
@@ -586,7 +556,8 @@ export function attachInteractions(ctx){
       if(ctx.requestEdit) ctx.requestEdit({x:p.x,y:p.y,cell:hit});
       return;
     }
-    if(!p.c) return;
+    // p.c 为 null = 点在画布空白：同样派发，dispatchTarget 用它清选中（触摸端没有 Esc，
+    // 这是唯一取消手势）；有命中时是普通的图元点击。
     dispatchTarget(p.c, {clientX:p.x, clientY:p.y, detail:0, preventDefault:function(){}}, true);
   }
   function endPointer(e){
@@ -754,11 +725,6 @@ export function attachInteractions(ctx){
       ctx.focusPane(ae===code?'diagram':((ae===wrap||wrap.contains(ae))?'src':'diagram'));
       return;
     }
-    if(e.key==='Escape'&&state.drag){
-      state.drag=null; var dl=svgRoot()&&svgRoot().querySelector('line.dropLine');
-      if(dl&&dl.parentNode) dl.parentNode.removeChild(dl);
-      ctx.redraw(); return;
-    }
     if(e.key==='Escape'&&state.linkMode){ ctx.setLinkMode(false); return; }
     if((e.ctrlKey||e.metaKey)&&/^(z|y)$/i.test(e.key)&&!typing){
       prevent(e); ctx.doCmd((e.shiftKey||/^y$/i.test(e.key))?'redo':'undo'); return;
@@ -821,6 +787,6 @@ export function attachInteractions(ctx){
   ctx.cancelModes=function(){
     state.connect=null; state.linkMode=false; state.linkCursor=null;
     state.selCell=null; state.sel=null; state.selLane=null;
-    state.drag=null; ctx.painting=null; ctx.closeInline(false); ctx.redraw();
+    ctx.painting=null; ctx.closeInline(false); ctx.redraw();
   };
 }

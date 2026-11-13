@@ -6,16 +6,11 @@
 <title>TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.9.12">
+<meta name="version" content="0.9.13">
 <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
-<nav class="tabbar" id="tabbar" role="tablist" aria-label="Switch view">
-  <button type="button" role="tab" data-view="diagram" aria-selected="true" aria-label="Timing diagram" data-name="Timing diagram"><svg class="tabico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 16h3v-7h4v7h4V9h4v7h3"/></svg></button>
-  <button type="button" role="tab" data-view="src" aria-selected="false" aria-label="Source" data-name="Source"><svg class="tabico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg></button>
-  <span class="tb-title">TimingBench</span>
-</nav>
-<div class="app" id="app" data-view="diagram">
+<div class="app" id="app">
   <div class="pane src">
     <div class="gutter" id="gutter" aria-hidden="true"></div>
     <textarea id="code" spellcheck="false" wrap="off" aria-label="WaveJSON source"></textarea>
@@ -24,12 +19,6 @@
   <div class="pane diagram">
     <div class="svgwrap" id="svgwrap" aria-label="Editable timing diagram canvas"></div>
   </div>
-</div>
-<div class="touchbar" id="touchbar" role="toolbar" aria-label="Touch toolbar">
-  <button type="button" data-tb="undo" aria-label="Undo" data-name="Undo"><span class="ico">↶</span></button>
-  <button type="button" data-tb="redo" aria-label="Redo" data-name="Redo"><span class="ico">↷</span></button>
-  <button type="button" data-tb="link" aria-pressed="false" aria-label="Link mode" data-name="Link mode"><span class="ico">◇</span></button>
-  <button type="button" data-tb="cancel" aria-label="Cancel" data-name="Cancel"><span class="ico">✕</span></button>
 </div>
 <div class="tbpanel" id="tbpanel"></div>
 <div class="charmore" id="charmore" role="toolbar" aria-label="All wave characters"></div>

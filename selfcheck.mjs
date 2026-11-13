@@ -157,7 +157,9 @@ function check() {
   ok(!/\.nodeAnchor|\.connecting/.test(cssSrc), '样式层仍存在锚点规则');
   ok(/linkMode/.test(editorSrc) && /setLinkMode/.test(editorSrc), '状态层缺少唯一的连线模式入口');
   ok(/if\(state\.linkMode\)/.test(interSrc) && !/nodeAnchor/.test(interSrc), '交互层未做互斥分派或仍有锚点命中');
-  ok(/cmd\('link'/.test(shapesSrc) && /data-tb="link"/.test(html), '桌面 HUD / 触摸操作栏缺少连线开关');
+  // 连线开关只剩 HUD 一处（底部操作栏 #touchbar 已在 0.9.13 删除：撤销/重做/连线 HUD 都有，
+  // 「取消选中」改成点画布空白，四场景一致）
+  ok(/cmd\('link'/.test(shapesSrc) && !/touchbar/.test(html), 'HUD 缺少连线开关，或已删的操作栏又回来了');
   // 全键盘可达：焦点入口、连线端点光标、命令分派、就地编辑焦点恢复、可见焦点样式
   ok(/focusPane/.test(editorSrc) && /ensureSelCell/.test(editorSrc) && /tabIndex=0/.test(editorSrc),
     '状态层缺少键盘焦点入口或画布不可聚焦');
@@ -227,17 +229,16 @@ function check() {
   ok(lrefs.every((r) => !r.startsWith('../')), '首页存在跳出站点根的相对路径');
 
   // 触摸版式的容器与入口：桌面隐藏、粗指针（或 ?touch=1）时由 main.js 装配
-  for (const id of ['app', 'tabbar', 'touchbar', 'tbpanel', 'toast'])
+  for (const id of ['app', 'tbpanel', 'toast'])
     ok(html.includes('id="' + id + '"'), '触摸 UI 容器缺失：#' + id);
   ok(html.includes('viewport-fit=cover'), '移动端安全区 viewport 缺失');
   ok(read('src/main.js').includes('is-touch'), 'main.js 未装配触摸版式开关');
   // 卡片口径：操作层（HUD / 字符条）按可视宽度排布并钉在可视区，只有纵向可增长；
   // 波形层仍按内容撑宽、可横向滚动 / 缩放。禁止退回「按整张画布宽度排字符条」或「不钉住」。
-  // 只约束「操作栏 / 上下文条」这类动作按钮：它们必须全部落在可视宽内。
+  // 只约束上下文条这类动作按钮：它们必须全部落在可视宽内。
   // 字符停靠条是有意的横向滚动（23 个字符一条排不下，等价于输入法候选条），不在约束范围。
-  ok(!/\.is-touch \.touchbar\{[^}]*overflow-x:auto/.test(cssSrc) &&
-     !/\.is-touch \.tbpanel\{[^}]*overflow-x:auto/.test(cssSrc),
-    '触摸操作栏仍允许横向滚动（窄屏会溢出）');
+  ok(!/\.is-touch \.tbpanel\{[^}]*overflow-x:auto/.test(cssSrc),
+    '触摸上下文条仍允许横向滚动（窄屏会溢出）');
   // 嵌入卡片里不能把上下文条一起藏掉：触摸端没有行工具 / 拖拽把手，
   // 选中行后的 up·down·改名·加行全在 #tbpanel，藏了等于把行重排整组关掉。
   ok(!/\.is-embed[^{}]*\.tbpanel[^{}]*\{[^}]*display:\s*none/.test(cssSrc),
@@ -248,8 +249,6 @@ function check() {
   ok(/\.is-touch \.chardock\.open\{[^}]*position:fixed/.test(cssSrc) &&
      /\.chardock \.chipbtn[^{]*\{[^}]*height:44px/.test(cssSrc),
     '字符停靠条未固定在卡片底部或命中区不足 44px');
-  ok(/flex:1 1 44px/.test(cssSrc) && /min-width:44px/.test(cssSrc),
-    '触摸操作栏按钮未按屏宽自适应或命中区不足 44px');
   // 字符输入只剩一套实现（HTML 停靠条 #chardock）：桌面全平铺、触摸折叠 4+⋯。
   // 折叠判据必须由 TOUCH 决定，不能写死数量 —— 23 颗 48px 在 390 宽屏上放不下。
   const touchSrcEarly = read('src/editor/touch.js');
@@ -332,7 +331,7 @@ function check() {
   // 总口径：只读场景下，所有「编辑入口」能力都必须是 off —— 只读 = 编辑态渲染减去控件。
   // 任何一条漏关，这里就报；新增能力也会被这条兜住（表里不写就没有默认值）。
   {
-    const editEntries = ['hud','colhead','colAct','rowTool','rowDrag','laneMeta','spacerMark','dock','tbpanel','inlineEdit'];
+    const editEntries = ['hud','colhead','colAct','rowTool','laneMeta','spacerMark','dock','tbpanel','inlineEdit'];
     const leak = editEntries.filter((n) => Cap.can(n,'deskView') || Cap.can(n,'touchView'));
     ok(leak.length === 0, '只读卡片仍启用了编辑入口：' + leak.join(' / '));
     // 就地编辑四场景同语义（桌面双击 / 触摸双敲），长按是叠加而非替代 —— 不该出现 swap。

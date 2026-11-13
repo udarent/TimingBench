@@ -4,7 +4,11 @@
 function detect() {
   try {
     if (typeof window === 'undefined') return false;
-    if (window.location && new URLSearchParams(window.location.search).get('touch') === '1') return true;
+    // ?touch=1 / ?touch=0 优先于设备能力：前者在桌面预览触摸版式，后者在粗指针设备
+    // （或继承了 coarse 的 iframe）里强制桌面版式 —— 验收套件靠它把「两个版式」都锁死。
+    var forced = window.location ? new URLSearchParams(window.location.search).get('touch') : null;
+    if (forced === '1') return true;
+    if (forced === '0') return false;
     if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
   } catch (e) { /* 无 matchMedia / 无 URLSearchParams 时按桌面处理 */ }
   return false;

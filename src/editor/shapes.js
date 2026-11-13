@@ -138,12 +138,6 @@ export function createShapes(ctx){
 
   // 行首拖拽把手：行位置调整的唯一交互
   // 只读卡片不画：没有拖拽这回事，画出来只是个不能用的点心。
-  function dragHandle(l,y){
-    if(!can('rowDrag')) return '';   // 触摸端换成 ↑ / ↓（swap，不与原生滚动抢手势）；只读不画（off）
-    return '<g class="rowDrag" data-drag="'+l.id+'" role="button" aria-label="Drag to reorder this row">'+
-      '<rect x="'+(PAD+2)+'" y="'+(y+8)+'" width="16" height="32" rx="3" fill="transparent"/>'+
-      '<text x="'+(PAD+10)+'" y="'+(y+24)+'" text-anchor="middle" dominant-baseline="central" font-size="13" fill="var(--muted)" pointer-events="none">⠿</text></g>';
-  }
 
   // 弧线：唯一「编辑 / 删除 edge」入口是双击弧线本体；清空字符串即删除
   function edgeArcs(ir){
@@ -217,9 +211,9 @@ export function createShapes(ctx){
     if(nameKey!==measKey){                       // 内容没变就不重复测量（getBBox 会强制布局）
       measKey=nameKey; measW=nameBlockWidth(ir);
     }
-    // 行名可用左界：画不画拖拽把手由能力表回答（桌面编辑态 on，其余场景 off），
-    // 不画就不为它留位 —— 这和「不画列号行就不为它留高度」是同一条口径。
-    var leftBound=PAD+(can('rowDrag')?18:0);
+    // 行名左界就是内边距：行首拖拽把手已于 0.9.10 撤除，0.9.13 连图元一起删除，
+    // 这里不再为它预留 18px。
+    var leftBound=PAD;
     var minW=64, maxW=T?300:260;                 // 上下限：空图 / 超长名字（两态同值）
     // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T + 10px 的 [分组]」
     // tspan 拼接有 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
@@ -341,7 +335,6 @@ export function createShapes(ctx){
       var cellH=ROW_H-10, i, hi=state.selLane===l.id;
       o.push('<g class="laneGrp'+(hi?' sel':'')+'" data-lane="'+l.id+'">');
       o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(ROW_H-2)+'" rx="3" fill="'+(hi?'var(--accent-bg)':'transparent')+'" style="cursor:pointer"/>');
-      o.push(dragHandle(l,y));
       if(l.kind==='spacer'){
         // 只读卡片上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
         // 否则读者会看到一条莫名其妙的「spacer」文字。

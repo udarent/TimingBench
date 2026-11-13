@@ -13,9 +13,8 @@ export function attachTouchUI(ctx, dom) {
   // 桌面也用它（原先桌面在 SVG 里另画一条 23 颗的字符条）。触摸专属的只有下面三处：
   // 标签页 / 底部操作栏、长按出英文名（bindLongName）、首屏手势引导（guide）。
   // 其余（上下文条渲染、停靠条渲染、afterRedraw 同步）在桌面同样需要，只是 CSS 决定摆哪。
-  var bar = dom.touchbar, panel = dom.tbpanel, toast = dom.toast;
+  var panel = dom.tbpanel, toast = dom.toast;
   var dock = dom.chardock, more = dom.charmore;
-  var tabbar = dom.tabbar, app = dom.app;
   // 不再因为「没有底部操作栏 / 上下文条容器」整块退出：字符停靠条（dock）在桌面
   // 与验收页里也要工作，缺哪个节点就跳过哪部分（下面各函数自带空值保护）。
   var state = ctx.state;
@@ -39,21 +38,6 @@ export function attachTouchUI(ctx, dom) {
     if (t) say(t);
   };
 
-  function setView(v) {
-    var prev = app && app.getAttribute('data-view');
-    if (app) app.setAttribute('data-view', v);
-    if (!tabbar) return;
-    var bs = tabbar.querySelectorAll('button[data-view]');
-    for (var i = 0; i < bs.length; i++)
-      bs[i].setAttribute('aria-selected', String(bs[i].getAttribute('data-view') === v));
-    // 切回时序图时画布才重新可见；此前 clientWidth 为 0，字符条按兜底宽度排过，
-    // 这里补一次重绘让操作层按真实卡片宽度重新排布（就地输入未结算时跳过）。
-    if (v === 'diagram' && prev !== 'diagram' && ctx.redraw && !ctx.inlineCtx) ctx.redraw();
-  }
-  if (tabbar) tabbar.addEventListener('click', function (e) {
-    var b = e.target && e.target.closest ? e.target.closest('button[data-view]') : null;
-    if (b) setView(b.getAttribute('data-view'));
-  });
 
   // 上下文图标条：没有「对象 / 列」两个文字面板，也没有 18 个文字按钮。
   // 选中格子 → 字符条（画在 SVG 里）；选中行 → 行动作；选中列 → 列动作。
@@ -108,7 +92,6 @@ export function attachTouchUI(ctx, dom) {
   }
 
   function doAct(k) {
-    setView('diagram');           // 行 / 列动作都作用在画布上，自动切回时序图
     var c, l, n;
     switch (k) {
       case 'char':   c = needCell(); if (c) ctx.openCellCharEditor(c.lane, c.tick); return;
@@ -159,21 +142,13 @@ export function attachTouchUI(ctx, dom) {
 
   var ctxKind = null, ctxKey = null;
   // 程序化滚动（revealLane）刚设过的目标位置；scroll 事件里据此区分「自己滚的」与「用户滚的」。
-  var selfScrollTop = null;  // 嵌入卡片里 #tbpanel 是唯一能改行 / 列的地方（触摸端不画行工具与拖拽把手），
-  // 所以它和右下角那个铅笔 / 对勾按钮会抢同一块地方：把面板实测高度写进 --ctx-h，
+  var selfScrollTop = null;
   // CSS 据此把退出按钮抬到面板上方，谁也不压谁。
-  function markContext(open) {
-    var de = document.documentElement;
-    if (!open) { de.classList.remove('ctx-open'); de.style.removeProperty('--ctx-h'); return; }
-    de.classList.add('ctx-open');
-    de.style.setProperty('--ctx-h', (panel.offsetHeight || 0) + 'px');
-  }
   function hideContext() {
     if (ctxKind === null) return;
     ctxKind = null; ctxKey = null;
     panel.classList.remove('open');
     panel.textContent = '';
-    markContext(false);
   }
   // 上下文条内容跟着「最后选中的对象」走：格子 → 格级动作，列 → 列动作，行 → 行动作。
   // 三级共用同一个容器与同一段渲染代码，差别只是喂进去的动作清单。
@@ -210,7 +185,6 @@ export function attachTouchUI(ctx, dom) {
     });
     panel.classList.add('open');
     bindLongName(panel);
-    markContext(true);
     // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮。
     // 这次滚动是程序自己发起的，要记下目标位置 —— 否则紧随其后的 scroll 事件会被
     // 当成「用户想看更多」，把刚打开的面板立刻收掉（选中靠下的行时表现为面板一闪就没）。
@@ -229,24 +203,6 @@ export function attachTouchUI(ctx, dom) {
     // 不收起面板：多个动作常需连点（如连按上移），重绘后 renderContext 会按新状态更新。
     doAct(b.getAttribute('data-act'));
   });
-
-  if (bar) bar.addEventListener('click', function (e) {
-    var b = e.target && e.target.closest ? e.target.closest('button') : null;
-    if (!b || b.disabled) return;
-    var k = b.getAttribute('data-tb');
-    if (k === 'undo' || k === 'redo') { ctx.doCmd(k); return; }
-    if (k === 'link') {
-      setView('diagram');
-      ctx.setLinkMode(!state.linkMode);   // 与桌面 HUD 共用唯一的模式切换入口
-      return;
-    }
-    if (k === 'cancel') {
-      ctx.cancelModes(); say('Selection cleared'); return;
-    }
-  });
-  bindLongName(bar);
-  if (tabbar) bindLongName(tabbar);
-
 
   // ---- 字符停靠条 ---------------------------------------------------------
   // 触摸端不再把 23 个字符画进 SVG 里（那条东西会钉在画布底部、随着滚动被反复 transform，
@@ -349,12 +305,7 @@ export function attachTouchUI(ctx, dom) {
   ctx.closeCharDock = hideDock;
 
   ctx.afterRedraw = function () {
-    // 不跑编辑器的页面（或桌面精简容器）可能没有底部操作栏：只同步存在的部分。
-    var u = bar && bar.querySelector('[data-tb="undo"]'), r = bar && bar.querySelector('[data-tb="redo"]');
-    if (u) u.disabled = !state.undo.length;
-    if (r) r.disabled = !state.redo.length;
-    var lk = bar && bar.querySelector('[data-tb="link"]');
-    if (lk) lk.setAttribute('aria-pressed', String(state.linkMode));
+    // 每次重绘后重新决定：上下文条该显示哪一级动作、字符停靠条该不该在。
     renderContext();
     renderDock();
   };

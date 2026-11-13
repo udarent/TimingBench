@@ -45,16 +45,13 @@ svg{display:block;font-family:var(--sans)}
 }
 [hidden]{display:none!important}
 /* 极简 HUD：撤销 / 重做 / 连线三个图标；无常驻文字，画布内无状态圆点 */
-.hudBtn,.rowDrag,.charChip{cursor:pointer}
-.hudBtn text,.colhead text,.colActBtn text,.charChip text,.rowDrag text{pointer-events:none}
+.hudBtn,.charChip{cursor:pointer}
+.hudBtn text,.colhead text,.colActBtn text,.charChip text{pointer-events:none}
 .hudBtn:hover rect{fill:var(--accent-bg);stroke:var(--accent)}
 .cellSel{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:3 2;pointer-events:none}
 /* 连线模式的端点光标：与普通选中框互斥，只服务键盘 / 触摸端点定位 */
 .linkCursor{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:5 3;pointer-events:none}
 .linkMode .linkCursor{stroke-width:2.4}
-.rowDrag{opacity:.3}
-.laneGrp:hover .rowDrag,.laneGrp.sel .rowDrag{opacity:.9}
-.dropLine{stroke:var(--accent);stroke-width:2;pointer-events:none}
 /* 数据标签的编辑入口是上下文条（ACTS.cell），画布上不再有 ✎ 徽标 */
 .connectPreview{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:4 3;pointer-events:none;opacity:.8}
 /* 就地编辑：输入框是 SVG 内的 foreignObject，跟着图元一起滚动 */
@@ -108,20 +105,12 @@ svg{display:block;font-family:var(--sans)}
 .charChip:hover text,.charChip.on text{stroke:var(--accent-bg)}
 /* ---------------------------------------------------------------------------
    触摸版式：粗指针（或 ?touch=1）时由 main.js 在 <html> 上加 .is-touch。
-   桌面仍是最初的上下双栏 + 无常驻文字；触摸端改为「标签页 + 底部操作栏」，
-   把桌面靠 hover / 双击 / 拖拽完成的操作换成可点按的常驻控件。
+   桌面是「左代码 / 右时序图」+ 无常驻文字；触摸端同屏两区、方向可由 HUD 切换，
+   把桌面靠 hover 完成的操作换成可点按的常驻控件（上下文条 / 停靠条）。
+   标签页（.tabbar）已在 0.9.13 删除 —— 两区同屏后它只改一个没有消费者的 data-view 属性。
    --------------------------------------------------------------------------- */
-.tabbar,.touchbar,.tbpanel,.toast{display:none}
+.tbpanel,.toast{display:none}
 .is-touch body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
-.is-touch .tabbar{display:none;flex:0 0 48px;align-items:stretch;gap:6px;padding:5px 8px;
-  background:var(--panel);border-bottom:1px solid var(--line);user-select:none}
-.is-touch .tabbar button{min-width:52px;width:52px;padding:0;border:1px solid var(--line);border-radius:10px;
-  background:var(--src-bg);color:var(--muted);touch-action:manipulation;
-  display:flex;align-items:center;justify-content:center}
-.is-touch .tabbar .tabico{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;
-  stroke-linecap:round;stroke-linejoin:round}
-.is-touch .tabbar button[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:600}
-.is-touch .tabbar .tb-title{margin-left:auto;align-self:center;font-size:12px;color:var(--muted)}
 .is-touch .app{flex:1 1 auto;height:auto;min-height:0}
 /* 触摸端不再分「源码页 / 时序图页」两页：两区同屏，方向同 HUD 的切换按钮 */
 
@@ -130,20 +119,8 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .pane.src textarea{font-size:14px;line-height:1.9;padding-left:52px}
 .is-touch .svgwrap{touch-action:manipulation;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* hover 才显现的细小控件在触摸端全部撤下，改由操作栏承担 */
-.is-touch .rowCtl,.is-touch .rowHint,.is-touch .rowDrag,.is-touch .colAct{display:none}
+.is-touch .rowCtl,.is-touch .rowHint,.is-touch .colAct{display:none}
 .is-touch .cellSel{stroke-width:2.4}
-/* 屏幕级操作栏：6 个按钮均分可用宽度，最小仍是 44px 命中区；320px 也无需横向滚动。
-   宽屏用 max-width 收住按钮宽度并整组居中，不把操作栏拉成一条长带。
-   画布内的 HUD / 字符条不在这里，由 SVG 按波形画布宽度 W 排布并随波形变换。 */
-.is-touch .touchbar{display:flex;flex:0 0 60px;align-items:center;justify-content:center;gap:5px;padding:5px 6px;
-  background:var(--panel);border-top:1px solid var(--line);overflow:hidden;user-select:none;touch-action:manipulation}
-.is-touch .touchbar button{flex:1 1 44px;min-width:44px;max-width:96px;min-height:48px;padding:0;
-  display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
-  touch-action:manipulation}
-.is-touch .touchbar button .ico{font-size:21px;line-height:1}
-.is-touch .touchbar button[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.is-touch .touchbar button[disabled]{opacity:.4}
 /* 桌面：上下文条钉在右侧（触摸端钉底部，规则在下面 .is-touch 段里）。
    行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头按钮都已撤掉。 */
 .tbpanel.open{display:flex;position:fixed;right:10px;top:50%;transform:translateY(-50%);
@@ -155,7 +132,7 @@ svg{display:block;font-family:var(--sans)}
   cursor:pointer}
 .tbpanel button.ctxbtn svg{width:17px;height:17px;fill:none;stroke:currentColor}
 .tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
-.is-touch .tbpanel{display:none;position:fixed;left:0;right:0;bottom:60px;z-index:20;
+.is-touch .tbpanel{display:none;position:fixed;left:0;right:0;bottom:0;z-index:20;
   /* 桌面那条规则是「钉在右侧」的三件套：top:50% + width:196px + transform:translateY(-50%)。
      触摸端改钉底部，这三项必须显式复位，否则三条一起出问题：
        · top:50% 与 bottom 同时存在 → 高度被两端拉开（844 高时面板高 318px，盖住半屏）
@@ -168,7 +145,7 @@ svg{display:block;font-family:var(--sans)}
 /* 选中格子时底部同时有两条：格级动作条（label / node）与字符停靠条。
    两者都是「选中格」派生的，压在同一位置会互相盖住 —— 面板抬到字符条上方 4px。
    停靠条高度由 JS 实测后写进 --dock-h（桌面 40 / 触摸 56），不写死。 */
-html.is-touch.dock-open .tbpanel.open{bottom:calc(60px + var(--dock-h,56px) + 4px)}
+html.is-touch.dock-open .tbpanel.open{bottom:calc(var(--dock-h,56px) + 4px)}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:13px var(--sans);touch-action:manipulation}
@@ -179,7 +156,7 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(60px + var(--dock-h,56px) + 4p
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .is-touch .tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel button:active{background:var(--accent-bg);border-color:var(--accent)}
-.is-touch .toast{display:none;position:fixed;left:50%;bottom:72px;transform:translateX(-50%);z-index:30;
+.is-touch .toast{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:30;
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
   font:12px/1.5 var(--sans);box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none}
 .is-touch .toast.show{display:block}
@@ -210,7 +187,7 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(60px + var(--dock-h,56px) + 4p
 .chardock .chipbtn:hover{border-color:var(--accent)}
 .chardock .chipbtn.clear{flex:0 0 26px;width:26px;min-width:26px}
 .chardock .chipbtn.clear span{font-size:14px;color:var(--muted)}
-.is-touch .chardock.open{display:flex;position:fixed;left:0;right:0;bottom:60px;z-index:22;
+.is-touch .chardock.open{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:22;
   align-items:center;gap:6px;height:56px;padding:6px 8px;
   background:var(--panel);border-top:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
@@ -276,7 +253,6 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(60px + var(--dock-h,56px) + 4p
 /* 嵌入卡片里没有标签页与操作栏（卡片只承担「看 / 就地改」两件事），
    但**上下文条必须保留** —— 触摸端没有 hover，选中行 / 列后的 up·down·改名·加行
    全在 #tbpanel 里，隐藏它等于把行重排、行编辑、列操作整组功能关掉。 */
-.is-embed .tabbar,.is-embed .touchbar{display:none!important}
 /* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；面板挡住波形是瞬时的（选完即收） */
 .is-embed .tbpanel{bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
 .is-embed .pane.src{display:none!important}
@@ -298,8 +274,7 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(60px + var(--dock-h,56px) + 4p
 /* 只读态：画布只承担查看，光标不暗示可编辑 */
 .is-embed.is-readonly .svgwrap{cursor:default}
 /* 只读态不出现任何编辑控件：行工具 / 列操作 / 拖拽把手 */
-.is-embed.is-readonly .rowCtl,.is-embed.is-readonly .rowHint,.is-embed.is-readonly .rowDrag,
-.is-embed.is-readonly .colAct{display:none}
+.is-embed.is-readonly .rowCtl,.is-embed.is-readonly .rowHint,.is-embed.is-readonly .colAct{display:none}
 .is-embed.is-readonly .svgwrap:focus-visible{outline:none}
 /* 退出 / 进入编辑的图标按钮：钉在卡片**右上角**，压在波形图的一个角上。
    为什么不是左上：只读态不再画列号行，第一行行名紧贴顶部，左上角放按钮会正好压住它；

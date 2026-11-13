@@ -150,13 +150,6 @@ export function createEditor(dom){
   }
   ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout;
 
-  function setView(v){
-    if(dom.app) dom.app.setAttribute('data-view',v);
-    if(dom.tabbar){
-      var bs=dom.tabbar.querySelectorAll('button[data-view]');
-      for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-selected',String(bs[i].getAttribute('data-view')===v));
-    }
-  }
   function signalLanes(){
     var out=[];
     if(state.ir) state.ir.lanes.forEach(function(l){ if(l.kind==='signal') out.push(l); });
@@ -179,8 +172,8 @@ export function createEditor(dom){
     return sc;
   }
   function focusPane(which){
-    if(which==='src'){ setView('src'); try{ code.focus({preventScroll:true}); }catch(e){ code.focus(); } return; }
-    setView('diagram'); focusCanvas(); ensureSelCell();
+    if(which==='src'){ try{ code.focus({preventScroll:true}); }catch(e){ code.focus(); } return; }
+    focusCanvas(); ensureSelCell();
   }
 
   // 图形区的两种操作互斥：linkMode 关闭时波形格只做时序编辑，开启时只做连线端点。
@@ -194,7 +187,7 @@ export function createEditor(dom){
       lc=valid?{lane:from.lane,tick:Math.max(0,Math.min(from.tick,N-1))}:firstCell();
     }
     state.linkMode=on; state.connect=null; state.linkCursor=lc;
-    state.selCell=null; state.sel=null; state.selLane=null; state.drag=null;
+    state.selCell=null; state.sel=null; state.selLane=null;
     ctx.painting=null;
     if(ctx.inlineCtx) ctx.closeInline(true);
     ctx.redraw(); ctx.status();
@@ -224,7 +217,7 @@ export function createEditor(dom){
     if(state.readonly===on) return;
     state.readonly=on;
     if(on){
-      state.selCell=null; state.sel=null; state.selLane=null; state.drag=null;
+      state.selCell=null; state.sel=null; state.selLane=null;
       state.linkMode=false; state.connect=null; state.linkCursor=null;
       if(ctx.inlineCtx) ctx.closeInline(true);
       if(ctx.closePanel) ctx.closePanel();
@@ -243,7 +236,7 @@ export function createEditor(dom){
   ctx.denyRing=denyRing;
   ctx.syncCode=syncCode; ctx.commit=commit; ctx.fromCode=fromCode;
   ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
-  ctx.focusPane=focusPane; ctx.setView=setView; ctx.ensureSelCell=ensureSelCell; ctx.clampSel=clampSel;
+  ctx.focusPane=focusPane; ctx.ensureSelCell=ensureSelCell; ctx.clampSel=clampSel;
 
   try{ var saved=localStorage.getItem('tb-layout'); if(saved==='rows'||saved==='cols') state.layout=saved; }catch(e){}
   applyLayout();
