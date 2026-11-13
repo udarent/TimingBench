@@ -145,18 +145,6 @@ export function createShapes(ctx){
       '<text x="'+(PAD+10)+'" y="'+(y+24)+'" text-anchor="middle" dominant-baseline="central" font-size="13" fill="var(--muted)" pointer-events="none">⠿</text></g>';
   }
 
-  // 数据标签的唯一编辑入口：长在总线块右下角的 ✎ 徽标，单击就地编辑 data 标签
-  function cellLabelHit(l,i,x0,y,label){
-    if(!can('cellLabel')) return '';   // 触摸端换成「长按格子 / 点标签徽标」（swap）；只读不画（off）
-    // 画在数据块下缘、格子底部：避开中心的标签文字与顶部的节点锚点
-    var bx=x0+CELL-15, by=y+30, txt=label?String(label):'';
-    return '<g class="cellLabel" data-lane="'+l.id+'" data-tick="'+i+'" data-label="1">'+
-      ''+
-      '<rect x="'+bx+'" y="'+by+'" width="13" height="11" fill="transparent"/>'+
-      '<g class="badge"><rect x="'+bx+'" y="'+by+'" width="13" height="11" rx="3" fill="var(--panel)" stroke="var(--line2)" stroke-width="0.7"/>'+
-      '<text x="'+(bx+6.5)+'" y="'+(by+8)+'" text-anchor="middle" font-size="9" fill="var(--muted)">✎</text></g></g>';
-  }
-
   // 弧线：唯一「编辑 / 删除 edge」入口是双击弧线本体；清空字符串即删除
   function edgeArcs(ir){
     var map={};
@@ -350,7 +338,7 @@ export function createShapes(ctx){
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*ROW_H;
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
-      var cellH=ROW_H-10, i, hi=state.selLane===l.id, laneBadges=[];
+      var cellH=ROW_H-10, i, hi=state.selLane===l.id;
       o.push('<g class="laneGrp'+(hi?' sel':'')+'" data-lane="'+l.id+'">');
       o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(ROW_H-2)+'" rx="3" fill="'+(hi?'var(--accent-bg)':'transparent')+'" style="cursor:pointer"/>');
       o.push(dragHandle(l,y));
@@ -395,7 +383,6 @@ export function createShapes(ctx){
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
           ' x="'+(x0+1)+'" y="'+(y+3)+'" width="'+(CELL-2)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
-        if(can('cellLabel')&&s&&s.point&&!s.gap&&Core.BUS.test(s.w)) laneBadges.push(cellLabelHit(l,i,x0,y,s.label));
       }
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
       o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(N*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');
@@ -408,8 +395,6 @@ export function createShapes(ctx){
         if(!nc||nc==='.') continue;
         o.push('<text class="waveNode" x="'+(XS+i*CELL+CELL/2+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
       }
-      // 徽标留在行图元组内，才能用 .laneGrp:hover 控制显隐
-      o.push(laneBadges.join(''));
       o.push('</g>');
     });
     o.push(edgeArcs(ir));

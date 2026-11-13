@@ -83,7 +83,6 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('emptyRow')) return {empty:1};
         if(g.classList&&g.classList.contains('rowTool')) return {tool:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
-        if(g.classList&&g.classList.contains('cellLabel')) return {label:1,lane:ln,tick:+g.getAttribute('data-tick')};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('colhead')) return {col:+g.getAttribute('data-c')};
@@ -425,7 +424,6 @@ export function attachInteractions(ctx){
       return;
     }
     if(c.ch!==undefined){ if(dbl>1) return; e.preventDefault(); writeChar(c.ch); return; }
-    if(c.label){ if(dbl>1) return; e.preventDefault(); openLabelEditor(c.lane,c.tick); return; }
     if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
     if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
     if(c.meta){ if(dbl>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }

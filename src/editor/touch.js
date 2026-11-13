@@ -71,6 +71,10 @@ export function attachTouchUI(ctx, dom) {
     add:    '<path d="M3.5 17.5h9"/><path d="M17 6.5v9M12.5 11h9"/>',
     spacer: '<path d="M4 8.5h16M4 15.5h16"/>',
     del:    '<path d="M3.5 17.5h9"/><path d="M15 8.5l6 6M21 8.5l-6 6"/>',
+    // 格级两项画成「这一格 + 格里的东西」：铅笔是标签文字，圆点是锚点字符。
+    // 与行级的 data / nodeStr（整行）刻意画得不同，免得两个图标看着一样却差一个量级。
+    label:  '<rect x="3.5" y="6" width="10" height="12" rx="1.5"/><path d="M16 15.5l1.5-1.5 3 3-1.5 1.5z"/><path d="M16 15.5l-1.2 3.2 3.2-1.2"/>',
+    node:   '<rect x="3.5" y="6" width="17" height="12" rx="1.5"/><circle cx="12" cy="12" r="2.4"/>',
     insert: '<path d="M8.5 5v14M15.5 5v14"/><path d="M12 9.5v5M9.5 12h5"/>',
     delCol: '<path d="M9 5v14"/><path d="M15.5 9l4.5 6M20 9l-4.5 6"/>',
     gap:    '<path d="M12 5v14" stroke-dasharray="2.5 2.5"/>',
@@ -79,6 +83,7 @@ export function attachTouchUI(ctx, dom) {
   var ICON_KEY = { delete: 'delCol' };
   var NAMES = {
     name: 'signal name', wave: 'row wave', data: 'row data', nodeStr: 'row node',
+    label: 'cell data label', node: 'cell node marker',
     phase: 'phase', period: 'period', up: 'move up', down: 'move down', add: 'add row',
     spacer: 'add spacer', del: 'delete row',
     insert: 'insert cycle', delete: 'delete cycle', gap: 'phase line', append: 'append cycle'
@@ -87,6 +92,7 @@ export function attachTouchUI(ctx, dom) {
   // 动作」与「图元里多一个按钮」各说各话。图标与英文名留在本文件（只有触摸端用得上）。
   var ROW_ACTS = Cap.ACTS.row;
   var COL_ACTS = Cap.ACTS.col;
+  var CELL_ACTS = Cap.ACTS.cell;
 
   function needCell() {
     if (state.selCell && state.ir) return state.selCell;
@@ -169,13 +175,22 @@ export function attachTouchUI(ctx, dom) {
     panel.textContent = '';
     markContext(false);
   }
-  // 上下文条内容跟着「最后选中的对象」走：选中格子时字符条在 SVG 里，这里让位。
+  // 上下文条内容跟着「最后选中的对象」走：格子 → 格级动作，列 → 列动作，行 → 行动作。
+  // 三级共用同一个容器与同一段渲染代码，差别只是喂进去的动作清单。
   function renderContext() {
     if (!panel) return;                           // 不跑编辑器的页面（如验收页）没有上下文条容器
-    if (state.linkMode || ctx.inlineCtx || state.selCell) { hideContext(); return; }
-    var kind = null, acts = null, key = null;
-    if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS; key = state.sel; }
-    else if (state.selLane) { kind = 'row'; acts = ROW_ACTS; key = state.selLane; }
+    if (state.linkMode || ctx.inlineCtx) { hideContext(); return; }
+    var kind = null, acts = null, key = null, laneOf = null;
+    if (state.selCell && state.ir) {
+      // 格级：改这一格的 data 标签 / 节点锚点字符。这两件事原先只有桌面的 ✎ 徽标能做
+      // （触摸端没有 hover，13×11 的命中区手指也点不中），是 CAP 里最后一处 swap。
+      // 现在四场景共用这一条通道，画布上不再画徽标。
+      kind = 'cell'; acts = CELL_ACTS;
+      key = state.selCell.lane + '@' + state.selCell.tick;
+      laneOf = state.selCell.lane;
+    }
+    else if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS; key = state.sel; }
+    else if (state.selLane) { kind = 'row'; acts = ROW_ACTS; key = state.selLane; laneOf = state.selLane; }
     if (!kind) { hideContext(); return; }
     // 同一对象不重绘（避免连点闪烁）—— 但必须确认面板**当前真的是开着的**：
     // 面板可能被 hideContext 清空过而 key 未变（清空路径不止一条），此时若只看 key
@@ -199,9 +214,9 @@ export function attachTouchUI(ctx, dom) {
     // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮。
     // 这次滚动是程序自己发起的，要记下目标位置 —— 否则紧随其后的 scroll 事件会被
     // 当成「用户想看更多」，把刚打开的面板立刻收掉（选中靠下的行时表现为面板一闪就没）。
-    if (kind === 'row' && ctx.revealLane && TOUCH) {
+    if (laneOf !== null && ctx.revealLane && TOUCH) {
       var top0 = ctx.wrap ? ctx.wrap.scrollTop : 0;
-      ctx.revealLane(state.selLane, panel.offsetHeight);
+      ctx.revealLane(laneOf, panel.offsetHeight);
       // 只有真的滚动了才记；横纵两个方向都要记 —— 用户随后横向滑动画布时 scrollTop 不变，
       // 只比 scrollTop 会把手势误判成「程序自己滚的」而放过，面板就再也收不起来了。
       selfScrollTop = ctx.wrap && ctx.wrap.scrollTop !== top0
@@ -252,6 +267,9 @@ export function attachTouchUI(ctx, dom) {
     if (dock) { dock.textContent = ''; dock.classList.remove('open'); }
     if (more) { more.textContent = ''; more.classList.remove('open'); }
     document.documentElement.classList.remove('more-open');
+    // 触摸端上下文条要按「字符条是否占着底部」决定站多高，这个标记给它用（见 styles.css）
+    document.documentElement.classList.remove('dock-open');
+    document.documentElement.style.removeProperty('--dock-h');
   }
 
   function chipButton(v) {
@@ -311,6 +329,10 @@ export function attachTouchUI(ctx, dom) {
     dock.appendChild(xb);
     dock.classList.add('open');
     dockOpen = true;
+    // 选中格时上下文条（格级两项）与字符停靠条会同时在底部：把停靠条的实测高度告诉 CSS，
+    // 面板据此抬到它上方。写死高度不行 —— 桌面那条 40px、触摸 56px（44 命中区 + 内边距）。
+    document.documentElement.classList.add('dock-open');
+    document.documentElement.style.setProperty('--dock-h', (dock.offsetHeight || 56) + 'px');
     bindLongName(dock);
     if (moreOpen && more) bindLongName(more);
   }

@@ -39,7 +39,10 @@ export var CAP = {
   // 触摸端从来就不画它（与原生滚动抢手势），桌面这次跟进，于是四场景一致 —— 同时
   // leftBound 不再为那 18px 预留，行名区可以再窄一点（XS 随之变化，整页黄金值重算）。
   rowDrag:    { deskEdit: OFF, deskView: OFF, touchEdit: OFF, touchView: OFF },
-  cellLabel:  { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
+  // 数据标签**不再画 ✎ 徽标**：徽标只有桌面能用（13×11 命中区手指点不中、且靠 hover 显形），
+  // 于是「改单格标签」变成桌面独有、触摸端没有对应物 —— 这正是 CAP 里最后一处 swap。
+  // 现在改标签走所有场景共用的上下文条（ACTS.cell），徽标连同命中分支一并删除；
+  // 桌面仍保留 `B` 快捷键，但那属于「叠加的快捷方式」，不进这张表。
   laneMeta:   { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   spacerMark: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   // 字符输入只剩一套实现：HTML 停靠条（`#chardock`）。桌面原来在 SVG 里画一条 23 颗的
@@ -93,5 +96,8 @@ export function isSwap(name, scene) {
 // 三处共用这一份清单，避免「面板里少一个动作」与「图元里多一个按钮」各说各话。
 export var ACTS = {
   row: ['name', 'wave', 'data', 'nodeStr', 'phase', 'period', 'up', 'down', 'add', 'spacer', 'del'],
-  col: ['insert', 'delete', 'gap', 'append']
+  col: ['insert', 'delete', 'gap', 'append'],
+  // 格级：作用对象是「某一个格子」而不是整行 / 整列。行级的 data / nodeStr 改的是整行
+  // 全部标签 / 整行锚点串；这两项才是「只改这一格」，原先只有桌面的徽标能触发。
+  cell: ['label', 'node']
 };

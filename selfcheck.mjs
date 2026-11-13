@@ -332,13 +332,22 @@ function check() {
   // 总口径：只读场景下，所有「编辑入口」能力都必须是 off —— 只读 = 编辑态渲染减去控件。
   // 任何一条漏关，这里就报；新增能力也会被这条兜住（表里不写就没有默认值）。
   {
-    const editEntries = ['hud','colhead','colAct','rowTool','rowDrag','cellLabel','laneMeta','spacerMark','dock','tbpanel','inlineEdit'];
+    const editEntries = ['hud','colhead','colAct','rowTool','rowDrag','laneMeta','spacerMark','dock','tbpanel','inlineEdit'];
     const leak = editEntries.filter((n) => Cap.can(n,'deskView') || Cap.can(n,'touchView'));
     ok(leak.length === 0, '只读卡片仍启用了编辑入口：' + leak.join(' / '));
     // 就地编辑四场景同语义（桌面双击 / 触摸双敲），长按是叠加而非替代 —— 不该出现 swap。
     ok(Cap.can('inlineEdit','deskEdit') && Cap.can('inlineEdit','touchEdit') &&
        !Cap.isSwap('inlineEdit','deskEdit') && !Cap.isSwap('inlineEdit','touchEdit'),
       '就地编辑在桌面 / 触摸应同为 on，且不是 swap');
+    // 格级动作（数据标签 / 节点锚点）是 ACTS 的第三组，四场景共用同一个上下文条。
+    // 原先它只有桌面能用（画布上的 ✎ 徽标），那是 CAP 里最后一处 swap —— 现在应彻底消失。
+    ok(Cap.ACTS.cell.length === 2 && Cap.ACTS.cell.indexOf('label') >= 0 &&
+       Cap.ACTS.cell.indexOf('node') >= 0,
+      '格级动作清单缺失（应为 label / node）');
+    const swaps = Object.keys(Cap.CAP).filter((n) =>
+      Cap.isSwap(n,'deskEdit') !== Cap.isSwap(n,'touchEdit'));
+    ok(swaps.length === 0, '桌面与触摸仍有能力差异（swap 标注不一致）：' + swaps.join(' / '));
+    ok(!Cap.CAP.cellLabel, 'cellLabel 徽标能力应已删除（改走 ACTS.cell）');
   }
   ok(/var roW=Math\.max\(ACT_X\+PAD, 360\)/.test(shapesSrc),
     '只读画布宽度仍为幽灵列预留一格（右侧会多一条空白）');

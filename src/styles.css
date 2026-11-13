@@ -55,13 +55,7 @@ svg{display:block;font-family:var(--sans)}
 .rowDrag{opacity:.3}
 .laneGrp:hover .rowDrag,.laneGrp.sel .rowDrag{opacity:.9}
 .dropLine{stroke:var(--accent);stroke-width:2;pointer-events:none}
-/* 数据标签徽标：只在悬停该行时淡显，单击就地编辑该数据块的 data 标签 */
-.cellLabel{cursor:pointer}
-.cellLabel .badge{opacity:0;pointer-events:none;transition:opacity .12s}
-.laneGrp:hover .cellLabel .badge{opacity:.72}
-.cellLabel:hover .badge{opacity:1}
-.cellLabel:hover .badge rect{fill:var(--accent-bg);stroke:var(--accent)}
-.cellLabel:hover .badge text{fill:var(--accent)}
+/* 数据标签的编辑入口是上下文条（ACTS.cell），画布上不再有 ✎ 徽标 */
 .connectPreview{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:4 3;pointer-events:none;opacity:.8}
 /* 就地编辑：输入框是 SVG 内的 foreignObject，跟着图元一起滚动 */
 /* 底部只保留上下文操作区：选中格 / 连线态才出现内容 */
@@ -136,7 +130,7 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .pane.src textarea{font-size:14px;line-height:1.9;padding-left:52px}
 .is-touch .svgwrap{touch-action:manipulation;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* hover 才显现的细小控件在触摸端全部撤下，改由操作栏承担 */
-.is-touch .rowCtl,.is-touch .rowHint,.is-touch .rowDrag,.is-touch .colAct,.is-touch .cellLabel{display:none}
+.is-touch .rowCtl,.is-touch .rowHint,.is-touch .rowDrag,.is-touch .colAct{display:none}
 .is-touch .cellSel{stroke-width:2.4}
 /* 屏幕级操作栏：6 个按钮均分可用宽度，最小仍是 44px 命中区；320px 也无需横向滚动。
    宽屏用 max-width 收住按钮宽度并整组居中，不把操作栏拉成一条长带。
@@ -162,9 +156,19 @@ svg{display:block;font-family:var(--sans)}
 .tbpanel button.ctxbtn svg{width:17px;height:17px;fill:none;stroke:currentColor}
 .tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel{display:none;position:fixed;left:0;right:0;bottom:60px;z-index:20;
+  /* 桌面那条规则是「钉在右侧」的三件套：top:50% + width:196px + transform:translateY(-50%)。
+     触摸端改钉底部，这三项必须显式复位，否则三条一起出问题：
+       · top:50% 与 bottom 同时存在 → 高度被两端拉开（844 高时面板高 318px，盖住半屏）
+       · width:196px 与 left/right:0 冲突 → 只占左边 196px，两个 44px 图标就换行
+       · transform 再把整块上移自身高度的一半 → 视觉位置与 bottom 对不上 */
+  top:auto;width:auto;transform:none;
   flex-wrap:wrap;gap:8px;padding:10px;max-height:46dvh;overflow:auto;
   background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.14)}
 .is-touch .tbpanel.open{display:flex}
+/* 选中格子时底部同时有两条：格级动作条（label / node）与字符停靠条。
+   两者都是「选中格」派生的，压在同一位置会互相盖住 —— 面板抬到字符条上方 4px。
+   停靠条高度由 JS 实测后写进 --dock-h（桌面 40 / 触摸 56），不写死。 */
+html.is-touch.dock-open .tbpanel.open{bottom:calc(60px + var(--dock-h,56px) + 4px)}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:13px var(--sans);touch-action:manipulation}
@@ -293,9 +297,9 @@ svg{display:block;font-family:var(--sans)}
 .is-embed .svgwrap svg{margin-inline:auto}
 /* 只读态：画布只承担查看，光标不暗示可编辑 */
 .is-embed.is-readonly .svgwrap{cursor:default}
-/* 只读态不出现任何编辑控件：行工具 / 列操作 / 拖拽把手 / 数据标签徽标 */
+/* 只读态不出现任何编辑控件：行工具 / 列操作 / 拖拽把手 */
 .is-embed.is-readonly .rowCtl,.is-embed.is-readonly .rowHint,.is-embed.is-readonly .rowDrag,
-.is-embed.is-readonly .colAct,.is-embed.is-readonly .cellLabel{display:none}
+.is-embed.is-readonly .colAct{display:none}
 .is-embed.is-readonly .svgwrap:focus-visible{outline:none}
 /* 退出 / 进入编辑的图标按钮：钉在卡片**右上角**，压在波形图的一个角上。
    为什么不是左上：只读态不再画列号行，第一行行名紧贴顶部，左上角放按钮会正好压住它；
