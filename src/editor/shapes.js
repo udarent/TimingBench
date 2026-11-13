@@ -42,18 +42,21 @@ export function createShapes(ctx){
 
 
 
-  // 列头 + / − / |：悬停才显现；第 N 个「幽灵列头」只承担末尾追加周期
+  // 列头 + / − / |：悬停才显现；第 N 个「幽灵列头」只承担末尾追加周期。
+  // 竖直位置压在 COL_Y+16 … COL_Y+30 这一条：上边留给列号，下边正好抵到 TOP，
+  // 不与第一行 laneRow 重叠 —— 否则按钮下沿会被行矩形盖住、点上去命中的是行。
   function colBtn(c,cx,k,act,txt,title,on){
     if(T||state.readonly) return '';   // 触摸端移到上下文图标条；只读态不提供列操作
     var x=cx-18+k*12.5, w=11;
     return '<g class="colActBtn" data-cact="'+act+'" data-c="'+c+'" role="button" aria-label="'+esc(title)+'">'+
-      '<rect x="'+x+'" y="'+(COL_Y+22)+'" width="'+w+'" height="18" rx="3" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line2)')+'" stroke-width="0.6"/>'+
-      '<text x="'+(x+w/2)+'" y="'+(COL_Y+31)+'" text-anchor="middle" dominant-baseline="central" font-size="10" fill="'+(on?'var(--accent)':'var(--muted)')+'">'+esc(txt)+'</text></g>';
+      '<rect x="'+x+'" y="'+(COL_Y+16)+'" width="'+w+'" height="14" rx="3" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line2)')+'" stroke-width="0.6"/>'+
+      '<text x="'+(x+w/2)+'" y="'+(COL_Y+23)+'" text-anchor="middle" dominant-baseline="central" font-size="9" fill="'+(on?'var(--accent)':'var(--muted)')+'">'+esc(txt)+'</text></g>';
   }
 
   // 行工具：只保留互不重复的修改；行重排已统一交给行首拖拽把手
+  // 只读卡片上整组撤掉：它们是编辑入口，点上去也只会被「点一下进编辑」拦下来。
   function rowTools(l,y,ACT_X){
-    if(T) return '';   // 触摸端行工具移到选中行后出现的上下文图标条
+    if(T||state.readonly) return '';   // 触摸端行工具移到选中行后出现的上下文图标条
     var o=[], x=ACT_X+4, isSp=l.kind==='spacer';
     function add(act,txt,w,title){
       o.push('<g class="rowTool" data-act="'+act+'" data-lane="'+l.id+'" role="button" aria-label="'+esc(title)+'" style="cursor:pointer">'+
@@ -74,8 +77,9 @@ export function createShapes(ctx){
   }
 
   // 行首拖拽把手：行位置调整的唯一交互
+  // 只读卡片不画：没有拖拽这回事，画出来只是个不能用的点心。
   function dragHandle(l,y){
-    if(T) return '';   // 触摸端改用「↑ 上移 / ↓ 下移」，不与原生滚动抢手势
+    if(T||state.readonly) return '';   // 触摸端改用「↑ 上移 / ↓ 下移」，不与原生滚动抢手势
     return '<g class="rowDrag" data-drag="'+l.id+'" role="button" aria-label="Drag to reorder this row">'+
       '<rect x="'+(PAD+2)+'" y="'+(y+8)+'" width="16" height="32" rx="3" fill="transparent"/>'+
       '<text x="'+(PAD+10)+'" y="'+(y+24)+'" text-anchor="middle" dominant-baseline="central" font-size="13" fill="var(--muted)" pointer-events="none">⠿</text></g>';
@@ -321,7 +325,7 @@ export function createShapes(ctx){
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
           ' x="'+(x0+1)+'" y="'+(y+3)+'" width="'+(CELL-2)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
-        if(s&&s.point&&!s.gap&&Core.BUS.test(s.w)) laneBadges.push(cellLabelHit(l,i,x0,y,s.label));
+        if(!state.readonly&&s&&s.point&&!s.gap&&Core.BUS.test(s.w)) laneBadges.push(cellLabelHit(l,i,x0,y,s.label));
       }
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
       o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(N*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');

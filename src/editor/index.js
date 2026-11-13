@@ -230,7 +230,15 @@ export function createEditor(dom){
   ctx.redraw=function(){ paint(); if(ctx.afterRedraw) ctx.afterRedraw(); };
 
   ctx.wrap.tabIndex=0;
-  ctx.wrap.addEventListener('focus',function(){ if(!state.linkMode&&!state.readonly) ensureSelCell(); });
+  // 焦点进画布时补一个可操作格子（纯键盘用户 Tab 进来就能直接打字）。
+  // 但只有在「什么都没选」时才补：触摸端点完列头 / 行名，浏览器还会补发一次原生 focus，
+  // 若无条件补选，会把刚弹出来的列 / 行上下文条用「第一个格子」顶掉（表现为面板一闪就没）。
+  ctx.wrap.addEventListener('focus',function(){
+    if(state.linkMode||state.readonly) return;
+    var hasSel=state.selCell||state.selLane||(state.sel!==null&&state.sel!==undefined);
+    if(hasSel) return;
+    ensureSelCell();
+  });
   // 卡片口径：波形层可横向滚动 / 双指缩放，操作层（HUD、字符条）钉在可视区。
   // 滚动只改这两个 <g> 的位移，不重绘；旋屏 / 窗口缩放才需要重排（字符条按可视宽度换行）。
   var rzTimer=null;

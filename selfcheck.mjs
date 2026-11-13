@@ -361,9 +361,15 @@ function check() {
   // Esc 逐层：内层消费后外层不得接管
   ok(/if \(e\.defaultPrevented\) return;/.test(read('src/editor/embed-shell.js')),
     '嵌入壳未尊重内层已消费的 Esc（一次 Esc 会跨层退出）');
-  // 滚动画布＝看更多：动作菜单让位
-  ok(/addEventListener\('scroll', function \(\) \{ hideContext\(\); \}/.test(touchSrc),
+  // 滚动画布＝看更多：动作菜单让位。
+  // 但 revealLane（把选中行滚到面板上方）自己也会触发 scroll，必须豁免那一次，
+  // 否则「选中靠下的行 → 面板刚出现就被自己关掉」。
+  ok(/addEventListener\('scroll'/.test(touchSrc) && /hideContext\(\)/.test(touchSrc) &&
+     /selfScrollTop/.test(touchSrc),
     '滚动画布时未收起上下文条（矮卡片里会一直挡着波形）');
+  ok(/Math\.abs\(ctx\.wrap\.scrollLeft - selfScrollTop\.left\)/.test(touchSrc) &&
+     /Math\.abs\(ctx\.wrap\.scrollTop - selfScrollTop\.top\)/.test(touchSrc),
+    '程序滚动豁免只比了纵向位置（用户横向滑动画布时面板收不起来）');
 
   // 纯 iframe 形态：内容靠 URL 片段带走，两种宿主共用一个编辑器页面
   const shellSrc = read('src/editor/embed-shell.js');

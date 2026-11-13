@@ -144,7 +144,8 @@ export function attachTouchUI(ctx, dom) {
   }
 
   var ctxKind = null, ctxKey = null;
-  // 嵌入卡片里 #tbpanel 是唯一能改行 / 列的地方（触摸端不画行工具与拖拽把手），
+  // 程序化滚动（revealLane）刚设过的目标位置；scroll 事件里据此区分「自己滚的」与「用户滚的」。
+  var selfScrollTop = null;  // 嵌入卡片里 #tbpanel 是唯一能改行 / 列的地方（触摸端不画行工具与拖拽把手），
   // 所以它和右下角那个铅笔 / 对勾按钮会抢同一块地方：把面板实测高度写进 --ctx-h，
   // CSS 据此把退出按钮抬到面板上方，谁也不压谁。
   function markContext(open) {
@@ -183,8 +184,17 @@ export function attachTouchUI(ctx, dom) {
     panel.classList.add('open');
     bindLongName(panel);
     markContext(true);
-    // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮
-    if (kind === 'row' && ctx.revealLane) ctx.revealLane(state.selLane, panel.offsetHeight);
+    // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮。
+    // 这次滚动是程序自己发起的，要记下目标位置 —— 否则紧随其后的 scroll 事件会被
+    // 当成「用户想看更多」，把刚打开的面板立刻收掉（选中靠下的行时表现为面板一闪就没）。
+    if (kind === 'row' && ctx.revealLane) {
+      var top0 = ctx.wrap ? ctx.wrap.scrollTop : 0;
+      ctx.revealLane(state.selLane, panel.offsetHeight);
+      // 只有真的滚动了才记；横纵两个方向都要记 —— 用户随后横向滑动画布时 scrollTop 不变，
+      // 只比 scrollTop 会把手势误判成「程序自己滚的」而放过，面板就再也收不起来了。
+      selfScrollTop = ctx.wrap && ctx.wrap.scrollTop !== top0
+        ? { left: ctx.wrap.scrollLeft, top: ctx.wrap.scrollTop } : null;
+    }
   }
   panel.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
@@ -313,7 +323,16 @@ export function attachTouchUI(ctx, dom) {
   // 滚动＝「我要看更多」：动作菜单（选中行 / 列后升起的那 117px 面板）自动让位。
   // 只收面板，不动选中格与字符停靠条 —— 它们不遮挡画布中部，且是高频输入控件。
   // 面板下次会在重绘时按当前选中重新出现（ctxKey 已清，不会因为「同一对象」被跳过）。
-  if (ctx.wrap) ctx.wrap.addEventListener('scroll', function () { hideContext(); }, { passive: true });
+  // 同步 compare 程序滚动：位置对得上就是 revealLane 自己刚滚的那一下，不能当用户滚动处理。
+  if (ctx.wrap) ctx.wrap.addEventListener('scroll', function () {
+    if (selfScrollTop && Math.abs(ctx.wrap.scrollLeft - selfScrollTop.left) < 2 &&
+        Math.abs(ctx.wrap.scrollTop - selfScrollTop.top) < 2) {
+      selfScrollTop = null;
+      return;
+    }
+    selfScrollTop = null;
+    hideContext();
+  }, { passive: true });
 
   ctx.closePanel = hideContext;
   ctx.hideToast = function () { if (toast) { clearTimeout(toastTimer); toast.classList.remove('show'); } };
