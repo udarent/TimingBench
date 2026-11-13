@@ -127,6 +127,27 @@ export function createEditor(dom){
   // ---- 键盘可达：焦点 / 初始选中 / 选中夹取 ---------------------------------
   // 页面常驻文字为零，键盘用户靠 Tab / F6 进入画布；一旦画布获得焦点且尚无选中格，
   // 自动落在第一条信号行的 t0，之后所有编辑都能纯键盘完成。
+  // ---- 分屏方向：左右 / 上下，由 HUD 的按钮切换并记住 ---------------------
+  // 没有显式选择时跟随宽度（CSS 媒体查询决定），一旦点过按钮就写死并持久化 ——
+  // 用户的选择比「窗口多宽」更能代表意图。
+  function currentLayout(){
+    if(state.layout) return state.layout;
+    if(!dom.app) return 'rows';
+    var g=getComputedStyle(dom.app).gridTemplateColumns.split(/s+/).filter(Boolean);
+    return g.length>=2?'cols':'rows';
+  }
+  function applyLayout(){
+    if(!dom.app) return;
+    if(state.layout) dom.app.setAttribute('data-layout',state.layout);
+    else dom.app.removeAttribute('data-layout');
+  }
+  function toggleLayout(){
+    state.layout = currentLayout()==='cols'?'rows':'cols';
+    try{ localStorage.setItem('tb-layout',state.layout); }catch(e){ /* 隐私模式等忽略 */ }
+    applyLayout(); ctx.redraw();
+  }
+  ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout;
+
   function setView(v){
     if(dom.app) dom.app.setAttribute('data-view',v);
     if(dom.tabbar){
@@ -180,6 +201,7 @@ export function createEditor(dom){
   function doCmd(act){
     if(act==='link'){ setLinkMode(!state.linkMode); return; }
     if(act==='embed'){ if(ctx.openEmbedCode) ctx.openEmbedCode(); return; }
+    if(act==='layout'){ toggleLayout(); return; }
     if(act!=='undo'&&act!=='redo') return;
     var stack=act==='undo'?state.undo:state.redo, back=act==='undo'?state.redo:state.undo;
     if(!stack.length) return;
@@ -221,6 +243,8 @@ export function createEditor(dom){
   ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
   ctx.focusPane=focusPane; ctx.setView=setView; ctx.ensureSelCell=ensureSelCell; ctx.clampSel=clampSel;
 
+  try{ var saved=localStorage.getItem('tb-layout'); if(saved==='rows'||saved==='cols') state.layout=saved; }catch(e){}
+  applyLayout();
   createShapes(ctx);
   attachInteractions(ctx);
   attachTouchUI(ctx, dom);

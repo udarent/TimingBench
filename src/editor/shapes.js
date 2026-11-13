@@ -71,6 +71,7 @@ export function createShapes(ctx){
     undo:{txt:'↶',title:'Undo (Ctrl+Z)'},
     redo:{txt:'↷',title:'Redo (Ctrl+Y)'},
     link:{txt:'◇'},
+    layout:{txt:'⇄'},
     embed:{txt:'<>',title:'Embed code: a snippet you can paste into your page'}
   };
   function hudSVG(viewW){
@@ -86,6 +87,9 @@ export function createShapes(ctx){
       var m=HUD_META[c];
       if(c==='link'){
         cmd('link',m.txt,state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
+      }else if(c==='layout'){
+        var cols=ctx.currentLayout&&ctx.currentLayout()==='cols';
+        cmd('layout',cols?'⇄':'⇅',cols?'Side by side — switch to stacked (code on top)':'Stacked — switch to side by side (code on left)',false,false);
       }else if(c==='embed'){
         cmd('embed',m.txt,m.title,false,false);
       }else{

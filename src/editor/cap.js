@@ -63,12 +63,18 @@ export var CAP = {
 //   · 嵌入代码（<>）：只在「触摸卡片」里去掉。卡片本身只有三四百像素宽，四个图标
 //     就是 190px 的浮层；而「把这张卡片再嵌一次」在那里确实没有意义。桌面卡片保留
 //     —— 边画边取片段是常见用法（工作台离得远时）。
-var HUD_ITEMS = ['undo', 'redo', 'link', 'embed'];
+var HUD_ITEMS = ['undo', 'redo', 'link', 'layout', 'embed'];
 
 export function hudCmds(scene, inCard) {
   if (!can('hud', scene)) return [];
-  var dropEmbed = inCard && scene.indexOf('touch') === 0;
-  return HUD_ITEMS.filter(function (c) { return !(c === 'embed' && dropEmbed); });
+  // 嵌入卡片只显示画布一个 pane，「分屏方向」永远没有意义 → 一律去掉。
+  // 「把这张卡片再嵌一次」只在触摸卡片里没意义（三四百像素宽），桌面卡片保留。
+  var touchCard = inCard && scene.indexOf('touch') === 0;
+  return HUD_ITEMS.filter(function (c) {
+    if (c === 'layout') return !inCard;
+    if (c === 'embed') return !touchCard;
+    return true;
+  });
 }
 
 export function can(name, scene) {

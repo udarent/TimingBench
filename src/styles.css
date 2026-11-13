@@ -4,8 +4,12 @@
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);overflow:hidden}
-/* 参考 WaveDrom Editor 默认版式（rot=0 / per=3）：源码上、波形下，各 50%、通栏，中间一条水平分隔线 */
+/* 分屏：左右（左代码 / 右时序图）为默认；HUD 的 ⇄ / ⇅ 按钮可切成上下，选择会记住。
+   没有显式选择时按宽度自适应（窄窗口退回上下，见下面的媒体查询）。 */
 .app{display:grid;grid-template-columns:minmax(320px,34%) minmax(0,1fr);height:100vh;height:100dvh}
+.app[data-layout="rows"]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
+.app[data-layout="rows"] .pane.src{border-right:0;border-bottom:1px solid var(--line)}
+.app[data-layout="cols"]{grid-template-columns:minmax(320px,34%) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 .pane{position:relative;min-width:0;min-height:0;overflow:hidden}
 .pane.src{background:var(--src-bg);border-right:1px solid var(--line)}
 /* 桌面宽屏 = 左代码 / 右时序图（2026-11-13）。窄窗口（鼠标但没横向空间）回退成上下分区，
@@ -115,7 +119,7 @@ svg{display:block;font-family:var(--sans)}
    --------------------------------------------------------------------------- */
 .tabbar,.touchbar,.tbpanel,.toast{display:none}
 .is-touch body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
-.is-touch .tabbar{display:flex;flex:0 0 48px;align-items:stretch;gap:6px;padding:5px 8px;
+.is-touch .tabbar{display:none;flex:0 0 48px;align-items:stretch;gap:6px;padding:5px 8px;
   background:var(--panel);border-bottom:1px solid var(--line);user-select:none}
 .is-touch .tabbar button{min-width:52px;width:52px;padding:0;border:1px solid var(--line);border-radius:10px;
   background:var(--src-bg);color:var(--muted);touch-action:manipulation;
@@ -124,10 +128,9 @@ svg{display:block;font-family:var(--sans)}
   stroke-linecap:round;stroke-linejoin:round}
 .is-touch .tabbar button[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:600}
 .is-touch .tabbar .tb-title{margin-left:auto;align-self:center;font-size:12px;color:var(--muted)}
-.is-touch .app{flex:1 1 auto;height:auto;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
-.is-touch .pane{grid-row:1;grid-column:1}
-.is-touch .app[data-view="src"] .pane.diagram{display:none}
-.is-touch .app[data-view="diagram"] .pane.src{display:none}
+.is-touch .app{flex:1 1 auto;height:auto;min-height:0}
+/* 触摸端不再分「源码页 / 时序图页」两页：两区同屏，方向同 HUD 的切换按钮 */
+
 .is-touch .pane.src{border-right:0;border-bottom:0}
 .is-touch .gutter{font-size:13px;line-height:1.9}
 .is-touch .pane.src textarea{font-size:14px;line-height:1.9;padding-left:52px}
