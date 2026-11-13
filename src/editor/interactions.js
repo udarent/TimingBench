@@ -436,23 +436,27 @@ export function attachInteractions(ctx){
       if(TOUCH){ state.selCell=null; state.selLane=null; }
       ctx.redraw(); ctx.status(); return;
     }
-    if(c.edgeIdx!==undefined){
-      if(dbl>1){ e.preventDefault(); openEditorFor(c); return; }
-      e.preventDefault(); state.selLane=null; ctx.redraw(); return;
-    }
-    if(dbl>1){
-        e.preventDefault();
-      if(!editable(c)) return;
-      openEditorFor(c);
-      return;
-    }
     if(c.nameLane||c.rowLane){
       state.selLane=c.nameLane||c.rowLane;
       // 行选中与格 / 列选中互斥 —— 四场景一致。桌面现在也靠上下文条改行列（行工具与
       // 列头按钮已撤），若不清掉 selCell，renderContext 会因「有格子选中」而把面板收起来，
       // 表现为「点了行但右侧面板不出现」。
       state.selCell=null; state.sel=null;
+      // 双击 / 双敲才进就地编辑；单击只选中行（否则面板会被 inlineCtx 抑制掉）
+      if(dbl>1){ e.preventDefault(); if(editable(c)) openEditorFor(c); return; }
       ctx.redraw(); return;
+    }
+
+    // 其余目标（格子、行内空白）双击 / 双敲 → 就地编辑
+    if(dbl>1){
+      e.preventDefault();
+      if(!editable(c)) return;
+      openEditorFor(c);
+      return;
+    }
+    if(c.edgeIdx!==undefined){
+      if(dbl>1){ e.preventDefault(); openEditorFor(c); return; }
+      e.preventDefault(); state.selLane=null; ctx.redraw(); return;
     }
     // 单击格子只选中，不写入；写入统一由 writeChar（键盘 / 字符条）完成
     e.preventDefault();
