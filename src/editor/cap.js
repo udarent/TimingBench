@@ -35,7 +35,10 @@ export var CAP = {
   // 命中率本来就差，收进面板后还能顺带把 ACT_W 的用途说清楚。
   colAct:     { deskEdit: OFF, deskView: OFF, touchEdit: SW,  touchView: OFF },
   rowTool:    { deskEdit: OFF, deskView: OFF, touchEdit: SW,  touchView: OFF },
-  rowDrag:    { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
+  // 行首拖拽把手撤掉：行重排统一为「选中行 → ↑ / ↓」（键盘 Ctrl+↑↓ 同理）。
+  // 触摸端从来就不画它（与原生滚动抢手势），桌面这次跟进，于是四场景一致 —— 同时
+  // leftBound 不再为那 18px 预留，行名区可以再窄一点（XS 随之变化，整页黄金值重算）。
+  rowDrag:    { deskEdit: OFF, deskView: OFF, touchEdit: OFF, touchView: OFF },
   cellLabel:  { deskEdit: ON, deskView: OFF, touchEdit: SW,  touchView: OFF },
   laneMeta:   { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   spacerMark: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
