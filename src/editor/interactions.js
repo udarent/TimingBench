@@ -448,8 +448,10 @@ export function attachInteractions(ctx){
     }
     if(c.nameLane||c.rowLane){
       state.selLane=c.nameLane||c.rowLane;
-      // 触摸端：选中行就让出格子选中与列选中，底部上下文条换成行动作
-      if(TOUCH){ state.selCell=null; state.sel=null; }
+      // 行选中与格 / 列选中互斥 —— 四场景一致。桌面现在也靠上下文条改行列（行工具与
+      // 列头按钮已撤），若不清掉 selCell，renderContext 会因「有格子选中」而把面板收起来，
+      // 表现为「点了行但右侧面板不出现」。
+      state.selCell=null; state.sel=null;
       ctx.redraw(); return;
     }
     // 单击格子只选中，不写入；写入统一由 writeChar（键盘 / 字符条）完成
