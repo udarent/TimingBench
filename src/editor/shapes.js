@@ -187,8 +187,8 @@ export function createShapes(ctx){
     // 底部与右侧也只留一点呼吸空间 —— 波形图本身尽量贴满卡片。
     var roTrimTop=Math.max(0, COL_Y-8);      // 裁到列号行上方 8px
     var roTrimBottom=12;                     // 最后一行下沿到卡片底
-    // 右侧必须容下最后一个列号（幽灵列的 rect 从 ACT_X+1 起、宽 CELL-2），只留一个 PAD 会把它裁掉
-    var roW=Math.max(ACT_X+CELL+PAD, 360);
+    // 只读态不画末尾的追加列，所以右侧只需容下最后一个真实格子的右边缘（= ACT_X - 1）。
+    var roW=Math.max(ACT_X+PAD, 360);
     var roBottomY=(function(){
       return ir.lanes.length===0 ? TOP+ROW_H : TOP+ir.lanes.length*ROW_H;
     })();
@@ -244,6 +244,9 @@ export function createShapes(ctx){
     // 而幽灵列头的 + 会正好压在占位行上。
     for(c=0;c<=N&&!isEmpty;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
+      // 只读卡片不能追加周期、那一列也没有任何波形内容 —— 留着只会是一个空编号框，
+      // 悬停还能看见一个「点不动的 +」。直接不画，画布右侧同时也少占一格宽度。
+      if(ghost&&state.readonly) continue;
       var gapc=ghost?false:ir.lanes.some(function(l){ return l.kind==='signal'&&l.slots[c]&&l.slots[c].gap; });
       o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'" role="img" aria-label="Column '+c+(ghost?' — append a cycle':'')+'">');
       // 整列列头透明命中区：让悬停 / 点击落在列头上，而不是落到背景矩形
