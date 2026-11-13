@@ -329,6 +329,22 @@ function check() {
   ok(/function bindLongName/.test(touchSrc) && /data-name/.test(touchSrc),
     '触摸端缺少「长按出名称」');
 
+  // 手势分层（见 interaction-design.md）：触摸端「按下只是候选，抬手才确认」。
+  // 这条模型一破，滑动看图就会顺手选中格子 / 弹面板 —— 也就是作者反馈的「移动与编辑冲突」。
+  const gestureSrc = read('src/editor/interactions.js');
+  ok(/function confirmTap\(/.test(gestureSrc) && /press=\{x:/.test(gestureSrc),
+    '触摸端缺少 tap 确认模型（按下只记候选，抬手才执行）');
+  ok(/if\(press&&\(Math\.abs\(\(e\.clientX\|\|0\)-press\.x\)>12/.test(gestureSrc),
+    '触摸端滑动超过 12px 未作废候选 tap');
+  ok(/if\(!x&&!y\)\{ x=p\.x; y=p\.y; \}/.test(gestureSrc),
+    '抬手事件缺坐标时未回退到按下坐标（会把正常点按误判为滑动）');
+  // Esc 逐层：内层消费后外层不得接管
+  ok(/if \(e\.defaultPrevented\) return;/.test(read('src/editor/embed-shell.js')),
+    '嵌入壳未尊重内层已消费的 Esc（一次 Esc 会跨层退出）');
+  // 滚动画布＝看更多：动作菜单让位
+  ok(/addEventListener\('scroll', function \(\) \{ hideContext\(\); \}/.test(touchSrc),
+    '滚动画布时未收起上下文条（矮卡片里会一直挡着波形）');
+
   // 纯 iframe 形态：内容靠 URL 片段带走，两种宿主共用一个编辑器页面
   const shellSrc = read('src/editor/embed-shell.js');
   ok(/iframeSnippet/.test(shareSrc) && /#wj=/.test(shareSrc),

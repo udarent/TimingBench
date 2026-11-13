@@ -217,7 +217,19 @@ export function attachTouchUI(ctx, dom) {
   // 改成停在卡片底部的 HTML 条：固定高度、不随画布滚动、命中区 44px 起。
   // 第一排只放最常用的几个 + 「⋯」，其余 23 个进一个可收起的面板，避免横向滑好几屏。
   var QUICK = ['0', '1', 'x', 'z'];
-  var dockKey = null, moreOpen = false;
+  var dockKey = null, moreOpen = false, dockOpen = false;
+
+  // 收起停靠条。写成幂等函数而不是「判 dockKey 有没有值」——
+  // closeCharDock 会主动把 dockKey 置 null，用 dockKey 当开关会让清理条件失效，
+  // 表现为「Esc 清掉了选中，底部字符条还挂着 6 个按钮」。
+  function hideDock() {
+    dockKey = null; moreOpen = false;
+    if (!dockOpen) return;
+    dockOpen = false;
+    if (dock) { dock.textContent = ''; dock.classList.remove('open'); }
+    if (more) { more.textContent = ''; more.classList.remove('open'); }
+    document.documentElement.classList.remove('more-open');
+  }
 
   function chipButton(v) {
     return '<svg viewBox="0 0 ' + G.CHIP_W + ' ' + G.CHIP_H + '" aria-hidden="true">' + chipGlyph(v) + '</svg>' +
@@ -237,12 +249,7 @@ export function attachTouchUI(ctx, dom) {
   function renderDock() {
     if (!dock) return;
     var visible = !state.readonly && !state.linkMode && !!state.selCell && !ctx.inlineCtx;
-    if (!visible) {
-      if (dockKey !== null) { dockKey = null; dock.textContent = ''; dock.classList.remove('open'); }
-      if (more) { more.classList.remove('open'); more.textContent = ''; }
-      moreOpen = false;
-      return;
-    }
+    if (!visible) { hideDock(); return; }
     var key = state.selCell.lane + '@' + state.selCell.tick + '|' + state.ch + '|' + moreOpen;
     if (key === dockKey) return;                 // 同一状态不重建，避免点一下闪一下
     dockKey = key;
@@ -278,6 +285,7 @@ export function attachTouchUI(ctx, dom) {
     xb.innerHTML = '<span>✕</span>';
     dock.appendChild(xb);
     dock.classList.add('open');
+    dockOpen = true;
     bindLongName(dock);
     if (moreOpen && more) bindLongName(more);
   }
@@ -291,7 +299,7 @@ export function attachTouchUI(ctx, dom) {
   }
   if (dock) dock.addEventListener('click', onDockClick);
   if (more) more.addEventListener('click', onDockClick);
-  ctx.closeCharDock = function () { moreOpen = false; dockKey = null; renderDock(); };
+  ctx.closeCharDock = hideDock;
 
   ctx.afterRedraw = function () {
     var u = bar.querySelector('[data-tb="undo"]'), r = bar.querySelector('[data-tb="redo"]');
@@ -302,6 +310,11 @@ export function attachTouchUI(ctx, dom) {
     renderContext();
     renderDock();
   };
+  // 滚动＝「我要看更多」：动作菜单（选中行 / 列后升起的那 117px 面板）自动让位。
+  // 只收面板，不动选中格与字符停靠条 —— 它们不遮挡画布中部，且是高频输入控件。
+  // 面板下次会在重绘时按当前选中重新出现（ctxKey 已清，不会因为「同一对象」被跳过）。
+  if (ctx.wrap) ctx.wrap.addEventListener('scroll', function () { hideContext(); }, { passive: true });
+
   ctx.closePanel = hideContext;
   ctx.hideToast = function () { if (toast) { clearTimeout(toastTimer); toast.classList.remove('show'); } };
 

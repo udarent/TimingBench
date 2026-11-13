@@ -106,6 +106,8 @@ export function attachEmbed(ctx, opts) {
   // Esc 退出编辑（就地输入 / 连线模式优先自己处理，已在 interactions 里拦截）
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
+    // 内层（就地编辑框 / 清选中）已经消费过这次 Esc 就不再接管 —— 层级见 interactions.js
+    if (e.defaultPrevented) return;
     if (state.readonly) return;
     if (ctx.inlineCtx || state.linkMode) return;   // 让内层先消费
     if (ctx.closePanel) ctx.closePanel();

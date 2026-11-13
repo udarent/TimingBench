@@ -54,7 +54,7 @@ export function attachInteractions(ctx){
     ctx.inlineCtx={apply:apply,input:inp,fo:fo};
     inp.addEventListener('keydown',function(e){
       if(e.key==='Enter'){ e.preventDefault(); closeInline(true,true); }
-      else if(e.key==='Escape'){ e.preventDefault(); closeInline(false,true); }
+      else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeInline(false,true); }
     });
     inp.addEventListener('blur',function(){ closeInline(true); });
     try{ inp.focus(); inp.select(); }catch(e){}
@@ -300,7 +300,6 @@ export function attachInteractions(ctx){
   // 触摸端不调 preventDefault，原生滚动与双指缩放照常可用；双击由「同目标 330ms
   // 内两次点按」识别，长按 480ms 是就地编辑的备用入口。
   var lastTap=null, longPress=null, longTimer=null, ignoreMouseUntil=0;
-  var pendingTap=null;   // 只读态下按下但还没确认的那一下（触摸端）
 
   function hitKey(c){
     if(!c) return '';
@@ -335,29 +334,46 @@ export function attachInteractions(ctx){
       var p=longPress; longPress=null;
       if(!p) return;
       lastTap=null;
+      press=null;          // 长按已经消费了这次按压，抬手时不再当成 tap 重复执行
       openEditorFor(p.c);
     },480);
   }
 
+  // ---- 触摸输入状态机 ---------------------------------------------------
+  // 手指按下 ≠ 点了。触摸端把「按下」只当候选：抬手时位移 ≤12px、时长 ≤500ms
+  // 才确认是一次 tap，确认之后才改选中 / 执行命令 / 进编辑。画布上滑动（看别的列、
+  // 看下面的行）因此永远不会顺手选中格子或弹面板 —— 「移动」与「编辑」不再靠猜。
+  // 桌面（鼠标）仍是按下即分派：那里有拖拽漫刷与行重排，需要 mousedown 就建状态。
+  var press=null;
+
   function handleDown(e,isTouch){
     if(e.button!==undefined&&e.button!==0) return;
-    // 只读态：点一下波形进入编辑，并顺手选中被点的格子（字符条随即出现）；
-    // 本次点击不产生任何编辑 —— 避免在宿主页面里误改图。
-    // 触摸端不在这里切模式：手指一按就进编辑的话，「想滑动看看」会被当成编辑，
-    // 而且模式一切、缩放就从「整图缩进卡片」跳成 1:1，手指底下的内容会换掉。
-    // 所以触摸端先记下来，等 pointerup 确认位移够小、时间够短（真的是一次 tap）再切。
+    // 就地输入框也在 SVG 里，点它自己不能触发结算
+    if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
+
+    if(isTouch){
+      // 只记候选，什么都不改：滑动（pan）与点按（tap）在抬手时才分得清
+      press={x:e.clientX||0, y:e.clientY||0, c:cellAt(e), t:Date.now()};
+      if(!state.readonly) startLong(press.c, press.x, press.y);   // 长按＝就地编辑的第二入口
+      return;
+    }
+
+    // 桌面只读态：点一下进编辑并顺手选中被点的格子，本次点击不产生任何编辑
     if(state.readonly){
       e.preventDefault&&e.preventDefault();
       var rc=cellAt(e);
       var hit=rc&&rc.lane!==undefined&&rc.tick!==undefined&&!rc.cmd?{lane:rc.lane,tick:rc.tick}:null;
-      if(isTouch){ pendingTap={x:e.clientX||0,y:e.clientY||0,cell:hit,t:Date.now()}; return; }
       if(hit){ state.selCell=hit; state.selLane=hit.lane; state.sel=null; }
       if(ctx.requestEdit) ctx.requestEdit(hit?{x:e.clientX,y:e.clientY,cell:hit}:null);
       return;
     }
-    // 就地输入框也在 SVG 里，点它自己不能触发结算
-    if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
-    var c=cellAt(e); // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
+    dispatchTarget(cellAt(e), e, false);
+  }
+
+  // 命中目标的分派：桌面在 mousedown 调用，触摸在 tap 确认后调用 —— 两边共用同一份逻辑，
+  // 差别只在双击识别方式（鼠标 e.detail / 触摸的 330ms 同目标二次 tap）与是否建拖拽状态。
+  function dispatchTarget(c,e,isTouch){
+    // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
     var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
     if(!c) return;
@@ -412,7 +428,7 @@ export function attachInteractions(ctx){
       e.preventDefault(); state.selLane=null; ctx.redraw(); return;
     }
     if(dbl>1){
-      e.preventDefault();
+        e.preventDefault();
       if(!editable(c)) return;
       openEditorFor(c);
       return;
@@ -428,7 +444,6 @@ export function attachInteractions(ctx){
     if(isTouch){
       state.selCell={lane:c.lane,tick:c.tick}; state.selLane=c.lane;
       state.sel=null; ctx.painting=null; ctx.redraw();
-      startLong(c,e.clientX,e.clientY);
       return;
     }
     state.selCell={lane:c.lane,tick:c.tick}; state.selLane=c.lane;
@@ -513,9 +528,12 @@ export function attachInteractions(ctx){
   });
   wrap.addEventListener('pointermove',function(e){
     if(e.pointerType==='mouse') return;
+    // 手指移动超过 12px 就判定为「滑动看图」（pan）：作废候选 tap 与长按计时，
+    // 本次手势不产生任何选中 / 弹出 / 编辑 —— 这是「移动 vs 编辑」的分界线。
+    if(press&&(Math.abs((e.clientX||0)-press.x)>12||Math.abs((e.clientY||0)-press.y)>12)){
+      press=null; clearLong();
+    }
     if(longPress&&(Math.abs((e.clientX||0)-longPress.x)>12||Math.abs((e.clientY||0)-longPress.y)>12)) clearLong();
-    // 只读态：手指一移动就说明是在滑动看图，不是点按 —— 撤销候选 tap
-    if(pendingTap&&(Math.abs((e.clientX||0)-pendingTap.x)>12||Math.abs((e.clientY||0)-pendingTap.y)>12)) pendingTap=null;
     // 触摸端也跟手画连线预览曲线：记录第一个端点后，曲线末端跟着手指走
     if(state.connect){
       var svg=svgRoot();
@@ -525,19 +543,34 @@ export function attachInteractions(ctx){
       }
     }
   });
+  // 抬手才算数：位移 ≤12px、时长 ≤500ms 才是一次 tap，其余一律视为滑动（不改任何状态）。
+  function confirmTap(cx,cy){
+    var p=press; press=null;
+    clearLong();
+    if(!p) return;
+    var x=cx, y=cy;
+    // 少数合成事件 / 老设备在抬手事件上不带坐标（都是 0）：退回按下时的位置，
+    // 否则一次正常的点按会被算成「滑了很远」而失效。
+    if(!x&&!y){ x=p.x; y=p.y; }
+    if(Math.abs(x-p.x)>12||Math.abs(y-p.y)>12) return;
+    if(Date.now()-p.t>500) return;
+    if(state.readonly){
+      var rc=p.c;
+      var hit=rc&&rc.lane!==undefined&&rc.tick!==undefined&&!rc.cmd?{lane:rc.lane,tick:rc.tick}:null;
+      if(hit){ state.selCell=hit; state.selLane=hit.lane; state.sel=null; }
+      if(ctx.requestEdit) ctx.requestEdit({x:p.x,y:p.y,cell:hit});
+      return;
+    }
+    if(!p.c) return;
+    dispatchTarget(p.c, {clientX:p.x, clientY:p.y, detail:0, preventDefault:function(){}}, true);
+  }
   function endPointer(e){
-    if(e.pointerType!=='mouse') clearLong();
-    var p=pendingTap; pendingTap=null;
-    if(!p||!state.readonly) return;
-    // 真的是一次点按（没移动、不超过 500ms）才切进编辑
-    var dx=Math.abs((e.clientX||0)-p.x), dy=Math.abs((e.clientY||0)-p.y);
-    if(dx>12||dy>12||Date.now()-p.t>500) return;
-    if(p.cell){ state.selCell={lane:p.cell.lane,tick:p.cell.tick}; state.selLane=p.cell.lane; state.sel=null; }
-    if(ctx.requestEdit) ctx.requestEdit({x:p.x,y:p.y,cell:p.cell});
+    if(e.pointerType==='mouse') return;
+    confirmTap(e.clientX,e.clientY);
   }
   document.addEventListener('pointerup',endPointer);
   document.addEventListener('pointercancel',function(e){
-    if(e.pointerType!=='mouse'){ clearLong(); pendingTap=null; }
+    if(e.pointerType!=='mouse'){ clearLong(); press=null; }
   });
 
   // 没有 Pointer Events 的老浏览器：用 touch 事件回退，命中点交给 elementFromPoint
@@ -556,14 +589,18 @@ export function attachInteractions(ctx){
     },{passive:true});
     wrap.addEventListener('touchmove',function(e){
       var t=e.touches&&e.touches[0]; if(!t) return;
+      if(press&&(Math.abs(t.clientX-press.x)>12||Math.abs(t.clientY-press.y)>12)){ press=null; clearLong(); }
       if(longPress&&(Math.abs(t.clientX-longPress.x)>12||Math.abs(t.clientY-longPress.y)>12)) clearLong();
       if(state.connect){
         var svg=svgRoot();
         if(svg){ var r=svg.getBoundingClientRect(); showConnectPreview(t.clientX-r.left,t.clientY-r.top); }
       }
     },{passive:true});
-    document.addEventListener('touchend',clearLong,{passive:true});
-    document.addEventListener('touchcancel',clearLong,{passive:true});
+    document.addEventListener('touchend',function(e){
+      var t=e.changedTouches&&e.changedTouches[0];
+      confirmTap(t?t.clientX:0, t?t.clientY:0);
+    },{passive:true});
+    document.addEventListener('touchcancel',function(){ clearLong(); press=null; },{passive:true});
   }
 
   // ---- 键盘：不用鼠标完成全部编辑 -------------------------------------------
@@ -706,7 +743,14 @@ export function attachInteractions(ctx){
     if(state.readonly) return;
     if(state.linkMode){ linkKeys(e); return; }
     var k=e.key;
-    if(k==='Escape'&&state.selCell){ prevent(e); state.selCell=null; ctx.redraw(); return; }
+    // Esc 逐层退出：就地编辑框 → 选中（本节）→ 编辑态（embed-shell 那一层）。
+    // 这一层必须 stopPropagation，否则一次 Esc 同时清选中又退出编辑，用户分不清发生了什么。
+    if(k==='Escape'&&(state.selCell||state.selLane||state.sel!==null&&state.sel!==undefined)){
+      prevent(e); e.stopPropagation();
+      state.selCell=null; state.selLane=null; state.sel=null;
+      if(ctx.closeCharDock) ctx.closeCharDock();
+      ctx.redraw(); return;
+    }
     var sc=ensureSel(); if(!sc||!state.ir) return;
     var ctrl=e.ctrlKey||e.metaKey;
     if(!ctrl&&!e.altKey&&Core.ALL.indexOf(k)>=0){ prevent(e); writeChar(k); return; }
