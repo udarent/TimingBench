@@ -313,7 +313,7 @@ function check() {
   // 所以现在按卡片宽铺满、上限 2 倍；viewBox 仍必须是内部坐标，几何与就地编辑换算才不错位。
   ok(/var fit=\(state\.embedCard&&state\.readonly\)\?Math\.min\(2, viewW\/W\):1/.test(shapesSrc) &&
      /outW=fit<1\?viewW:Math\.round\(W\*fit\)/.test(shapesSrc) &&
-     /viewBox="0 0 '\+W\+' '\+H\+'"/.test(shapesSrc),
+     /viewBox="0 '\+vbTop\+' '\+W\+' '\+vbH\+'"/.test(shapesSrc),
     '缩放未按卡片宽铺满或未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
   // 只读态没有字符条，触摸引导 toast 不适用，也不该出现在英文宿主页面里
   const touchSrc = read('src/editor/touch.js');

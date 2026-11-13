@@ -182,12 +182,17 @@ export function createShapes(ctx){
     // 比卡片窄就保持 1:1 并靠 .svgwrap svg 的 margin-inline:auto 居中 —— 卡片右侧不会再空出一条。
     // 只读卡片的「内部尺寸」：嵌入片段按 W/H 算 aspect-ratio，让 iframe 高度随宽度自适应，
     // 卡片底部不会再留一片空白（旧片段写死 height，窄卡片里就空出上百像素）。
-    var roW=Math.max(ACT_X+PAD*2, 360);
-    var roH=(function(){
-      var b=TOP+ir.lanes.length*ROW_H;
-      if(ir.lanes.length===0) b=TOP+ROW_H;
-      return b+4+20;                 // actY + barH(只读态为 0) + 底部留白
+    // 只读卡片不要再背「顶部给 HUD 留位置」这笔账：HUD 只在编辑态画，留着就是一圈死白。
+    // 做法是把 viewBox 的 y 前移一段（图元坐标一个都没动，波形层指纹与桌面布局不受影响），
+    // 底部与右侧也只留一点呼吸空间 —— 波形图本身尽量贴满卡片。
+    var roTrimTop=Math.max(0, COL_Y-8);      // 裁到列号行上方 8px
+    var roTrimBottom=12;                     // 最后一行下沿到卡片底
+    // 右侧必须容下最后一个列号（幽灵列的 rect 从 ACT_X+1 起、宽 CELL-2），只留一个 PAD 会把它裁掉
+    var roW=Math.max(ACT_X+CELL+PAD, 360);
+    var roBottomY=(function(){
+      return ir.lanes.length===0 ? TOP+ROW_H : TOP+ir.lanes.length*ROW_H;
     })();
+    var roH=roBottomY+4+roTrimBottom-roTrimTop;
     state.roBox={w:roW, h:roH};
     var W=state.readonly ? roW : Math.max(ACT_X+ACT_W+PAD, viewW, 560);
     var bottom=TOP+ir.lanes.length*ROW_H;
@@ -207,8 +212,12 @@ export function createShapes(ctx){
     var barH=state.readonly?0:(T?(state.selCell?DOCK_H:ACT_H):Math.max(ACT_H,(state.selCell?rows*(CHIP_H+6)+12:ACT_H)));
     // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
-    var contentH=actY+barH+20;
+    // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
+    var contentH=actY+barH+((state.embedCard&&state.readonly)?roTrimBottom:20);
     var H=state.embedCard?contentH:Math.max(contentH, viewH), c, x;
+    // 只读卡片把顶部那段「HUD 区」从 viewBox 里裁掉：渲染高度同步变矮，卡片不再顶着一条死白。
+    var vbTop=(state.embedCard&&state.readonly)?roTrimTop:0;
+    var vbH=H-vbTop;
     // 嵌入只读卡片：整张图按卡片宽度等比缩小，让波形一次全显示 —— 读者不会去横向拖一张
     // 只读卡片。进入编辑后 fit=1，恢复 1:1 + 滚动，保证点选精度。
     // 只改 svg 的渲染尺寸，viewBox 仍是内部坐标 ⇒ 所有图元几何、getBBox 与就地编辑的
@@ -218,7 +227,7 @@ export function createShapes(ctx){
     // 进入编辑态回到 1:1 + 滚动，保证点选精度。
     var fit=(state.embedCard&&state.readonly)?Math.min(2, viewW/W):1;
     var outW=fit<1?viewW:Math.round(W*fit);
-    var outH=fit<1?Math.round(H*outW/W):Math.round(H*fit);
+    var outH=fit<1?Math.round(vbH*outW/W):Math.round(vbH*fit);
     state.barY=actY; state.barH=barH; state.viewW=viewW; state.fit=fit;
     // 高度上报用缩放后的真实像素高，否则宿主会按原始高设 iframe，底部留一片空白。
     state.contentH=state.embedCard?outH:contentH;
@@ -226,7 +235,7 @@ export function createShapes(ctx){
     // xMidYMin：只读卡片把 svg 拉满视口时，比例若略有偏差，多出来的空间留在下方而不是
     // 上下均分 —— 图始终贴顶，进编辑时「把被点的格子钉回手指下」的换算不必再补一层偏移。
     // 尺寸精确时（桌面编辑态、比例匹配的只读卡片）meet 不产生任何缩放。
-    var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMin meet" class="'+(state.linkMode?'linkMode':'')+'" role="img" aria-label="Timing diagram editor">'];
+    var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 '+vbTop+' '+W+' '+vbH+'" preserveAspectRatio="xMidYMin meet" class="'+(state.linkMode?'linkMode':'')+'" role="img" aria-label="Timing diagram editor">'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
     if(!state.readonly) o.push(hudSVG(viewW));
