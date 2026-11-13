@@ -121,11 +121,8 @@ export function createShapes(ctx){
       var rest=s.slice(head.length).trim();
       if(rest){
         var mx=(a.x+b.x)/2, my=(a.y+b.y)/2-22, lw=Math.max(22,rest.length*6+10);
-        // 只读卡片不加白底衬（上游就是一个纯色小字，底下垫一块矩形反而像控件）；
-        // 编辑态保留，因为它是可双击改的入口，需要明确的命中感。
-        if(!state.readonly)
-          o.push('<rect x="'+(mx-lw/2)+'" y="'+(my-9)+'" width="'+lw+'" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>');
-        o.push('<text x="'+mx+'" y="'+(my+1)+'" text-anchor="middle" dominant-baseline="central" font-size="'+(state.readonly?11:9)+'" fill="var(--accent)" pointer-events="none">'+esc(cut(rest,18))+'</text>');
+        o.push('<rect x="'+(mx-lw/2)+'" y="'+(my-9)+'" width="'+lw+'" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>'+
+          '<text x="'+mx+'" y="'+(my+1)+'" text-anchor="middle" dominant-baseline="central" font-size="9" fill="var(--accent)" pointer-events="none">'+esc(cut(rest,18))+'</text>');
       }
       o.push('</g>');
     });
@@ -183,11 +180,10 @@ export function createShapes(ctx){
     // 重绘会替换 SVG DOM；未提交的就地编辑先结算，再用最新 IR 重建整张图
     if(ctx.inlineCtx) ctx.closeInline(true);
     var ir=state.ir; if(!ir) return;
-    // 只读卡片按「渲染器」排版：行名区收到刚好够放行名 + 竖排分组（上游 WaveDrom 只占 ~20%），
-    // 波形区因此更宽、整图更接近上游的观感。编辑态恢复设备几何 —— 那里还要放行工具与拖拽把手。
-    var roGeom=state.readonly&&state.embedCard;
-    XS=roGeom?100:G.XS;
-    NAME_W=roGeom?84:G.NAME_W;
+    // 只读态与编辑态共用同一套排版（行名区宽度、格子、行高都不变）：
+    // 只读卡片只是「少画编辑控件」，不是另一套版式。行名区在这里固定回设备几何，
+    // 避免任何调用方改动过后残留。
+    XS=G.XS; NAME_W=G.NAME_W;
     var N=ir.ticks, ACT_X=XS+N*CELL;
     // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
@@ -256,14 +252,11 @@ export function createShapes(ctx){
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
     if(!state.readonly) o.push(hudSVG(viewW));
-    // 列网格：编辑态从列号行上方起、实线；只读态（没有列号行）从画面顶起、改为点线 ——
-    // 上游 WaveDrom 用的就是贯穿全高的点状竖线，实线会显得像表格。
+    // 列网格：只读态没有列号行，所以从画面顶起；线型与编辑态一致（同一条竖线，不加虚线）。
     var gridTop=state.readonly?vbTop+4:(TOP-10);
     for(c=0;c<=N;c++){
       x=XS+c*CELL;
-      o.push('<line class="colGrid" x1="'+x+'" y1="'+gridTop+'" x2="'+x+'" y2="'+bottom+'" stroke="'+
-        (state.readonly?'var(--line2)':'var(--line)')+'" stroke-width="0.5"'+
-        (state.readonly?' stroke-dasharray="1 3" opacity="0.45"':'')+'/>');
+      o.push('<line class="colGrid" x1="'+x+'" y1="'+gridTop+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>');
     }
     // 列号 + 列操作按钮是「编辑定位器」：只读卡片不需要（上游 WaveDrom 也从不画列号），
     // 整组不画。零行空态同样不画：0 个周期时列号与「末尾追加」都没有意义。
@@ -282,24 +275,6 @@ export function createShapes(ctx){
       o.push('</g></g>');
     }
     if(isEmpty) o.push(emptyRow(W));
-    // 分组竖排（只读态）：上游 WaveDrom 用左侧「[ 括线 + 竖排组名」表示 [Master] 包住了哪几行。
-    // 编辑态不画 —— 那里用行名后缀 [Master]，因为它本身就是可点选的分组入口。
-    if(state.readonly){
-      var gi=0;
-      while(gi<ir.lanes.length){
-        var gp=ir.lanes[gi].groupPath;
-        if(!gp||!gp.length){ gi++; continue; }
-        var gj=gi, gkey=gp.join('/');
-        while(gj+1<ir.lanes.length && (ir.lanes[gj+1].groupPath||[]).join('/')===gkey) gj++;
-        var gy0=TOP+gi*ROW_H+5, gy1=TOP+(gj+1)*ROW_H-5, gx=PAD+18;
-        var gmid=(gy0+gy1)/2;
-        o.push('<g class="groupSpine" pointer-events="none">'+
-          '<path d="M'+(gx+5)+','+gy0+' H'+gx+' V'+gy1+' H'+(gx+5)+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.5"/>'+
-          '<text x="'+(gx-6)+'" y="'+gmid+'" transform="rotate(-90 '+(gx-6)+' '+gmid+')" text-anchor="middle" dominant-baseline="central" font-size="11" fill="var(--accent)">'+esc(gkey)+'</text>'+
-          '</g>');
-        gi=gj+1;
-      }
-    }
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*ROW_H;
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
@@ -317,9 +292,8 @@ export function createShapes(ctx){
         o.push(rowTools(l,y,ACT_X)); o.push('</g>');
         return;
       }
-      // 分组与相位 / 周期都是「可点改」的编辑入口：只读卡片上它们只是噪音，一并撤掉
-      // （分组改由左侧竖排标注，见 groupSpine）。
-      var gname=(!state.readonly&&l.groupPath.length)?' <tspan fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>':'';
+      // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉；分组名不是控件，两态都显示。
+      var gname=l.groupPath.length?' <tspan fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>':'';
       var meta=state.readonly?'':'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
         '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-8)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+

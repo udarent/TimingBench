@@ -87,10 +87,7 @@ svg{display:block;font-family:var(--sans)}
 /* bus 段的轮廓单独一条 path：段内不画竖边，段与段之间才不会出现「被切一刀」的接缝 */
 .waveBusInk{fill:none;stroke:var(--wave-ink);stroke-width:1;stroke-linejoin:round;pointer-events:none}
 .waveLabel{fill:var(--ink);font-size:10px}
-/* 只读卡片按「渲染器」呈现（2026-11-13 起）：行名用强调色、字号贴近上游 WaveDrom
-   （14.67px → 14），数据标签同步放大。编辑态保持小字号，因为那里要挤编辑控件。 */
-.is-embed.is-readonly .laneName{fill:var(--accent);font-size:14px}
-.is-embed.is-readonly .waveLabel{font-size:12.5px}
+/* 只读卡片与编辑态共用同一套排版：不另设字号 / 字色（只读态只是少画编辑控件）。 */
 .is-embed.is-readonly .waveNode{font-weight:600}
 /* 源码 wave 比全局周期数短时，尾部按 repeater 延续画出可续写区 */
 .tailSlot{opacity:.78;pointer-events:none}
