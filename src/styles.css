@@ -5,9 +5,15 @@
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);overflow:hidden}
 /* 参考 WaveDrom Editor 默认版式（rot=0 / per=3）：源码上、波形下，各 50%、通栏，中间一条水平分隔线 */
-.app{display:grid;grid-template-rows:minmax(0,1fr) minmax(0,1fr);height:100vh;height:100dvh}
+.app{display:grid;grid-template-columns:minmax(320px,34%) minmax(0,1fr);height:100vh;height:100dvh}
 .pane{position:relative;min-width:0;min-height:0;overflow:hidden}
-.pane.src{background:var(--src-bg);border-bottom:1px solid var(--line)}
+.pane.src{background:var(--src-bg);border-right:1px solid var(--line)}
+/* 桌面宽屏 = 左代码 / 右时序图（2026-11-13）。窄窗口（鼠标但没横向空间）回退成上下分区，
+   触摸端与嵌入卡片另有自己的规则（见 .is-touch / .is-embed 段）。 */
+@media (max-width: 860px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
+  .pane.src{border-right:0;border-bottom:1px solid var(--line)}
+}
 .gutter{position:absolute;left:0;top:0;bottom:0;width:40px;padding:12px 9px 12px 0;text-align:right;font:12px/1.65 var(--mono);color:var(--muted);border-right:1px solid var(--line);overflow:hidden;white-space:pre;user-select:none;pointer-events:none}
 /* 只作用于源码框：.shareCode 等其它 textarea 不能被这条绝对定位规则误伤 */
 .pane.src textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;background:transparent;color:var(--ink);padding:12px 10px 12px 50px;font:12px/1.65 var(--mono);tab-size:2;white-space:pre;overflow:auto}
@@ -118,11 +124,11 @@ svg{display:block;font-family:var(--sans)}
   stroke-linecap:round;stroke-linejoin:round}
 .is-touch .tabbar button[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:600}
 .is-touch .tabbar .tb-title{margin-left:auto;align-self:center;font-size:12px;color:var(--muted)}
-.is-touch .app{flex:1 1 auto;height:auto;min-height:0;grid-template-rows:minmax(0,1fr)}
+.is-touch .app{flex:1 1 auto;height:auto;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 .is-touch .pane{grid-row:1;grid-column:1}
 .is-touch .app[data-view="src"] .pane.diagram{display:none}
 .is-touch .app[data-view="diagram"] .pane.src{display:none}
-.is-touch .pane.src{border-bottom:0}
+.is-touch .pane.src{border-right:0;border-bottom:0}
 .is-touch .gutter{font-size:13px;line-height:1.9}
 .is-touch .pane.src textarea{font-size:14px;line-height:1.9;padding-left:52px}
 .is-touch .svgwrap{touch-action:manipulation;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
@@ -271,7 +277,7 @@ svg{display:block;font-family:var(--sans)}
    之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，
    下面几行会被裁掉且没有可滚动容器（纵向根本没有滚动条），手机上等于「看不见也点不到」。
    只读态内容本来就等比缩到卡片宽、不会溢出，所以看不出差别。 */
-.is-embed .app{grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
+.is-embed .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
 .is-embed .pane.diagram{display:block;height:100%}
 .is-embed .svgwrap{position:absolute;inset:0;overflow:auto;min-height:0}
 /* 内容比卡片窄时水平居中（宽于卡片时仍从左侧起排、可横向滚动） */
