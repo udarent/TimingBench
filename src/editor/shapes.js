@@ -236,7 +236,16 @@ export function createShapes(ctx){
     // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T + 10px 的 [分组]」
     // tspan 拼接有 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
     // 实测下来行名左缘正好落在 leftBound 上，既不压拖拽把手也不浪费宽度。
-    NAME_W=Math.max(minW,Math.min(maxW,Math.ceil(leftBound+measW+16)));
+    // 量化到 8px：行名区随输入逐像素变化时，波形会跟着横向挪，观感像抽搐。对齐到一个
+    // 固定粒度后，小于一粒的改动不再重排，平移量也可预期。
+    // 粒度不取格宽 CELL（桌面 38 / 触摸 48）：WaveDrom 把 xg 量化到 xs 是因为它的 xg 在
+    // 120~180 量级，20px 步长只占一成；而行名区这里只有 65~140，38px 步长只剩两档，
+    // 73 会被直接顶到 114 —— 左边空白当场翻倍，与「收缩行名区」的初衷相反。
+    // 8px ≈ 一个窄字符宽、也 ≈ 触摸端一格的 1/6，相对粒度与 WaveDrom 相当。
+    // 只向上取整：NAME_W 必须 ≥ rawW，否则行名左缘会顶出画布（实测差 2px 就越界）；
+    // 代价是平均多让 4px，小于半个字。
+    var rawW=Math.max(minW,Math.min(maxW,leftBound+measW+16));
+    NAME_W=Math.min(maxW,Math.ceil(rawW/8)*8);
     XS=NAME_W+8;                                 // 行名右缘（NAME_W-6）到波形 8px
     // 其它模块（interactions 的键盘滚动定位、embed-shell 的进编辑锚定）读 G 的实时值
     G.NAME_W=NAME_W; G.XS=XS;
