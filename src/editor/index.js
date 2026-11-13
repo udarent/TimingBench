@@ -131,10 +131,12 @@ export function createEditor(dom){
   // 没有显式选择时跟随宽度（CSS 媒体查询决定），一旦点过按钮就写死并持久化 ——
   // 用户的选择比「窗口多宽」更能代表意图。
   function currentLayout(){
-    if(state.layout) return state.layout;
-    if(!dom.app) return 'rows';
-    var g=getComputedStyle(dom.app).gridTemplateColumns.split(/s+/).filter(Boolean);
-    return g.length>=2?'cols':'rows';
+    if (state.layout) return state.layout;
+    // 用与 CSS 媒体查询同一个阈值（860px）判断，**不要**读 getComputedStyle：
+    // 之前用 split(/\s+/) 解析 gridTemplateColumns，正则里的反斜杠在转义过程中丢失，
+    // 变成 split(/s+/) —— 永远不分割、永远算出 'rows'，于是 auto 状态下点一下按钮
+    // 会「设成和当前一样的方向」，表现为点了没反应。
+    return (typeof window !== 'undefined' && window.innerWidth >= 860) ? 'cols' : 'rows';
   }
   function applyLayout(){
     if(!dom.app) return;
