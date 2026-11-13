@@ -133,11 +133,11 @@
   <h2 id="embed">Embed it in your page</h2>
   <div class="live">
     <div class="livecard" data-timingbench data-title="TimingBench live demo" data-height="300"
-         data-wavejson='{ signal: [ { name: "clk", wave: "p..........." }, { name: "dat", wave: "x.3.4.5.x...", data: ["head","body","tail"] }, { name: "req", wave: "0.1......0..", node: "..a........." } ] }'></div>
+         data-wavejson="{ signal: [ { name: 'clk', wave: 'p.....|...' }, { name: 'dat', wave: 'x.345x|=.x', data: ['head', 'body', 'tail', 'data'] }, { name: 'req', wave: '0.1..0|1.0', node: '..a...' }, {}, { name: 'ack', wave: '1.....|01.' }, ['Master', { name: 'wr', wave: '01.0....', node: '.b......' }] ], edge: ['a~>b t1'], config: { hscale: 1 } }"></div>
     <p class="cap">
-      <b>Live, not a recording.</b> This is the real embed running on this page — read-only until
-      you click it. Click a cell, pick a character, double-click to type in place, or press
-      <code>Esc</code> to go back to viewing.
+      <b>Live, not a recording.</b> This is the real embed running on this page, showing
+      <b>the same document the editor opens with</b> — read-only until you click it. Click a cell,
+      pick a character, double-click to type in place, or press <code>Esc</code> to go back to viewing.
     </p>
     <noscript>
       <p class="cap">JavaScript is off, so the live card can't run here — <a href="editor.html">open the editor</a> instead.</p>
