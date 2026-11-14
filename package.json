@@ -1,6 +1,6 @@
 {
   "name": "timingbench",
-  "version": "0.9.29",
+  "version": "0.9.30",
   "private": true,
   "type": "module",
   "description": "WaveJSON ⇄ 可编辑时序图的双向编辑器（纯静态、零构建、零运行时依赖）",

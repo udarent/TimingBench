@@ -396,7 +396,11 @@ export function createShapes(ctx){
       var ptAt=function(k){ var q=k<l.slots.length?l.slots[k]:null; return q?(q.point&&!q.gap):false; };
       for(i=0;i<N;i++){
         var s=i<l.slots.length?l.slots[i]:null, x0=XS+i*CELL, w=s?s.w:lastW;
-        var isPoint=s?(s.point&&!s.gap):false, prevCh=isPoint?lastPoint:null;
+        var isPoint=s?(s.point&&!s.gap):false;
+        // 上一格**实际画出来的字符**（含延续格归一化后的 w）：时钟字符要靠它判断边界处
+        // 那条起沿是不是多余的。只传「最近一个显式状态点」会漏掉 `h...` / `l.` 这种
+        // 延续同一电平的情况，于是每个延续格边界都多画一条竖线。
+        var prevCh=i>0?wsAt(i-1):null;
         if(isPoint) lastPoint=w;
         var gopt={label:s&&isPoint?s.label:null};
         if(Core.BUS.test(w)){
