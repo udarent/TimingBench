@@ -230,6 +230,21 @@ function check() {
   }
   ok(lrefs.every((r) => !r.startsWith('../')), '首页存在跳出站点根的相对路径');
 
+  // 教程页（tutorial.html）：与首页同口径 —— 英文、同版本、可编辑示例、只有一个本地 embed.js。
+  const tut = read('tutorial.html');
+  ok(tut.includes('content="' + version + '"'), 'tutorial.html 版本不一致');
+  ok(/<html[^>]+lang="en"/.test(tut), 'tutorial.html 未声明 lang="en"');
+  ok(!/[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]/.test(tut), 'tutorial.html 出现中日韩字符（应全英文）');
+  ok(tut.includes('editor.html'), 'tutorial.html 缺少进入编辑器的入口 editor.html');
+  ok(tut.includes('index.html'), 'tutorial.html 缺少返回首页的链接');
+  ok(/data-timingbench/.test(tut) && /data-wavejson=/.test(tut),
+    'tutorial.html 缺少可编辑的实时示例卡片（data-timingbench）');
+  {
+    const ts = [...tut.matchAll(/<script[^>]*>/g)].map((m) => m[0]);
+    ok(ts.length === 1 && /src="embed\.js"/.test(ts[0]),
+      'tutorial.html 应只加载本地 embed.js 这一个脚本（实际 ' + ts.length + ' 个）');
+  }
+
   // 触摸版式的容器与入口：桌面隐藏、粗指针（或 ?touch=1）时由 main.js 装配
   for (const id of ['app', 'tbpanel', 'toast'])
     ok(html.includes('id="' + id + '"'), '触摸 UI 容器缺失：#' + id);
