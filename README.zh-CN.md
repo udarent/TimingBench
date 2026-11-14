@@ -4,7 +4,7 @@
 
 **WaveJSON ⇄ 可编辑时序图。** 改图形回写源码，改源码重绘图形，两侧实时同步。
 
-`0.9.30` · [MIT](LICENSE) · 纯静态 · 零构建 · 零依赖 · 完全本地运行 · [在线打开](https://udarent.github.io/TimingBench/editor.html)
+`0.9.31` · [MIT](LICENSE) · 纯静态 · 零构建 · 零依赖 · 完全本地运行 · [在线打开](https://udarent.github.io/TimingBench/editor.html)
 
 两侧只有一份语义：图形回写优先打最小补丁（注释、缩进、键序、引号原样保留），生成结果若与图形不等价就回滚，不会静默改坏你的源码。
 
@@ -182,7 +182,7 @@ TimingBench 按**波形卡片**设计：需要的操作都在卡片可视范围�
 - **节点小圆圈去哪了？** 已移除，波形呈现更接近 WaveDrom 原始渲染。波形格本身就是连线端点：点「◇ 连线」开启模式后依次点两格即可。连线模式下其它操作一律不响应 —— 字符条、键盘写入、双击就地编辑与选中都暂停，直到成线或按 `Esc` 退出。
 - **双击 HTML 打不开？** ES modules 受 `file://` 的 CORS 限制，用 `npm start` 或任意静态服务器访问；GitHub Pages 部署天然可用。
 - **我的时序图会上传到服务器吗？** 不会。纯前端计算，没有请求、没有存储、没有账号。
-- **支持 WaveDrom 全部语法吗？** 支持常用子集：`wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer` 与 repeater 补画。不是 WaveDrom 的完整实现，也不含其代码。
+- **支持 WaveDrom 全部语法吗？** 支持常用子集：`wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer` 与 repeater 补画。其中 `period` 把该行每个字符拉宽 period 倍、`phase` 把整行左移若干分之一周期，两者都参与绘制、也都能在画布上就地改。不是 WaveDrom 的完整实现，也不含其代码。
 - **哪些浏览器？** 现代 Chrome / Edge / Firefox / Safari（需 ES modules、SVG `foreignObject`、Pointer Events）；缺少 Pointer Events 的老浏览器触摸端回退 touch 事件。
 - **触屏笔记本没切换版式？** 主指针是鼠标时不自动切换，地址后加 `?touch=1` 强制预览。
 - **已知限制**：iOS Safari 软键盘配合 `foreignObject` 输入框尚未真机验证；触摸端不做按住拖过连写与拖动重排（避免抢原生滚动手势），连线没有跟随手指的预览曲线。

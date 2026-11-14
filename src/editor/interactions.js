@@ -3,7 +3,7 @@
 // 键盘另有独立的 linkCursor 端点光标，保证不用鼠标也能完成全部编辑。
 // 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
-import { G } from './geometry.js';
+import { G, cellGeo } from './geometry.js';
 import { TOUCH } from './mode.js';
 import { esc, cut } from '../core/util.js';
 
@@ -173,16 +173,18 @@ export function attachInteractions(ctx){
   // 两者都动滚动就会互相打架，手指底下的东西会跳。
   function revealSel(){
     var sc=state.selCell; if(!sc||!state.ir||!wrap.clientWidth) return;
-    var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===sc.lane) li=i; });
-    if(li<0) return;
+    var lane=null, li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===sc.lane){ lane=l; li=i; } });
+    if(li<0||!lane) return;
     // 视图可能是等比缩小过的（触摸端 / 卡片），状态里一律是**用户坐标**，
     // 而 scrollLeft / clientWidth 是像素 —— 先乘 fit 再比较，否则滚到错地方。
     var k=state.fit||1;
-    var cx=(G.XS+sc.tick*CELL+CELL/2)*k, cy=(TOP+li*ROW_H+ROW_H/2)*k;
+    // 格心与格宽都走行级标尺（period 行更宽、phase 行整体左移）；period:1 时与 CELL 等价。
+    var geo=cellGeo(lane,sc.tick), cw=geo.w*k;
+    var cx=geo.cx*k, cy=(TOP+li*ROW_H+ROW_H/2)*k;
     var vw=wrap.clientWidth, vh=wrap.clientHeight-Math.max(0,state.barH||0);
     var maxL=Math.max(0,wrap.scrollWidth-vw), maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
     var left=wrap.scrollLeft, top=wrap.scrollTop;
-    if(cx<left+CELL*k*0.6||cx>left+vw-CELL*k*0.6) left=Math.min(maxL,Math.max(0,cx-vw/2));
+    if(cx<left+cw*0.6||cx>left+vw-cw*0.6) left=Math.min(maxL,Math.max(0,cx-vw/2));
     if(cy<top+ROW_H*k*0.6||cy>top+vh-ROW_H*k*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
     if(left!==wrap.scrollLeft) wrap.scrollLeft=left;
     if(top!==wrap.scrollTop) wrap.scrollTop=top;
@@ -506,7 +508,8 @@ export function attachInteractions(ctx){
     var svg=svgRoot(); if(!svg||!state.connect) return;
     var p=svg.querySelector('path.connectPreview');
     if(!p){ p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('class','connectPreview'); svg.appendChild(p); }
-    var a=state.connect, ax=G.XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+7;
+    var a=state.connect, ln=findLane(a.lane);
+    var ax=ln?cellGeo(ln,a.tick).cx:G.XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+7;
     p.setAttribute('d','M'+ax+','+ay+' C'+(ax+10)+','+(ay-26)+' '+(mx-10)+','+(my-26)+' '+mx+','+my);
   }
 

@@ -302,8 +302,23 @@ function check() {
     'waveform.js 读取了视口尺寸 / 滚动位置（渲染内核必须与 UI 解耦）');
   ok(!/from ['"]\.\/(shapes|interactions|touch|index)\.js['"]/.test(waveSrc),
     'waveform.js 反向依赖了 UI 模块（渲染内核必须保持底层）');
-  ok(/waveGlyph\(w,prevCh,x0,yT,yM,yB,CELL,/.test(shapesSrc),
-    'waveGlyph 调用参数被改动（不得掺入操作层的排版变量）');
+  // 行级时间标尺（教程 Step 6）：period/phase 必须真的参与绘制，不能只当元信息。
+  // 口径对齐上游 parse-wave-lanes：period 把字符拆成 2·period 个 half-brick（每格宽 period 倍）；
+  // phase 以 half-brick 计、非整数向上取整到半个周期。
+  const geoSrc = read('src/editor/geometry.js');
+  ok(/export function lanePeriod/.test(geoSrc) && /export function laneShift/.test(geoSrc) &&
+     /export function laneChars/.test(geoSrc) && /export function cellGeo/.test(geoSrc) &&
+     /Math\.ceil\(p\*2\)\/2/.test(geoSrc),
+    '行级时间标尺缺失（period/phase 又退回「只存不画」）');
+  ok(/var P=lanePeriod\(l\), sh=laneShift\(l\), cw=P\*CELL, chars=laneChars\(l,N\)/.test(shapesSrc) &&
+     /cellGeo\(l,i\)/.test(shapesSrc) && /lclip-/.test(shapesSrc) &&
+     /COLS=Math\.max\(COLS, laneChars\(l,N\)\*lanePeriod\(l\)\)/.test(shapesSrc),
+    'period/phase 未接入绘制（格宽 / 起点 / 画布宽度 / phase 裁剪）');
+
+  // 第七个参数是「这一格有多宽」：period≠1 的行按 period×CELL 传（渲染层自己的标尺），
+  // 仍不得掺入 viewW / scrollLeft 这类操作层变量。
+  ok(/waveGlyph\(w,prevCh,x0,yT,yM,yB,cw,/.test(shapesSrc) && /var P=lanePeriod\(l\), sh=laneShift\(l\), cw=P\*CELL/.test(shapesSrc),
+    'waveGlyph 调用参数被改动（应传该行的格宽 cw = period×CELL，不得掺入操作层的排版变量）');
   ok(!/waveGlyph\([^)]*viewW|waveGlyph\([^)]*scrollLeft|waveGlyph\([^)]*barLeft/.test(shapesSrc),
     'waveGlyph 被传入了操作层变量（波形层与 UI 已耦合）');
 

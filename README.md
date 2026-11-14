@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **WaveJSON ⇄ editable timing diagrams.** Edit the diagram and the source is rewritten; edit the source and the diagram redraws — both stay in sync.
 
-`0.9.30` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
+`0.9.31` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
 
 There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
 
@@ -182,7 +182,7 @@ Missing trailing cycles are drawn repeater-style with the last state (slightly d
 - **Where did the node markers / little circles go?** They are gone, so the waveform looks like WaveDrom's own rendering. The cells themselves are the connection targets: click ◇ Link, then pick two cells. While link mode is on nothing else responds — character chips, keyboard writing, double-click editing and selection are suspended until the arc is drawn or `Esc` is pressed.
 - **Nothing happens when I double-click the HTML file?** ES modules are blocked by CORS under `file://`. Use `npm start` or any static server; a GitHub Pages deployment works out of the box.
 - **Are my diagrams uploaded anywhere?** No. Everything is computed in the browser — no requests, no storage, no account.
-- **Does it support all of WaveDrom?** It covers the common subset: `wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer` and repeater-style fill-in. It is not a full WaveDrom implementation and contains none of its code.
+- **Does it support all of WaveDrom?** It covers the common subset: `wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer` and repeater-style fill-in. `period` scales each character's width and `phase` shifts a lane by a fraction of a period (both applied to the drawing, both editable in place). It is not a full WaveDrom implementation and contains none of its code.
 - **Which browsers?** Current Chrome / Edge / Firefox / Safari (ES modules, SVG `foreignObject`, Pointer Events). Older browsers without Pointer Events fall back to touch events.
 - **My touchscreen laptop stayed in desktop mode?** If the primary pointer is a mouse, the layout does not switch automatically; append `?touch=1` to force it.
 - **Known limitations**: the `foreignObject` input with the iOS Safari soft keyboard has not been verified on a real device; touch mode drops drag-paint and drag-to-reorder (to avoid stealing native scroll gestures), and arcs have no finger-following preview curve.

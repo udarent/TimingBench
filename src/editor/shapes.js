@@ -1,7 +1,7 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G } from './geometry.js';
+import { G, lanePeriod, laneShift, laneChars, cellGeo } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import { EMBED } from './embed.js';
@@ -177,7 +177,7 @@ export function createShapes(ctx){
     var map = {};
     ir.lanes.forEach(function (l, li) {
       if (l.kind !== 'signal') return;
-      l.node.forEach(function (ch, t) { if (ch && ch !== '.' && !map[ch]) map[ch] = { x: XS + t * CELL + CELL / 2, y: TOP + li * ROW_H + 7 }; });
+      l.node.forEach(function (ch, t) { if (ch && ch !== '.' && !map[ch]) map[ch] = { x: cellGeo(l, t).cx, y: TOP + li * ROW_H + 7 }; });
     });
     var o = [];
     ir.edges.forEach(function (e, i) {
@@ -262,7 +262,16 @@ export function createShapes(ctx){
     // 其它模块（interactions 的键盘滚动定位、embed-shell 的进编辑锚定）读 G 的实时值
     G.NAME_W=NAME_W; G.XS=XS;
     G.CHIPS_W=XS+Core.ALL.length*CHIP_STEP+16;
-    var N=ir.ticks, ACT_X=XS+N*CELL;
+    var N=ir.ticks;
+    // 全图列数（参考周期）：period≠1 的行一个字符占多列，行宽不再都等于字符数，
+    // 所以按「最宽的那一行」定画布宽度。全为 period:1 时 COLS 恒等于 N（默认情形零变化）。
+    // phase 只是行内左移，不会让行变宽。
+    var COLS=0;
+    ir.lanes.forEach(function(l){
+      if(l.kind!=='signal') return;
+      COLS=Math.max(COLS, laneChars(l,N)*lanePeriod(l));
+    });
+    var ACT_X=XS+COLS*CELL;
     // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
     var viewW=Math.max(240, Math.round(wrap.clientWidth||0)||360);
@@ -340,7 +349,9 @@ export function createShapes(ctx){
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
     // 列网格：只读态没有列号行，所以从画面顶起；线型与编辑态一致（同一条竖线，不加虚线）。
     var gridTop=state.readonly?vbTop+4:(TOP-10);
-    for(c=0;c<=N;c++){
+    // 网格按**参考周期**铺满整张图（period≠1 的行更宽，网格必须跟到最右）；列号仍按字符序号
+    // 编到 N —— 它是「第几个周期」的定位器，period:1 的行上两者重合（默认情形零变化）。
+    for(c=0;c<=COLS;c++){
       x=XS+c*CELL;
       o.push('<line class="colGrid" x1="'+x+'" y1="'+gridTop+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>');
     }
@@ -363,6 +374,15 @@ export function createShapes(ctx){
       o.push('</g>');
     }
     if(isEmpty) o.push(emptyRow(W));
+    // phase 行要裁掉被移出波形起点的那半个周期（上游是直接丢掉半个 brick，我们裁掉，视觉等价）。
+    // 只给 phase>0 的行建 clipPath —— 默认文档不产生任何额外 DOM。
+    var clips=[];
+    ir.lanes.forEach(function(l,li){
+      if(l.kind!=='signal'||laneShift(l)<=0) return;
+      var w=laneChars(l,N)*lanePeriod(l)*CELL;
+      clips.push('<clipPath id="lclip-'+l.id+'"><rect x="'+XS+'" y="'+(TOP+li*ROW_H)+'" width="'+w+'" height="'+ROW_H+'"/></clipPath>');
+    });
+    if(clips.length) o.push('<defs>'+clips.join('')+'</defs>');
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*ROW_H;
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
@@ -387,14 +407,19 @@ export function createShapes(ctx){
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
         '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+'</text>');
+      // 行级时间标尺：period 决定这一行的格宽（字符按比例横向拉伸），phase 决定整行左移量。
+      // period=1 / phase=0 时这些值与改造前逐一相同（P=1、sh=0、cw=CELL、chars=N）。
+      var P=lanePeriod(l), sh=laneShift(l), cw=P*CELL, chars=laneChars(l,N);
+      var clipId=sh>0?('lclip-'+l.id):null;
       // 画布按全局 N 个周期绘制；wave 较短的行，尾部缺失周期按 repeater 延续补画并留出可续写格子
       var lastW=l.slots.length?l.slots[l.slots.length-1].w:'x';
       // bus 段合并：延续格（repeater / 超出行尾的补齐格）与相邻同段格之间不画斜边。
       // 判据用 slot 的 point 标志 —— 它正是「用户写了字符」与「延续而来」的分界。
       var wsAt=function(k){ var q=k<l.slots.length?l.slots[k]:null; return q?q.w:lastW; };
       var ptAt=function(k){ var q=k<l.slots.length?l.slots[k]:null; return q?(q.point&&!q.gap):false; };
-      for(i=0;i<N;i++){
-        var s=i<l.slots.length?l.slots[i]:null, x0=XS+i*CELL, w=s?s.w:lastW;
+      if(clipId) o.push('<g clip-path="url(#'+clipId+')">');
+      for(i=0;i<chars;i++){
+        var s=i<l.slots.length?l.slots[i]:null, x0=cellGeo(l,i).x0, w=s?s.w:lastW;
         var isPoint=s?(s.point&&!s.gap):false;
         // 上一格**实际画出来的字符**（含延续格归一化后的 w）：时钟字符要靠它判断边界处
         // 那条起沿是不是多余的。只传「最近一个显式状态点」会漏掉 `h...` / `l.` 这种
@@ -403,27 +428,31 @@ export function createShapes(ctx){
         var gopt={label:s&&isPoint?s.label:null};
         if(Core.BUS.test(w)){
           var ljoin=i>0&&!ptAt(i)&&Core.BUS.test(wsAt(i-1));
-          var rjoin=(i+1<N)&&!ptAt(i+1)&&Core.BUS.test(wsAt(i+1));
+          var rjoin=(i+1<chars)&&!ptAt(i+1)&&Core.BUS.test(wsAt(i+1));
           gopt.seg=ljoin?(rjoin?'mid':'end'):(rjoin?'start':'only');
           gopt.cls=busClassOf(w);
         }
-        var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,CELL,gopt);
+        var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,cw,gopt);
         o.push(s?glyph:'<g class="tailSlot" role="img" aria-label="Undefined period — tap to extend">'+glyph+'</g>');
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
+        // 命中区裁到波形起点：phase 行的首格有一半落在行名区，不能让它压住行名抢点击。
+        // period=1 / phase=0 时 rx=x0+1、宽=CELL-2，与改造前逐字节相同。
+        var rx=Math.max(x0+1,XS);
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
-          ' x="'+(x0+1)+'" y="'+(y+3)+'" width="'+(CELL-2)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
+          ' x="'+rx+'" y="'+(y+3)+'" width="'+Math.max(1,x0+cw-1-rx)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
       }
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
-      o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(N*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');
+      o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(chars*P*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');
       o.push(rowTools(l,y,ACT_X));
       // node 字母：上游会把 `node: '..a...'` 的 a / b 画成小字母标在锚点处，
       // 它是 edge 的可读锚点 —— 不画的话读者只看到一条曲线，不知道连的是哪两点。
       // 这属于「图的内容」，与 data 标签同类，不受零常驻文字约束。
-      for(i=0;i<N&&i<l.node.length;i++){
+      for(i=0;i<chars&&i<l.node.length;i++){
         var nc=l.node[i];
         if(!nc||nc==='.') continue;
-        o.push('<text class="waveNode" x="'+(XS+i*CELL+CELL/2+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
+        o.push('<text class="waveNode" x="'+(cellGeo(l,i).cx+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
       }
+      if(clipId) o.push('</g>');
       o.push('</g>');
     });
     // 分组括号（对照上游 render-groups 的画法）：一条花括号从该组首行跨到末行，组名
@@ -447,14 +476,26 @@ export function createShapes(ctx){
         '</g>');
     });
     o.push(edgeArcs(ir));
+    // 选中框 / 连线端点光标：框的是「一个字符格」，几何必须跟该行自己的标尺走
+    // （period 行的格子更宽、phase 行整体左移）。helper 只在这里用，就放在用它的地方。
+    function selBox(l, tick){
+      var g=cellGeo(l,tick), x=Math.max(g.x0+1,XS);
+      return {x:x, w:Math.max(1,g.x0+g.w-1-x)};
+    }
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条
     if(state.linkMode&&state.linkCursor){
-      var lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane) lci=k; });
-      if(lci>=0&&state.linkCursor.tick<N) o.push('<rect class="linkCursor" x="'+(XS+state.linkCursor.tick*CELL+1)+'" y="'+(TOP+lci*ROW_H+3)+'" width="'+(CELL-2)+'" height="'+(ROW_H-10)+'" rx="3" role="img" aria-label="Link endpoint cursor"></rect>');
+      var lcLane=null, lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane){ lci=k; lcLane=l; } });
+      if(lcLane&&lci>=0&&state.linkCursor.tick<laneChars(lcLane,N)){
+        var lb=selBox(lcLane,state.linkCursor.tick);
+        o.push('<rect class="linkCursor" x="'+lb.x+'" y="'+(TOP+lci*ROW_H+3)+'" width="'+lb.w+'" height="'+(ROW_H-10)+'" rx="3" role="img" aria-label="Link endpoint cursor"></rect>');
+      }
     }
     if(!state.linkMode&&state.selCell){
-      var sli=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.selCell.lane) sli=k; });
-      if(sli>=0&&state.selCell.tick<N) o.push('<rect class="cellSel" x="'+(XS+state.selCell.tick*CELL+1)+'" y="'+(TOP+sli*ROW_H+3)+'" width="'+(CELL-2)+'" height="'+(ROW_H-10)+'" rx="3"/>');
+      var scLane=null, sli=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.selCell.lane){ sli=k; scLane=l; } });
+      if(scLane&&sli>=0&&state.selCell.tick<laneChars(scLane,N)){
+        var sb=selBox(scLane,state.selCell.tick);
+        o.push('<rect class="cellSel" x="'+sb.x+'" y="'+(TOP+sli*ROW_H+3)+'" width="'+sb.w+'" height="'+(ROW_H-10)+'" rx="3"/>');
+      }
     }
     o.push('</svg>');
     wrap.innerHTML=o.join('');

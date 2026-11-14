@@ -28,3 +28,35 @@ export const G = {
 
 // 桌面单行字符条的最小画布宽度；触摸端字符条换行，不再用它撑宽画布。
 G.CHIPS_W = G.XS + Core.ALL.length * G.CHIP_STEP + 16;
+
+// ---- 行级时间标尺（period / phase）----------------------------------------
+// WaveJSON 的 period / phase 是**行级**的：上游 parse-wave-lanes.js 里
+//   lane.period = sigx.period || 1            → 每个字符拆成 2·period 个 half-brick
+//   lane.phase  = (sigx.phase || 0) * 2       → 再逐 half-brick 从行首 shift 掉
+// 于是：period 把该行的每个字符横向拉长 period 倍；phase 把整行墨迹左移 phase 个周期
+// （phase 以 half-brick 计，非整数时上游等价于向上取整到半个周期）。
+// 我们只在**绘制层**引入这套标尺：IR 里 tick 仍是「这一行自己的字符序号」，
+// 因此编辑语义（点哪一格改哪个字符、增删列、node 锚点、edge 端点）全都不变。
+export function lanePeriod(l){
+  var p=Number(l&&l.period);
+  return (isFinite(p)&&p>=1) ? Math.round(p) : 1;
+}
+// 该行墨迹相对参考网格的左移量，单位是「周期」，恒为 0.5 的整数倍。
+export function laneShift(l){
+  var p=Number(l&&l.phase);
+  return (isFinite(p)&&p>0) ? Math.ceil(p*2)/2 : 0;
+}
+// 这一行要画多少个字符格：自身字符数与「补齐到全图参考宽度」取大。
+// period=1 时恒等于 ticks（与改造前完全一致）；period=2 时补一半。
+export function laneChars(l,ticks){
+  var p=lanePeriod(l), own=l.slots?l.slots.length:0;
+  return Math.max(own, Math.ceil(ticks/p));
+}
+// 行内第 tick 个字符格的几何（读 G.XS / G.CELL 的实时值，redraw 会先写回）：
+//   x0 未裁剪的起点（phase 行可能落在波形起点左侧），w 格宽，cx 中心。
+export function cellGeo(l,tick){
+  var p=lanePeriod(l), sh=laneShift(l), w=p*G.CELL;
+  var x0=G.XS+(tick*p-sh)*G.CELL;
+  return {x0:x0, w:w, cx:x0+w/2};
+}
+

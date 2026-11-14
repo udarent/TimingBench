@@ -3,7 +3,7 @@
 // 与宿主页面 postMessage 双向同步（源码 / 只读态 / 高度）。
 // 不碰渲染内核与编辑语义 —— 只控制「哪些层画、哪些事件放行」。
 import { EMBED, EDIT_ON_START } from './embed.js';
-import { G } from './geometry.js';
+import { G, cellGeo } from './geometry.js';
 import { TOUCH } from './mode.js';
 import { decodePayload } from './payload.js';
 
@@ -147,11 +147,12 @@ export function attachEmbed(ctx, opts) {
     if (!anchor || !anchor.cell) return;
     var st = ctx.state, ir = st.ir, wrap = ctx.wrap;
     if (!ir || !wrap) return;
-    var li = -1;
-    ir.lanes.forEach(function (l, i) { if (l.id === anchor.cell.lane) li = i; });
-    if (li < 0) return;
+    var li = -1, lane = null;
+    ir.lanes.forEach(function (l, i) { if (l.id === anchor.cell.lane) { li = i; lane = l; } });
+    if (li < 0 || !lane) return;
     var k = st.fit || 1;
-    var cx = (G.XS + anchor.cell.tick * G.CELL + G.CELL / 2) * k;
+    // 格心按行级标尺算（period 行更宽、phase 行整体左移）；period:1 时与 CELL 等价。
+    var cx = cellGeo(lane, anchor.cell.tick).cx * k;
     var cy = (G.TOP + li * G.ROW_H + G.ROW_H / 2) * k;
     var r = wrap.getBoundingClientRect();
     var vx = (anchor.x || 0) - r.left, vy = (anchor.y || 0) - r.top;

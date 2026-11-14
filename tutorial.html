@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.9.30">
+<meta name="version" content="0.9.31">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -175,7 +175,7 @@
   </section>
 
   <section class="step">
-    <h2>Step 6. Period and phase <span class="badge todo">pending</span></h2>
+    <h2>Step 6. Period and phase <span class="badge">done</span></h2>
     <p><code>period</code> and <code>phase</code> adjust a lane: period scales a character's width,
     phase shifts it by a fraction of a period. A DDR read transfer is the classic example.</p>
 <pre>{ signal: [
@@ -187,8 +187,9 @@
 ] }</pre>
     <div class="livecard" data-timingbench data-height="240"
          data-wavejson="{ signal: [ { name: 'CK', wave: 'P.......', period: 2 }, { name: 'CMD', wave: 'x.3x=x4x=x=x=x=x', data: 'RAS NOP CAS NOP NOP NOP NOP', phase: 0.5 }, { name: 'ADDR', wave: 'x.=x..=x........', data: 'ROW COL', phase: 0.5 }, { name: 'DQS', wave: 'z.......0.1010z.' }, { name: 'DQ', wave: 'z.........5555z.', data: 'D0 D1 D2 D3' } ] }"></div>
-    <p class="caveat todo">Pending: <code>period</code> / <code>phase</code> are parsed, editable and round-tripped,
-    but not yet applied to the drawing.</p>
+    <p class="hint">Both fields are applied to the drawing and are editable in place: click the
+    <code>φ</code> / <code>T</code> next to a row name. The numbered ruler above still counts
+    reference periods, so a <code>period: 2</code> row spans two ruler columns per character.</p>
   </section>
 
   <section class="step">
