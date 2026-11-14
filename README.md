@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **WaveJSON ⇄ editable timing diagrams.** Edit the diagram and the source is rewritten; edit the source and the diagram redraws — both stay in sync.
 
-`0.9.25` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
+`0.9.26` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
 
 There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
 
@@ -20,7 +20,7 @@ Two lines, no build step, no dependency in your project:
      data-wavejson='{ signal: [ { name: "clk", wave: "p....." }, { name: "dat", wave: "x.345x." } ] }'></div>
 ```
 
-The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the pencil icon in the corner) to go back to viewing. On a narrow card the whole diagram is **scaled down to fit the width**, so readers see everything at a glance instead of having to scroll sideways; once they click into editing it goes back to 1:1 with scrolling, so cells stay easy to hit. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
+The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the pencil icon in the corner) to go back to viewing. On a narrow card the whole diagram is **scaled down to fit the width**, so readers see everything at a glance instead of having to scroll sideways, and editing keeps that same scale — nothing jumps under the cursor. On a phone the card goes **fullscreen** when you start editing, and there the diagram is drawn at 1:1 (up to 2× for small ones) with plain scrolling, so cells stay large enough to hit. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
 
 Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the last icon in the page top bar (`<>`) — it generates exactly this snippet from your current source, ready to copy.
 
@@ -55,6 +55,7 @@ el.addEventListener('timingbench:change', e => {
 | Leave editing | `Esc`, or the pencil icon in the bottom-right corner (it turns into a check mark while editing) |
 | Auto height | the card reports its real (post-scaling) height via `postMessage`; `embed.js` applies it |
 | Narrow cards | the diagram scales to fit the card width — in editing too, no 1:1 jump, no horizontal scroll |
+| Fullscreen editing (phones) | a cramped card goes fullscreen on tap-to-edit; there it draws at 1:1 (≤2× for small diagrams) and you scroll to move |
 | Host events | `timingbench:ready` · `timingbench:change` · `timingbench:mode` |
 | Host commands | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |
 | Params | `?embed=1` (card mode) · `&mode=edit` (start editable) |

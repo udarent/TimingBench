@@ -36,7 +36,8 @@ export function attachEmbed(ctx, opts) {
   // 消息都不算手势）；失败（宿主没给 allowfullscreen、iOS Safari 不支持元素全屏）就静默
   // 退回卡片内编辑 —— 此时 CSS 会把上下文条压成单行，至少不会折成好几排把画布吃光。
   var fsForEdit = false;   // 当前这次全屏是为「编辑」开的：退出全屏时一并回只读
-  var fsActive = false;    // 此刻确实处于全屏（退出失败时不要假装退出了）
+  // state.fsEdit 是「此刻确实处于全屏」的唯一事实：退出失败时不能假装已退出，
+  // 绘制层（shapes.js 的 fit 规则）也读它 —— 全屏里按 1:1 画、靠滑动移动。
   function fsCurrent() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
   function fsSupported() { return !!(docEl.requestFullscreen || docEl.webkitRequestFullscreen); }
   function hasGesture() {
@@ -52,7 +53,7 @@ export function attachEmbed(ctx, opts) {
     if (!fn) return;
     try {
       var p = fn.call(docEl);
-      if (p && p.then) p.then(function () { fsActive = true; }, function () { /* 被拒绝：留在卡片内编辑 */ });
+      if (p && p.then) p.then(function () { state.fsEdit = true; }, function () { /* 被拒绝：留在卡片内编辑 */ });
     } catch (e) { /* 同步抛错同样退回卡片内 */ }
   }
   // 退出全屏要够耐用：不同引擎的前缀 API 不同，且首次调用偶尔因「请求仍在 pending」被拒，
@@ -67,8 +68,8 @@ export function attachEmbed(ctx, opts) {
       var retry = function () { if (tries < 4) setTimeout(attempt, 80); };
       try {
         var p = fn.call(d);
-        if (p && p.then) p.then(function () { fsActive = false; }, retry);
-        else fsActive = false;
+        if (p && p.then) p.then(function () { state.fsEdit = false; }, retry);
+        else state.fsEdit = false;
       } catch (e) { retry(); }
     })();
   }
@@ -105,7 +106,7 @@ export function attachEmbed(ctx, opts) {
     // 离开编辑：若这次全屏是为编辑开的，顺带退出全屏（退出失败会重试，不会假装已退）。
     if (!on && !keepFs) {
       fsForEdit = false;
-      if (fsActive || fsCurrent()) exitFs();
+      if (state.fsEdit || fsCurrent()) exitFs();
     }
     post('mode', { editing: !!on });
   }
@@ -113,11 +114,10 @@ export function attachEmbed(ctx, opts) {
 
   // 用户按 Esc / 系统手势退出全屏：若这次全屏是为编辑开的，也回到只读卡片。
   function onFsChange() {
-    fsActive = !!fsCurrent();
-    // 全屏态参与布局：全屏时画布按 1:1 画、靠滚动移动（见 shapes.js 的 fit 规则），
-    // 回到卡片后立刻恢复「等比缩进卡片」。两种状态都要重画，否则尺寸会停在旧值上。
-    state.fsEdit = fsActive;
-    if (fsActive) { ctx.redraw(); return; }
+    // state.fsEdit 同时是布局开关：全屏里画布按 1:1 画、靠滑动移动（见 shapes.js 的 fit 规则），
+    // 回到卡片立即恢复「等比缩进卡片」。两种状态都要重画，否则尺寸会停在旧值上。
+    state.fsEdit = !!fsCurrent();
+    if (state.fsEdit) { ctx.redraw(); return; }
     if (fsForEdit) { fsForEdit = false; if (!state.readonly) setEditing(false, null, true); }
     else ctx.redraw();
   }
