@@ -260,13 +260,25 @@ export function createEditor(dom){
     if(hasSel) return;
     ensureSelCell();
   });
-  // 卡片口径：波形层可横向滚动 / 双指缩放，操作层（HUD、字符条）钉在可视区。
-  // 旋屏 / 窗口缩放才需要重排（字符条按可视宽度换行；顶栏是页面级 flex，不用重排）
-  var rzTimer=null;
-  window.addEventListener('resize',function(){
+  // 旋屏 / 窗口缩放、以及**画布容器自己**的尺寸变化都要重排：底部两条操作条的展开与收起、
+  // 进出全屏只改容器、不改窗口，`window.resize` 收不到 —— 少了这条，画布高度会停在旧值，
+  // 表现为「滚到底还差一截、最下面几行点不到」（卡片里则是「底下空出一片」）。
+  // 去重：卡片内 .svgwrap 高度与内容互相影响，重画会再改它一次 —— 记下已渲染过的尺寸避免来回抖。
+  var rzTimer=null, obsKey='';
+  function scheduleRedraw(){
     clearTimeout(rzTimer);
-    rzTimer=setTimeout(function(){ if(!ctx.inlineCtx) ctx.redraw(); },120);
-  });
+    rzTimer=setTimeout(function(){ obsKey=''; if(!ctx.inlineCtx) ctx.redraw(); },120);
+  }
+  window.addEventListener('resize',scheduleRedraw);
+  if(typeof ResizeObserver!=='undefined'){
+    try{
+      new ResizeObserver(function(){
+        var w=ctx.wrap, k=w.clientWidth+'x'+w.clientHeight;
+        if(k===obsKey) return;
+        obsKey=k; scheduleRedraw();
+      }).observe(ctx.wrap);
+    }catch(e){}
+  }
   code.addEventListener('scroll',function(){ gutter.scrollTop=code.scrollTop; });
   code.addEventListener('input',function(){
     renderGutter();

@@ -27,9 +27,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
 .pane.diagram{position:relative;display:flex;flex-direction:column;min-height:0}
 .svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto;background:var(--bg);outline:none}
 .dockzone{position:relative;flex:0 0 auto;display:flex;flex-direction:column;z-index:20}
-/* 嵌入卡片的高度由 CSS aspect-ratio 固定（无脚本时没法自适应），dock 一旦占布局就会溢出 ——
-   卡片里退回「覆盖在画布底部」，整页仍是真实 flex 子项（画布自动让高度）。 */
-.is-embed .dockzone{position:absolute;left:0;right:0;bottom:0}
 /* 离屏文本测量容器：只给 shapes.js 量行名宽度用，永远不可见、不吃事件 */
 .measure{position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;visibility:hidden;font-family:var(--sans)}
 /* 键盘用户用 Tab / F6 进入画布时给出可见焦点；鼠标点击不显示 */
@@ -281,13 +278,13 @@ svg{display:block;font-family:var(--sans)}
    下面几行会被裁掉且没有可滚动容器（纵向根本没有滚动条），手机上等于「看不见也点不到」。
    只读态内容本来就等比缩到卡片宽、不会溢出，所以看不出差别。 */
 .is-embed .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
-.is-embed .pane.diagram{display:block;height:100%}
 .is-embed .svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto}
-/* 全屏编辑：这里已经是整块屏幕，画布要铺满它 —— 图比屏幕宽/高就靠滑动去看（移动端唯一手段）。
-   卡片内 .pane.diagram 是 display:block（高度由内容撑），全屏改成 flex 列，画布吃掉除底部
-   操作条之外的全部高度（滚动规则沿用上面 .is-embed .svgwrap 的 overflow:auto）。 */
-.is-embed:fullscreen .pane.diagram,
-.is-embed:-webkit-full-screen .pane.diagram{display:flex;flex-direction:column;height:100%}
+/* 嵌入卡片：画布 + 底部两条与整页同一套模型 —— flex 列，画布 flex:1 自己滚，dock 真占高度。
+   曾经因为「卡片高度被 aspect-ratio 锁死」把 dock 改成绝对浮层，代价是它不参与滚动范围的
+   账：滚动高度按「内容 − 视口」算，浮层只盖画面，于是滚到底最后一两行仍压在 dock 底下
+   （用户实测「全屏后能平移但范围不够，底部被编辑按钮挡住」）。dock 进文档流后画布自动让出
+   它的高度，滚到底就真的到底。只读卡片不弹 dock（高度 0），版式与之前完全一致。 */
+.is-embed .pane.diagram{display:flex;flex-direction:column;height:100%;min-height:0}
 .is-embed:fullscreen .svgwrap,
 .is-embed:-webkit-full-screen .svgwrap{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 /* 内容比卡片窄时水平居中（宽于卡片时仍从左侧起排、可横向滚动） */

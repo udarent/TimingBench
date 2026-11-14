@@ -264,11 +264,12 @@ function check() {
   // 选中行后的 up·down·改名·加行全在 #tbpanel，藏了等于把行重排整组关掉。
   ok(!/\.is-embed[^{}]*\.tbpanel[^{}]*\{[^}]*display:\s*none/.test(cssSrc),
     '嵌入态把上下文条（#tbpanel）隐藏了 —— 触摸端在卡片里将无法上下移动行');
-  // 卡片高度由 aspect-ratio 固定，dock 若参与布局会溢出 —— 卡片里 dockzone 绝对贴底，
-  // 两条（动作 / 字符）都在 dockzone 内，且 dockzone 不得盖住可交互的整幅画布。
-  ok(/\.is-embed \.dockzone\{[^}]*position:absolute/.test(cssSrc) &&
-     /\.is-embed \.dockzone\{[^}]*bottom:0/.test(cssSrc),
-    '嵌入态的底部两条未贴卡片底部（卡片高度固定，占布局会溢出）');
+  // 卡片与全屏用同一套模型：.pane.diagram 是 flex 列、画布 flex:1 自己滚、dock 真占高度。
+  // 反面案例写在注释里：dock 一旦改成绝对浮层，它就不进「内容 − 视口」这笔账，滚到底最后
+  // 一两行仍压在 dock 底下（用户实测「全屏后能平移但范围不够，底部被编辑按钮挡住」）。
+  ok(/\.is-embed \.pane\.diagram\{[^}]*display:flex/.test(cssSrc) &&
+     !/\.is-embed[^{}]*\.dockzone\{[^}]*position:absolute/.test(cssSrc),
+    '嵌入态的底部两条又变成浮层了（浮层不进滚动范围，最后几行会被挡住无法编辑）');
   // 字符停靠条：必须固定在卡片底部（不随画布滚动）、命中区 ≥44px
   // 字符停靠条：在 dockzone 内（不再全屏 fixed）、命中区 ≥44px
   ok(/\.dockzone\{[^}]*display:flex/.test(cssSrc) &&
