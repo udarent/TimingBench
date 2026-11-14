@@ -62,16 +62,18 @@ export function createShapes(ctx){
     return max;
   }
 
-  // 分组区间：把 `groupPath` 相同的连续行收敛成「一段」，供左侧括号使用（上游的做法）。
-  // 逐层扫描：第 d 层里，凡是 groupPath 长度 > d 且前 d+1 段相同的连续行，就是第 d 层的一段。
-  // 返回 [{name, depth, from, to}]，from / to 是行下标（含）。单行分组同样成段 —— 上游也画。
+  // 分组区间：把 `groupPath` 相同的连续行收敛成「一段」，供左侧括号使用（上游同款做法）。
+  // 第 d 层里，凡是 groupPath 长度 > d 且前 d+1 段相同的连续行就是一段；单行分组也成段。
+  // 返回 [{name, depth, from, to}]，from / to 是行下标（含）。depthMax 可由调用方传入，
+  // 这样行名左界与括号绘制共用同一次扫描（两边都要知道「最深嵌套几层」）。
   function groupDepth(lanes){
     var d=0;
     lanes.forEach(function(l){ if((l.groupPath||[]).length>d) d=l.groupPath.length; });
     return d;
   }
-  function groupRuns(lanes){
-    var out=[], depthMax=groupDepth(lanes);
+  function groupRuns(lanes, depthMax){
+    var out=[];
+    if(depthMax===undefined) depthMax=groupDepth(lanes);
     for(var d=0; d<depthMax; d++){
       var i=0;
       while(i<lanes.length){
@@ -429,9 +431,10 @@ export function createShapes(ctx){
     // 基线不设 dominant-baseline：上游用默认 alphabetic，字形从基线向**左**长；加了 central
     // 会让字形以基线为轴上下各伸一半，右半正好压到括号竖线上（实测重叠 2.5px）。
     var gEdit=can('laneMeta');
-    groupRuns(ir.lanes).forEach(function(g){
+    groupRuns(ir.lanes, gDepth).forEach(function(g){
       var y0=TOP+g.from*ROW_H+4, y1=TOP+(g.to+1)*ROW_H-4, h=y1-y0;
       if(h<10) return;
+      // bx 是括号的**起点**：钩子向右伸 5px，竖线落在 bx-5；组名放在 bx-10（与上游同值）。
       var bx=PAD+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-10;
       var brace='M'+bx+','+y0+' c -3,0 -5,2 -5,5 l 0,'+(h-10)+' c 0,3 2,5 5,5';
       o.push('<g class="groupBrace">'+

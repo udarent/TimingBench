@@ -83,7 +83,7 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
-        if(g.classList&&g.classList.contains('laneGroupName')) return {group:ln, gname:(g.textContent||'').replace(/^\[/,'').replace(/\]$/,'')};
+        if(g.classList&&g.classList.contains('laneGroupName')) return {group:ln};
         if(g.classList&&g.classList.contains('colhead')) return {col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('laneName')) return {nameLane:ln};
         if(g.classList&&g.classList.contains('cell')) return {lane:ln,tick:+g.getAttribute('data-tick')};
@@ -289,7 +289,7 @@ export function attachInteractions(ctx){
   }
   function openInlineFor(s){
     if(s.edgeIdx!==undefined){ openEdgeEditor(s.edgeIdx); return; }
-    if(s.group!==undefined){ openGroupEditor(s.group,s.gname); return; }
+    if(s.group!==undefined){ openGroupEditor(s.group); return; }
     if(s.nameLane){
       var l=findLane(s.nameLane); if(!l||l.kind==='spacer') return;
       var el=wrap.querySelector('text.laneName[data-lane="'+s.nameLane+'"] tspan.laneNameText');
@@ -305,12 +305,13 @@ export function attachInteractions(ctx){
   // 括号只显示「本层」的组名（与上游一致），但编辑的是**整条路径**：`regroup` 的 `old`
   // 要按完整路径精确匹配，否则嵌套组的改名 / 取消会落空（点外层 `Outer` 却改不动
   // `Outer/Inner` 的那几行）。
-  function openGroupEditor(laneId,name){
+  function openGroupEditor(laneId){
     var el=wrap.querySelector('.laneGroupName[data-lane="'+laneId+'"]');
     if(!el) return;
     var lane=null;
     if(state.ir) state.ir.lanes.forEach(function(l){ if(l.id===laneId) lane=l; });
-    var full=lane&&lane.groupPath&&lane.groupPath.length?lane.groupPath.join('/'):name;
+    if(!lane||!lane.groupPath.length) return;
+    var full=lane.groupPath.join('/');
     openInline(el,full,function(v){
       var path=String(v).split('/').map(function(s){return s.trim();}).filter(function(s){return s.length;});
       ctx.commit({t:'regroup',old:full,path:path},'regroup ['+full+'] -> '+(path.join('/')||'(none)'));
@@ -320,7 +321,7 @@ export function attachInteractions(ctx){
   // 就地编辑的唯一入口：双击（桌面）/ 双敲 / 长按（触摸）都走这里
   function openEditorFor(c){
     if(!c) return;
-    var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx,group:c.group,gname:c.gname};
+    var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx,group:c.group};
     if(!(snap.nameLane||snap.edgeIdx!==undefined||snap.group!==undefined||(snap.lane!==undefined&&snap.tick!==undefined))) return;
     ctx.painting=null; state.connect=null;
     ctx.redraw(); openInlineFor(snap);
@@ -337,7 +338,7 @@ export function attachInteractions(ctx){
     if(!c) return '';
     if(c.edgeIdx!==undefined) return 'e'+c.edgeIdx;
     if(c.nameLane) return 'n'+c.nameLane;
-    if(c.group!==undefined) return 'g'+c.group+'|'+c.gname;
+    if(c.group!==undefined) return 'g'+c.group;
     if(c.lane!==undefined&&c.tick!==undefined)
       return 'c'+c.lane+'@'+c.tick+'|'+(c.label?'l':'')+(c.tool||'')+(c.cact||'')+(c.meta||'');
     return JSON.stringify(c);
@@ -446,7 +447,7 @@ export function attachInteractions(ctx){
     if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
     if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
     if(c.meta){ if(dbl>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }
-    if(c.group!==undefined){ if(dbl>1) return; e.preventDefault(); openGroupEditor(c.group,c.gname); return; }
+    if(c.group!==undefined){ if(dbl>1) return; e.preventDefault(); openGroupEditor(c.group); return; }
     if(c.col!==undefined){
       if(dbl>1) return;
       e.preventDefault(); state.sel=c.col;
