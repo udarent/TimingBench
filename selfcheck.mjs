@@ -157,9 +157,10 @@ function check() {
   ok(!/\.nodeAnchor|\.connecting/.test(cssSrc), '样式层仍存在锚点规则');
   ok(/linkMode/.test(editorSrc) && /setLinkMode/.test(editorSrc), '状态层缺少唯一的连线模式入口');
   ok(/if\(state\.linkMode\)/.test(interSrc) && !/nodeAnchor/.test(interSrc), '交互层未做互斥分派或仍有锚点命中');
-  // 连线开关只剩 HUD 一处（底部操作栏 #touchbar 已在 0.9.13 删除：撤销/重做/连线 HUD 都有，
-  // 「取消选中」改成点画布空白，四场景一致）
-  ok(/cmd\('link'/.test(shapesSrc) && !/touchbar/.test(html), 'HUD 缺少连线开关，或已删的操作栏又回来了');
+  // 连线开关在全局顶栏（画布内 HUD 已于 0.9.14 删除）：按钮表来自 cap.js 的 hudCmds，
+  ok(/Cap\.hudCmds/.test(read('src/editor/touch.js')) && /'link'/.test(read('src/editor/cap.js')) &&
+     !/touchbar/.test(html) && !/hudSVG/.test(shapesSrc),
+    '顶栏缺少连线开关，或画布内 HUD / 已删的操作栏又回来了');
   // 全键盘可达：焦点入口、连线端点光标、命令分派、就地编辑焦点恢复、可见焦点样式
   ok(/focusPane/.test(editorSrc) && /ensureSelCell/.test(editorSrc) && /tabIndex=0/.test(editorSrc),
     '状态层缺少键盘焦点入口或画布不可聚焦');
@@ -243,12 +244,16 @@ function check() {
   // 选中行后的 up·down·改名·加行全在 #tbpanel，藏了等于把行重排整组关掉。
   ok(!/\.is-embed[^{}]*\.tbpanel[^{}]*\{[^}]*display:\s*none/.test(cssSrc),
     '嵌入态把上下文条（#tbpanel）隐藏了 —— 触摸端在卡片里将无法上下移动行');
-  ok(/\.is-embed \.tbpanel\{[^}]*bottom:0/.test(cssSrc),
-    '嵌入态的上下文条未贴卡片底部（卡片里没有 60px 操作栏，留着会浮一条空隙）');
+  // 卡片高度由 aspect-ratio 固定，dock 若参与布局会溢出 —— 卡片里 dockzone 绝对贴底，
+  // 两条（动作 / 字符）都在 dockzone 内，且 dockzone 不得盖住可交互的整幅画布。
+  ok(/\.is-embed \.dockzone\{[^}]*position:absolute/.test(cssSrc) &&
+     /\.is-embed \.dockzone\{[^}]*bottom:0/.test(cssSrc),
+    '嵌入态的底部两条未贴卡片底部（卡片高度固定，占布局会溢出）');
   // 字符停靠条：必须固定在卡片底部（不随画布滚动）、命中区 ≥44px
-  ok(/\.is-touch \.chardock\.open\{[^}]*position:fixed/.test(cssSrc) &&
-     /\.chardock \.chipbtn[^{]*\{[^}]*height:44px/.test(cssSrc),
-    '字符停靠条未固定在卡片底部或命中区不足 44px');
+  // 字符停靠条：在 dockzone 内（不再全屏 fixed）、命中区 ≥44px
+  ok(/\.dockzone\{[^}]*display:flex/.test(cssSrc) &&
+     /\.is-touch \.chardock \.chipbtn[^{]*\{[^}]*flex:0 0 48px/.test(cssSrc),
+    '字符停靠条未收进 dockzone，或触摸端命中区不足 48px');
   // 字符输入只剩一套实现（HTML 停靠条 #chardock）：桌面全平铺、触摸折叠 4+⋯。
   // 折叠判据必须由 TOUCH 决定，不能写死数量 —— 23 颗 48px 在 390 宽屏上放不下。
   const touchSrcEarly = read('src/editor/touch.js');
@@ -256,11 +261,12 @@ function check() {
     '字符停靠条未按指针决定是否折叠（桌面全平铺 / 触摸 4+⋯）');
   ok(!/charChips|actionBar/.test(shapesSrc),
     'SVG 内字符条（charChips / actionBar）应已删除，字符输入只走 #chardock');
-  ok(/g class="hudBar"/.test(shapesSrc) && /syncPinned/.test(shapesSrc) && /wrap\.scrollLeft/.test(shapesSrc),
-    'HUD 未钉在卡片可视区（滚动后会跑出视野）');
-  ok(/window\.addEventListener\('resize'/.test(editorSrc) &&
-     /ctx\.wrap\.addEventListener\('scroll'/.test(editorSrc),
-    '缺少旋屏重排或滚动跟随');
+  // 顶栏是页面级 HTML（不在 SVG 里），所以「滚动后按钮跑出视野」这类问题从根上没有了：
+  // 画布层不应再出现任何 HUD 图元。
+  ok(!/hudBar|hudSVG|syncPinned/.test(shapesSrc) &&
+     /\.topbar/.test(cssSrc) && /renderTopbar/.test(read('src/editor/touch.js')),
+    '画布内仍有 HUD 图元，或页面顶栏没接上');
+  ok(/window\.addEventListener\('resize'/.test(editorSrc), '缺少旋屏 / 缩放后的重排');
 
   // 分层：波形层（渲染内核）与操作层（UI）必须解耦。
   // ① waveform.js 只做「给定字符 → 图元字符串」，不得读视口尺寸或滚动位置；
@@ -307,8 +313,9 @@ function check() {
     '片段未转义 & 或 <（源码含 < > & 时会破坏属性）');
   ok(/data-wavejson="/.test(shareSrc),
     '片段应用双引号包裹 data-wavejson（单引号会让源码里的 &#39; 遍地都是）');
-  ok(/data-cmd="embed"|'embed'/.test(shapesSrc),
-    'HUD 未提供嵌入代码入口');
+  // 顶栏按钮表来自 cap.js（HUD_ITEMS 里有 embed），渲染在 touch.js 的 renderTopbar
+  ok(/'embed'/.test(read('src/editor/cap.js')) && /TOP_META/.test(read('src/editor/touch.js')),
+    '顶栏未提供嵌入代码入口');
   // 嵌入只读卡片必须按容器宽度等比缩小：否则 320/360px 手机上只能看到半张波形，
   // 而读者不会去横向拖一张只读卡片。缩放只改 svg 渲染尺寸，viewBox 保持内部坐标。
   ok(/state\.embedCard&&state\.readonly/.test(shapesSrc) && /var fit=/.test(shapesSrc),

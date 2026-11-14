@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **WaveJSON ⇄ editable timing diagrams.** Edit the diagram and the source is rewritten; edit the source and the diagram redraws — both stay in sync.
 
-`0.9.13` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
+`0.9.14` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
 
 There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
 
@@ -20,7 +20,7 @@ Two lines, no build step, no dependency in your project:
 
 The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the pencil icon in the corner) to go back to viewing. On a narrow card the whole diagram is **scaled down to fit the width**, so readers see everything at a glance instead of having to scroll sideways; once they click into editing it goes back to 1:1 with scrolling, so cells stay easy to hit. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
 
-Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the last icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
+Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the last icon in the page top bar (`<>`) — it generates exactly this snippet from your current source, ready to copy.
 
 **No script allowed?** Some hosts only render raw HTML and never execute `<script>` — an Obsidian note, for example. Use the `iframe only` tab in that same `<>` panel, or build it yourself: the content travels inside the URL, so nothing else is needed.
 
@@ -99,8 +99,8 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 | Inline editing | Double-click to edit a cell, signal name, data label, arc, a whole `wave` / `data` / `node` row, or `phase` / `period`; `Shift+Enter` edits the node marker of the selected cell |
 | Keyboard-only | Every edit — cells, rows, cycles, names, labels, arcs, reordering and link mode — has a shortcut. `Tab` / `F6` focuses the canvas and selects the first cell; `F6` returns to the source |
 | Structure editing | Add / remove rows and cycles, phase gaps, row reordering, append a trailing cycle, `group` / `spacer` |
-| Nodes and arcs | Click **◇ Link** in the canvas HUD, then click two waveform cells; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
-| Undo / redo | `Ctrl+Z` / `Ctrl+Y` (or the ↶ ↷ icons in the HUD); one paint drag, one row move and one arc each count as a single undo step |
+| Nodes and arcs | Click **◇ Link** in the top bar, then click two waveform cells; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Y` (or the ↶ ↷ icons in the top bar); one paint drag, one row move and one arc each count as a single undo step |
 | Tolerant parsing | While the source is incomplete, the last valid diagram stays on screen and a red dot shows the error and offset |
 | Desktop / touch | Code on the left, diagram on the right (stacked on narrow windows); coarse-pointer devices show both panes and switch orientation with the ⇄ / ⇅ icon |
 | Privacy | Everything runs in the browser — no requests, no accounts, no backend, no telemetry |
@@ -114,7 +114,7 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 | Connect an arc | Click ◇ Link in the HUD → click two waveform cells (dashed preview follows the pointer) → the mode exits once the arc is drawn | Tap ◇ Link in the canvas HUD → tap two waveform cells (a toast confirms the first tap) |
 | Rows / cycles / phase gaps | Select a row / column → the context bar on the right (11 row actions / 4 column actions) | Select a row / column → the context bar at the bottom (same icons) |
 | Reorder rows | Select the row → `↑` / `↓` in the context bar (or `Ctrl+↑↓`) | Same |
-| Undo / redo | ↶ ↷ in the canvas HUD, or `Ctrl+Z` / `Ctrl+Y` | ↶ ↷ in the canvas HUD |
+| Undo / redo | ↶ ↷ in the page top bar, or `Ctrl+Z` / `Ctrl+Y` | ↶ ↷ in the page top bar |
 | Cancel current mode | `Esc` | Tap empty canvas space (same in all four layouts) |
 | See source / diagram | Code left, diagram right, both visible | Both panes visible; switch orientation with ⇄ / ⇅ |
 | Cell data label / node marker | Select the cell → `✎` or the node icon in the context bar (or `B` / `Shift+Enter`) | Select the cell → the two cell-level icons in the bottom context bar |

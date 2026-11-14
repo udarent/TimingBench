@@ -14,12 +14,10 @@ export const G = {
   // 只读态与触摸端不画拖拽把手，左界就只剩 PAD —— 名字短时行名区自然更窄。
   NAME_W:    TOUCH ? 96 : 104,
   ROW_H:     TOUCH ? 60 : 48,
-  TOP:       TOUCH ? 88 : 64,
+  TOP:       TOUCH ? 44 : 36,
   PAD:       16,
   ACT_W:     TOUCH ? 24 : 196,   // 触摸端行工具改由操作栏承担，画布右侧不再留 196px
-  CMD_Y:     TOUCH ? 8 : 6,
-  CMD_H:     TOUCH ? 40 : 22,
-  COL_Y:     TOUCH ? 54 : 34,
+  COL_Y:     TOUCH ? 8 : 6,
   ACT_H:     40,
   CHIP_W:    TOUCH ? 44 : 28,
   CHIP_H:    TOUCH ? 44 : 26,

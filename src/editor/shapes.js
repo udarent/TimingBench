@@ -10,7 +10,7 @@ import { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf } from './waveform.
 
 var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元里的 T 是上沿 y 坐标，已移到 waveform.js）
 var CELL=G.CELL, NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
-var CMD_Y=G.CMD_Y, CMD_H=G.CMD_H, COL_Y=G.COL_Y, ACT_H=G.ACT_H;
+var COL_Y=G.COL_Y, ACT_H=G.ACT_H;
 var CHIP_W=G.CHIP_W, CHIP_H=G.CHIP_H, CHIP_STEP=G.CHIP_STEP;
 var XS=G.XS, CHIPS_W=G.CHIPS_W;
 
@@ -56,48 +56,6 @@ export function createShapes(ctx){
       if(w>max) max=w;
     }
     return max;
-  }
-  function hudBtn(x,cmd,txt,title,on,dim){
-    var bw=T?44:26, br=T?8:5, fs=T?18:13;
-    return '<g class="hudBtn" data-cmd="'+cmd+'" role="button" aria-label="'+esc(title)+'">'+
-      '<rect x="'+x+'" y="'+CMD_Y+'" width="'+bw+'" height="'+CMD_H+'" rx="'+br+'" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line)')+'" stroke-width="0.7" opacity="'+(dim?'.4':'1')+'"/>'+
-      '<text x="'+(x+bw/2)+'" y="'+(CMD_Y+CMD_H/2)+'" text-anchor="middle" dominant-baseline="central" font-size="'+fs+'" fill="'+(on?'var(--accent)':'var(--ink)')+'">'+esc(txt)+'</text></g>';
-  }
-  // HUD 是卡片顶栏：坐标相对视口，随横向 / 纵向滚动反向位移，始终钉在可视区左上角。
-  // 背景宽度取可视宽度而不是整张画布，避免顶栏拉成一条超出卡片的长带。
-  // 画哪几个图标由能力表给列表（cap.hudCmds）—— 「触摸卡片里该不该有连线」这个问题
-  // 从此只有一处答案，不再靠某个复合布尔表达式记得住。
-  var HUD_META={
-    undo:{txt:'↶',title:'Undo (Ctrl+Z)'},
-    redo:{txt:'↷',title:'Redo (Ctrl+Y)'},
-    link:{txt:'◇'},
-    layout:{txt:'⇄'},
-    embed:{txt:'<>',title:'Embed code: a snippet you can paste into your page'}
-  };
-  function hudSVG(viewW){
-    var sy=wrap.scrollTop;
-    var o=['<g class="hudBar" transform="translate('+wrap.scrollLeft+','+sy+')">'];
-    o.push('<rect x="0" y="0" width="'+viewW+'" height="'+(T?CMD_Y+CMD_H+4:COL_Y-4)+'" fill="var(--bg)"/>');
-    var x=PAD;
-    function cmd(c,t,title,dim,on){ o.push(hudBtn(x,c,t,title,!!on,dim)); x+=T?50:31; }
-    // 「是不是卡片」取 URL 事实（EMBED 常量），不取 state.embedCard：
-    // 后者由 embed-shell 在装配时置位，`?embed=1&mode=edit` 这种「一进来就编辑」的路径上
-    // 首帧还没置位 —— 用状态判断会让同一张卡片在两种进入方式下画出不同的 HUD（实测 4 个 vs 3 个）。
-    Cap.hudCmds(SC, EMBED).forEach(function(c){
-      var m=HUD_META[c];
-      if(c==='link'){
-        cmd('link',m.txt,state.linkMode?'Linking: click the second cell · K to exit · arrows to move · Enter to pick':'Link mode: click two cells, or press K then arrows + Enter',false,state.linkMode);
-      }else if(c==='layout'){
-        var cols=ctx.currentLayout&&ctx.currentLayout()==='cols';
-        cmd('layout',cols?'⇄':'⇅',cols?'Side by side — switch to stacked (code on top)':'Stacked — switch to side by side (code on left)',false,false);
-      }else if(c==='embed'){
-        cmd('embed',m.txt,m.title,false,false);
-      }else{
-        cmd(c,m.txt,m.title,!state[c].length);
-      }
-    });
-    o.push('</g>');
-    return o.join('');
   }
 
 
@@ -265,16 +223,9 @@ export function createShapes(ctx){
     var isEmpty=ir.lanes.length===0;
     if(isEmpty) bottom=TOP+ROW_H;
     var actY=bottom+4;
-    // 可视宽度够放下整排时，仍从波形起点 XS 起排（与格子对齐，保持原版式观感）；
-    // 放不下才退到卡片左缘用满整行宽度，靠多行纵向堆叠消化。
-    // 只读态不画字符条，也不需要为它预留高度（否则卡片底部会留一条空白）。
-    // 触摸端改由 HTML 停靠条承担（touch.js 的 renderDock），画布只为它预留高度：
-    // 这样选中格可以滚到停靠条上方，条本身也不再盖在波形上、更不会随滚动被反复位移。
-    var DOCK_H=56;
-    // 底栏高度是**布局派生**：谁在这个场景里承担字符输入，就为谁留高度。
-    // 字符输入只剩 HTML 停靠条（dock）：选中格时给 #chardock 让出高度，
-    // 两者都关（只读）= 0，否则卡片底部会留一条谁也点不到的空白。
-    var barH=can('dock')?(state.selCell?DOCK_H:ACT_H):0;
+    // 底部两条（动作 / 字符）现在是 .pane.diagram 里的真实 flex 子项，不再盖在画布上，
+    // 所以画布不必为它们预留高度 —— barH 恒为 0，画布高度由 flex 自动让出。
+    var barH=0;
     // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
@@ -303,7 +254,6 @@ export function createShapes(ctx){
     var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 '+vbTop+' '+W+' '+vbH+'" preserveAspectRatio="xMidYMin meet" class="'+(state.linkMode?'linkMode':'')+'" role="img" aria-label="Timing diagram editor">'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
     // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
-    if(can('hud')) o.push(hudSVG(viewW));
     // 列网格：只读态没有列号行，所以从画面顶起；线型与编辑态一致（同一条竖线，不加虚线）。
     var gridTop=state.readonly?vbTop+4:(TOP-10);
     for(c=0;c<=N;c++){
@@ -404,14 +354,7 @@ export function createShapes(ctx){
     wrap.innerHTML=o.join('');
     ctx.renderGutter();
   }
-  // 只改位移、不重绘：波形滚动时把操作层重新钉回可视区。
-  function syncPinned(){
-    var sx=wrap.scrollLeft, sy=wrap.scrollTop;
-    var hud=wrap.querySelector('g.hudBar');
-    if(hud) hud.setAttribute('transform','translate('+sx+','+sy+')');
-  }
 
   ctx.redraw=redraw;
-  ctx.syncPinned=syncPinned;
-  return { redraw:redraw, syncPinned:syncPinned };
+  return { redraw:redraw };
 }

@@ -1,19 +1,16 @@
-// 触摸端 UI 装配：标签页、底部操作栏、上下文操作面板、字符停靠条、轻提示。
-// 只在 coarse 指针（或 ?touch=1）时生效；桌面版式与「无常驻文字」口径不受影响。
+// 编辑器 UI 外壳：全局顶栏、上下文操作条、字符停靠条、轻提示。
+// 四场景共用同一份代码 —— 桌面与触摸的差别只在 CSS 决定摆哪、多大。
 // 本模块不产生新的编辑命令 —— 所有按钮复用 interactions.js 暴露的同一组动作。
 import { TOUCH } from './mode.js';
 import * as Cap from './cap.js';
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
+import { EMBED } from './embed.js';
 import { chipGlyph, chipDesc } from './waveform.js';
 import { esc } from '../core/util.js';
 
 export function attachTouchUI(ctx, dom) {
-  // 这个模块现在四场景都装配：字符停靠条（#chardock）是**唯一**的字符输入控件，
-  // 桌面也用它（原先桌面在 SVG 里另画一条 23 颗的字符条）。触摸专属的只有下面三处：
-  // 标签页 / 底部操作栏、长按出英文名（bindLongName）、首屏手势引导（guide）。
-  // 其余（上下文条渲染、停靠条渲染、afterRedraw 同步）在桌面同样需要，只是 CSS 决定摆哪。
-  var panel = dom.tbpanel, toast = dom.toast;
+  var topbar = dom.topbar, panel = dom.tbpanel, toast = dom.toast;
   var dock = dom.chardock, more = dom.charmore;
   // 不再因为「没有底部操作栏 / 上下文条容器」整块退出：字符停靠条（dock）在桌面
   // 与验收页里也要工作，缺哪个节点就跳过哪部分（下面各函数自带空值保护）。
@@ -28,6 +25,58 @@ export function attachTouchUI(ctx, dom) {
     toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1900);
   }
   ctx.say = say;
+
+  // ---- 全局顶栏 -----------------------------------------------------------
+  // 撤销 / 重做改的是源码历史，分屏方向改的是页面版式，生成嵌入代码读的是当前源码 ——
+  // 三者都与「画布内容」无关，所以不该只画在波形区里（左右分栏时尤其明显）。
+  // 连线开关也放这里：它只是切换画布的输入语义，按钮本身不需要贴着波形。
+  // 画布内因此不再画 HUD，sticky 顶栏的 translate 补偿（旧 syncPinned）一并消失。
+  var TOP_META = {
+    undo:   { txt: '↶', name: 'Undo (Ctrl+Z)' },
+    redo:   { txt: '↷', name: 'Redo (Ctrl+Y)' },
+    link:   { txt: '◇', name: 'Link mode: click two cells' },
+    layout: { txt: '⇄', name: 'Split direction' },
+    embed:  { txt: '<>', name: 'Embed code' }
+  };
+  var topKey = '';
+  function renderTopbar() {
+    if (!topbar) return;
+    var cmds = Cap.hudCmds(Cap.sceneOf(state), EMBED);
+    var cols = ctx.currentLayout ? ctx.currentLayout() === 'cols' : true;
+    // 只在「按钮集合 / 可用态 / 模式」变化时重建，避免每次 redraw 都闪一下
+    var key = cmds.join(',') + '|' + state.undo.length + '|' + state.redo.length + '|' +
+      (state.linkMode ? 'L' : '-') + '|' + (cols ? 'C' : 'R') + '|' + (state.embedCard ? 'E' : '-');
+    if (key === topKey && topbar.childNodes.length) return;
+    topKey = key;
+    topbar.textContent = '';
+    cmds.forEach(function (c) {
+      var m = TOP_META[c];
+      if (!m) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hudBtn';
+      b.setAttribute('data-cmd', c);
+      var name = m.name;
+      if (c === 'layout') {
+        name = cols ? 'Code left / diagram right — click for stacked'
+                    : 'Stacked — click for code left / diagram right';
+      } else if (c === 'link' && state.linkMode) {
+        name = 'Link mode: on — click to exit';
+      }
+      b.textContent = c === 'layout' ? (cols ? '⇄' : '⇅') : m.txt;
+      b.title = name;
+      b.setAttribute('aria-label', name);
+      if (c === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
+      var dim = (c === 'undo' && !state.undo.length) || (c === 'redo' && !state.redo.length);
+      if (dim) { b.disabled = true; b.classList.add('dim'); }
+      topbar.appendChild(b);
+    });
+  }
+  if (topbar) topbar.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button[data-cmd]') : null;
+    if (!b || b.disabled) return;
+    ctx.doCmd(b.getAttribute('data-cmd'));
+  });
 
   // 桌面把反馈藏在 title 里；触摸端没有 hover，改成一次性轻提示。
   // 阻止类提示也走轻提示 —— 源码区红点在时序图标签页里根本看不见，
@@ -141,6 +190,9 @@ export function attachTouchUI(ctx, dom) {
   }
 
   var ctxKind = null, ctxKey = null;
+  // 打开面板那一刻的滚动位置（见 renderContext 末尾）：用于把「布局抖动引发的 scroll」
+  // 与「用户真的想滑动」区分开。
+  var ctxScroll = null;
   // 程序化滚动（revealLane）刚设过的目标位置；scroll 事件里据此区分「自己滚的」与「用户滚的」。
   var selfScrollTop = null;
   // CSS 据此把退出按钮抬到面板上方，谁也不压谁。
@@ -185,6 +237,9 @@ export function attachTouchUI(ctx, dom) {
     });
     panel.classList.add('open');
     bindLongName(panel);
+    // 记下「打开面板这一刻的滚动位置」：重绘会换掉 SVG，内容尺寸变化可能让浏览器把
+    // scrollTop 夹回去并派发 scroll —— 那不是用户想滑动，不能拿它收面板（否则刚弹就消失）。
+    ctxScroll = ctx.wrap ? { left: ctx.wrap.scrollLeft, top: ctx.wrap.scrollTop } : null;
     // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮。
     // 这次滚动是程序自己发起的，要记下目标位置 —— 否则紧随其后的 scroll 事件会被
     // 当成「用户想看更多」，把刚打开的面板立刻收掉（选中靠下的行时表现为面板一闪就没）。
@@ -223,9 +278,6 @@ export function attachTouchUI(ctx, dom) {
     if (dock) { dock.textContent = ''; dock.classList.remove('open'); }
     if (more) { more.textContent = ''; more.classList.remove('open'); }
     document.documentElement.classList.remove('more-open');
-    // 触摸端上下文条要按「字符条是否占着底部」决定站多高，这个标记给它用（见 styles.css）
-    document.documentElement.classList.remove('dock-open');
-    document.documentElement.style.removeProperty('--dock-h');
   }
 
   function chipButton(v) {
@@ -285,10 +337,6 @@ export function attachTouchUI(ctx, dom) {
     dock.appendChild(xb);
     dock.classList.add('open');
     dockOpen = true;
-    // 选中格时上下文条（格级两项）与字符停靠条会同时在底部：把停靠条的实测高度告诉 CSS，
-    // 面板据此抬到它上方。写死高度不行 —— 桌面那条 40px、触摸 56px（44 命中区 + 内边距）。
-    document.documentElement.classList.add('dock-open');
-    document.documentElement.style.setProperty('--dock-h', (dock.offsetHeight || 56) + 'px');
     bindLongName(dock);
     if (moreOpen && more) bindLongName(more);
   }
@@ -306,6 +354,7 @@ export function attachTouchUI(ctx, dom) {
 
   ctx.afterRedraw = function () {
     // 每次重绘后重新决定：上下文条该显示哪一级动作、字符停靠条该不该在。
+    renderTopbar();
     renderContext();
     renderDock();
   };
@@ -314,12 +363,20 @@ export function attachTouchUI(ctx, dom) {
   // 面板下次会在重绘时按当前选中重新出现（ctxKey 已清，不会因为「同一对象」被跳过）。
   // 同步 compare 程序滚动：位置对得上就是 revealLane 自己刚滚的那一下，不能当用户滚动处理。
   if (ctx.wrap) ctx.wrap.addEventListener('scroll', function () {
+    // ① revealLane 自己刚滚的那一下：位置对得上就放过
     if (selfScrollTop && Math.abs(ctx.wrap.scrollLeft - selfScrollTop.left) < 2 &&
         Math.abs(ctx.wrap.scrollTop - selfScrollTop.top) < 2) {
       selfScrollTop = null;
       return;
     }
     selfScrollTop = null;
+    // ② 重绘换掉 SVG 后浏览器把 scrollTop 夹回原位时也会派发 scroll：位置与「开面板那一刻」
+    //    一致说明画布没动，同样不能收面板。
+    if (ctxScroll && Math.abs(ctx.wrap.scrollLeft - ctxScroll.left) < 2 &&
+        Math.abs(ctx.wrap.scrollTop - ctxScroll.top) < 2) {
+      return;
+    }
+    ctxScroll = null;
     hideContext();
   }, { passive: true });
 

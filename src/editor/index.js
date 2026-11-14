@@ -259,13 +259,12 @@ export function createEditor(dom){
     ensureSelCell();
   });
   // 卡片口径：波形层可横向滚动 / 双指缩放，操作层（HUD、字符条）钉在可视区。
-  // 滚动只改这两个 <g> 的位移，不重绘；旋屏 / 窗口缩放才需要重排（字符条按可视宽度换行）。
+  // 旋屏 / 窗口缩放才需要重排（字符条按可视宽度换行；顶栏是页面级 flex，不用重排）
   var rzTimer=null;
   window.addEventListener('resize',function(){
     clearTimeout(rzTimer);
     rzTimer=setTimeout(function(){ if(!ctx.inlineCtx) ctx.redraw(); },120);
   });
-  ctx.wrap.addEventListener('scroll',function(){ if(ctx.syncPinned) ctx.syncPinned(); });
   code.addEventListener('scroll',function(){ gutter.scrollTop=code.scrollTop; });
   code.addEventListener('input',function(){
     renderGutter();

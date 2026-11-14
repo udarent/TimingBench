@@ -3,10 +3,11 @@
 @media (prefers-color-scheme:dark){:root{--bg:#191a1c;--panel:#222427;--src-bg:#202225;--ink:#e9e9e6;--muted:#9b9b95;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.3);--accent:#6cb0ee;--accent-bg:#14304a;--ok:#5dcaa5;--ok-bg:#12382b;--warn:#ef9f27;--warn-bg:#3a2a10;--err:#f09595;--err-bg:#3b1e1e;--bus:#ef9f27;--bus-bg:#3a2a10;--bus2:#3a3b3e;--bus3:#4a4a24;--bus4:#4a3520;--bus5:#1d3a55;--bus6:#1e4547;--bus7:#22452a;--bus8:#402748;--bus9:#4a2a28}}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);overflow:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);overflow:hidden;
+  display:flex;flex-direction:column;height:100vh;height:100dvh}
 /* 分屏：左右（左代码 / 右时序图）为默认；HUD 的 ⇄ / ⇅ 按钮可切成上下，选择会记住。
    没有显式选择时按宽度自适应（窄窗口退回上下，见下面的媒体查询）。 */
-.app{display:grid;grid-template-columns:minmax(320px,34%) minmax(0,1fr);height:100vh;height:100dvh}
+.app{display:grid;grid-template-columns:minmax(320px,34%) minmax(0,1fr);flex:1 1 auto;min-height:0}
 .app[data-layout="rows"]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
 .app[data-layout="rows"] .pane.src{border-right:0;border-bottom:1px solid var(--line)}
 .app[data-layout="cols"]{grid-template-columns:minmax(320px,34%) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
@@ -21,7 +22,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
 .gutter{position:absolute;left:0;top:0;bottom:0;width:40px;padding:12px 9px 12px 0;text-align:right;font:12px/1.65 var(--mono);color:var(--muted);border-right:1px solid var(--line);overflow:hidden;white-space:pre;user-select:none;pointer-events:none}
 /* 只作用于源码框：.shareCode 等其它 textarea 不能被这条绝对定位规则误伤 */
 .pane.src textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;background:transparent;color:var(--ink);padding:12px 10px 12px 50px;font:12px/1.65 var(--mono);tab-size:2;white-space:pre;overflow:auto}
-.svgwrap{position:absolute;inset:0;overflow:auto;background:var(--bg);outline:none}
+/* 波形区 = 画布 + 底部两条（动作 / 字符）。两条是**真实的 flex 子项**，
+   所以不再盖在波形上、也不需要画布为它们预留高度。 */
+.pane.diagram{position:relative;display:flex;flex-direction:column;min-height:0}
+.svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto;background:var(--bg);outline:none}
+.dockzone{position:relative;flex:0 0 auto;display:flex;flex-direction:column;z-index:20}
+/* 嵌入卡片的高度由 CSS aspect-ratio 固定（无脚本时没法自适应），dock 一旦占布局就会溢出 ——
+   卡片里退回「覆盖在画布底部」，整页仍是真实 flex 子项（画布自动让高度）。 */
+.is-embed .dockzone{position:absolute;left:0;right:0;bottom:0}
 /* 离屏文本测量容器：只给 shapes.js 量行名宽度用，永远不可见、不吃事件 */
 .measure{position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;visibility:hidden;font-family:var(--sans)}
 /* 键盘用户用 Tab / F6 进入画布时给出可见焦点；鼠标点击不显示 */
@@ -44,10 +52,9 @@ svg{display:block;font-family:var(--sans)}
   100%{opacity:0;stroke-width:1.2}
 }
 [hidden]{display:none!important}
-/* 极简 HUD：撤销 / 重做 / 连线三个图标；无常驻文字，画布内无状态圆点 */
-.hudBtn,.charChip{cursor:pointer}
-.hudBtn text,.colhead text,.colActBtn text,.charChip text{pointer-events:none}
-.hudBtn:hover rect{fill:var(--accent-bg);stroke:var(--accent)}
+/* 画布内不再有 HUD（撤销 / 重做 / 连线 / 分屏 / 嵌入已移到页面顶栏） */
+.charChip{cursor:pointer}
+.colhead text,.colActBtn text,.charChip text{pointer-events:none}
 .cellSel{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:3 2;pointer-events:none}
 /* 连线模式的端点光标：与普通选中框互斥，只服务键盘 / 触摸端点定位 */
 .linkCursor{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:5 3;pointer-events:none}
@@ -110,7 +117,22 @@ svg{display:block;font-family:var(--sans)}
    标签页（.tabbar）已在 0.9.13 删除 —— 两区同屏后它只改一个没有消费者的 data-view 属性。
    --------------------------------------------------------------------------- */
 .tbpanel,.toast{display:none}
-.is-touch body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+/* 全局顶栏（2026-11-14 起）：撤销 / 重做 / 连线 / 分屏方向 / 生成嵌入代码。
+   这些动作与「画布内容」无关，左右分栏时必须横跨两栏 —— 原先它们画在 SVG 里，
+   只能在波形区出现，而且要靠 translate 补偿跟随滚动。 */
+.topbar{display:flex;align-items:center;gap:6px;flex:0 0 40px;padding:0 10px;
+  background:var(--panel);border-bottom:1px solid var(--line);user-select:none}
+.topbar .hudBtn{min-width:32px;height:26px;padding:0 7px;border:1px solid var(--line);
+  border-radius:6px;background:var(--src-bg);color:var(--ink);cursor:pointer;
+  display:grid;place-items:center;font:600 14px/1 var(--sans)}
+.topbar .hudBtn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.topbar .hudBtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
+.topbar .hudBtn.dim,.topbar .hudBtn:disabled{opacity:.4;cursor:default}
+/* 只读态没有任何全局动作 → 顶栏整条不占位（否则卡片 iframe 会白白高 40px） */
+.topbar:empty{display:none}
+.is-touch .topbar{flex:0 0 54px;padding:0 8px;gap:8px}
+.is-touch .topbar .hudBtn{min-width:44px;height:44px;padding:0;font-size:18px;border-radius:10px}
+.is-touch body{overflow:hidden}
 .is-touch .app{flex:1 1 auto;height:auto;min-height:0}
 /* 触摸端不再分「源码页 / 时序图页」两页：两区同屏，方向同 HUD 的切换按钮 */
 
@@ -123,29 +145,15 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .cellSel{stroke-width:2.4}
 /* 桌面：上下文条钉在右侧（触摸端钉底部，规则在下面 .is-touch 段里）。
    行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头按钮都已撤掉。 */
-.tbpanel.open{display:flex;position:fixed;right:10px;top:50%;transform:translateY(-50%);
-  width:196px;flex-wrap:wrap;gap:4px;padding:8px;z-index:24;
-  background:var(--panel);border:1px solid var(--line);border-radius:10px;
-  box-shadow:0 6px 20px rgba(0,0,0,.14)}
+.tbpanel.open{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;
+  background:var(--panel);border-top:1px solid var(--line)}
 .tbpanel button.ctxbtn{width:34px;height:34px;min-width:34px;padding:0;border:1px solid var(--line);
   border-radius:7px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
   cursor:pointer}
 .tbpanel button.ctxbtn svg{width:17px;height:17px;fill:none;stroke:currentColor}
 .tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
-.is-touch .tbpanel{display:none;position:fixed;left:0;right:0;bottom:0;z-index:20;
-  /* 桌面那条规则是「钉在右侧」的三件套：top:50% + width:196px + transform:translateY(-50%)。
-     触摸端改钉底部，这三项必须显式复位，否则三条一起出问题：
-       · top:50% 与 bottom 同时存在 → 高度被两端拉开（844 高时面板高 318px，盖住半屏）
-       · width:196px 与 left/right:0 冲突 → 只占左边 196px，两个 44px 图标就换行
-       · transform 再把整块上移自身高度的一半 → 视觉位置与 bottom 对不上 */
-  top:auto;width:auto;transform:none;
-  flex-wrap:wrap;gap:8px;padding:10px;max-height:46dvh;overflow:auto;
-  background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.14)}
-.is-touch .tbpanel.open{display:flex}
-/* 选中格子时底部同时有两条：格级动作条（label / node）与字符停靠条。
-   两者都是「选中格」派生的，压在同一位置会互相盖住 —— 面板抬到字符条上方 4px。
-   停靠条高度由 JS 实测后写进 --dock-h（桌面 40 / 触摸 56），不写死。 */
-html.is-touch.dock-open .tbpanel.open{bottom:calc(var(--dock-h,56px) + 4px)}
+.is-touch .tbpanel{display:none}
+.is-touch .tbpanel.open{display:flex;flex-wrap:wrap;gap:8px;padding:8px;max-height:40dvh;overflow:auto}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:13px var(--sans);touch-action:manipulation}
@@ -168,13 +176,12 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(var(--dock-h,56px) + 4px)}
    按指针定。原先桌面在 SVG 里另画一条 23 颗的 charChips —— 两套渲染、两套布局、
    两套点击，还有一段「滚动时反向位移把 chips 钉回可视区」的补偿。现在一套。
    桌面放得下 23 颗就全平铺（不折叠），触摸端 4 颗 + ⋯，由 JS 按 TOUCH 决定数量。 */
-.chardock.open{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:22;
+.chardock.open{display:flex;
   align-items:center;justify-content:flex-start;gap:4px;height:40px;padding:4px 8px;
   background:var(--panel);border-top:1px solid var(--line);user-select:none;
   /* 23 颗 × 30px ≈ 690：窄卡片（如 520 的 iframe）放不下时必须横向滚动，
      不能居中溢出 —— 居中会让第一颗跑到负坐标，用户看不到也点不到。 */
   overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
-.is-embed .chardock.open{bottom:0}
 .chardock .chipbtn{position:relative;flex:0 0 30px;width:30px;height:28px;min-width:30px;padding:0;
   border:1px solid var(--line);border-radius:6px;background:var(--src-bg);color:var(--ink);overflow:hidden}
 .chardock .chipbtn svg{position:absolute;inset:0;width:100%;height:100%;
@@ -187,17 +194,15 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(var(--dock-h,56px) + 4px)}
 .chardock .chipbtn:hover{border-color:var(--accent)}
 .chardock .chipbtn.clear{flex:0 0 26px;width:26px;min-width:26px}
 .chardock .chipbtn.clear span{font-size:14px;color:var(--muted)}
-.is-touch .chardock.open{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:22;
+.is-touch .chardock.open{display:flex;
   align-items:center;gap:6px;height:56px;padding:6px 8px;
   background:var(--panel);border-top:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
   touch-action:pan-x;user-select:none}
-.is-embed .chardock.open{bottom:0}
-.is-touch .charmore.open{display:flex;position:fixed;left:0;right:0;bottom:116px;z-index:23;
+.is-touch .charmore.open{display:flex;position:absolute;left:0;right:0;bottom:100%;z-index:23;
   flex-wrap:wrap;gap:6px;padding:8px;max-height:min(62dvh,260px);overflow:auto;
   background:var(--panel);border-top:1px solid var(--line);
   box-shadow:0 -6px 18px rgba(0,0,0,.12)}
-.is-embed .charmore.open{bottom:56px}
 .is-touch .chardock .chipbtn,.is-touch .charmore .chipbtn{position:relative;flex:0 0 48px;
   width:48px;height:44px;min-width:48px;padding:0;border:1px solid var(--line);border-radius:10px;
   background:var(--src-bg);color:var(--ink);touch-action:manipulation;overflow:hidden}
@@ -254,7 +259,7 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(var(--dock-h,56px) + 4px)}
    但**上下文条必须保留** —— 触摸端没有 hover，选中行 / 列后的 up·down·改名·加行
    全在 #tbpanel 里，隐藏它等于把行重排、行编辑、列操作整组功能关掉。 */
 /* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；面板挡住波形是瞬时的（选完即收） */
-.is-embed .tbpanel{bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+.is-embed .tbpanel.open{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
 .is-embed .pane.src{display:none!important}
 /* 卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
    之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，
@@ -262,7 +267,7 @@ html.is-touch.dock-open .tbpanel.open{bottom:calc(var(--dock-h,56px) + 4px)}
    只读态内容本来就等比缩到卡片宽、不会溢出，所以看不出差别。 */
 .is-embed .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
 .is-embed .pane.diagram{display:block;height:100%}
-.is-embed .svgwrap{position:absolute;inset:0;overflow:auto;min-height:0}
+.is-embed .svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto}
 /* 内容比卡片窄时水平居中（宽于卡片时仍从左侧起排、可横向滚动） */
 /* 只读卡片：让 SVG 自己按视口等比适配（viewBox 不变，preserveAspectRatio 默认 xMidYMid meet）。
    原因有两个：① 纯 iframe 的高度由宿主的 aspect-ratio 决定，而内部几何常量会随指针类型变

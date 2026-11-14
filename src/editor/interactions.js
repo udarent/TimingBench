@@ -77,7 +77,6 @@ export function attachInteractions(ctx){
     while(g&&g!==wrap){
       if(g.getAttribute){
         var ln=g.getAttribute('data-lane');
-        if(g.classList&&g.classList.contains('hudBtn')) return {cmd:g.getAttribute('data-cmd')};
         if(g.classList&&g.classList.contains('charChip')) return {ch:g.getAttribute('data-ch')};
         if(g.classList&&g.classList.contains('emptyRow')) return {empty:1};
         if(g.classList&&g.classList.contains('rowTool')) return {tool:g.getAttribute('data-act'),lane:ln};
