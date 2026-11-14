@@ -467,6 +467,11 @@ function check() {
   // 纯 node 行（无 wave）必须保留锚点：否则引用它的 edge 找不到端点（教程 Sharp lines 样例）。
   ok(/var nn = n > 0 \? n :/.test(read('src/core/ir.js')),
     '只有 node、没有 wave 的行会丢锚点，导致 edge 找不到端点');
+  // 分组可编辑（教程 Step 5 的双向缺口）：regroup 改变 groupPath，点组名 `[A/B]` 打开输入框。
+  ok(/case 'regroup'/.test(read('src/core/ir.js')) && /function openGroupEditor\(/.test(read('src/editor/interactions.js')),
+    '分组改名 / 重分组（regroup / openGroupEditor）缺失');
+  ok(/laneGroupName/.test(shapesSrc) && /laneGroupName/.test(read('src/editor/interactions.js')),
+    '分组名不可点改（缺 laneGroupName 命中或入口）');
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',

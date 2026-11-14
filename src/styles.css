@@ -82,6 +82,9 @@ svg{display:block;font-family:var(--sans)}
 .rowTool:hover rect{fill:var(--accent-bg);stroke:var(--accent)}
 .laneMeta{cursor:text}
 .laneMeta:hover{fill:var(--accent)}
+/* 分组名仅在编辑态可点改（有 data-act 时才是可点区域） */
+.laneGroupName[data-act]{cursor:text}
+.laneGroupName[data-act]:hover{fill:var(--accent)}
 /* 列头：悬停 / 选中该列才出现 + − |；幽灵列头只在末尾追加周期 */
 .colAct{opacity:0;pointer-events:none;transition:opacity .12s}
 .colhead:hover .colAct,.colhead.sel .colAct,.colhead.ghost .colAct{opacity:1;pointer-events:auto}

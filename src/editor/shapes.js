@@ -341,8 +341,12 @@ export function createShapes(ctx){
         o.push(rowTools(l,y,ACT_X)); o.push('</g>');
         return;
       }
-      // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉；分组名不是控件，两态都显示。
-      var gname=l.groupPath.length?' <tspan fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>':'';
+      // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉；分组名编辑态可点改（`A/B` 嵌套、
+      // 清空即取消分组），只读卡片只显示、不给编辑入口。
+      var gEdit=can('laneMeta');
+      var gname=l.groupPath.length
+        ? ' <tspan class="laneGroupName"'+(gEdit?' data-act="group" data-lane="'+l.id+'"':'')+' fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>'
+        : '';
       var meta=can('laneMeta')?'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
         '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>':'';
       // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，

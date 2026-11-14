@@ -83,6 +83,7 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
+        if(g.classList&&g.classList.contains('laneGroupName')) return {group:ln, gname:(g.textContent||'').replace(/^\[/,'').replace(/\]$/,'')};
         if(g.classList&&g.classList.contains('colhead')) return {col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('laneName')) return {nameLane:ln};
         if(g.classList&&g.classList.contains('cell')) return {lane:ln,tick:+g.getAttribute('data-tick')};
@@ -288,6 +289,7 @@ export function attachInteractions(ctx){
   }
   function openInlineFor(s){
     if(s.edgeIdx!==undefined){ openEdgeEditor(s.edgeIdx); return; }
+    if(s.group!==undefined){ openGroupEditor(s.group,s.gname); return; }
     if(s.nameLane){
       var l=findLane(s.nameLane); if(!l||l.kind==='spacer') return;
       var el=wrap.querySelector('text.laneName[data-lane="'+s.nameLane+'"] tspan.laneNameText');
@@ -298,12 +300,22 @@ export function attachInteractions(ctx){
     if(s.lane===undefined||s.tick===undefined) return;
     openCellCharEditor(s.lane,s.tick);
   }
+  // 分组改名 / 重分组：点行名后的 `[A/B]` 打开输入框；`/` 表示嵌套，清空即取消分组。
+  // 提交的 regroup 会作用于所有 groupPath 等于旧路径的行（含 spacer），整组一起改名。
+  function openGroupEditor(laneId,name){
+    var el=wrap.querySelector('tspan.laneGroupName[data-lane="'+laneId+'"]');
+    if(!el) return;
+    openInline(el,name,function(v){
+      var path=String(v).split('/').map(function(s){return s.trim();}).filter(function(s){return s.length;});
+      ctx.commit({t:'regroup',old:name,path:path},'regroup ['+name+'] -> '+(path.join('/')||'(none)'));
+    },{ title:'group name (use / to nest, empty to ungroup)', placeholder:'group', width:150 });
+  }
 
   // 就地编辑的唯一入口：双击（桌面）/ 双敲 / 长按（触摸）都走这里
   function openEditorFor(c){
     if(!c) return;
-    var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx};
-    if(!(snap.nameLane||snap.edgeIdx!==undefined||(snap.lane!==undefined&&snap.tick!==undefined))) return;
+    var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx,group:c.group,gname:c.gname};
+    if(!(snap.nameLane||snap.edgeIdx!==undefined||snap.group!==undefined||(snap.lane!==undefined&&snap.tick!==undefined))) return;
     ctx.painting=null; state.connect=null;
     ctx.redraw(); openInlineFor(snap);
   }
@@ -319,6 +331,7 @@ export function attachInteractions(ctx){
     if(!c) return '';
     if(c.edgeIdx!==undefined) return 'e'+c.edgeIdx;
     if(c.nameLane) return 'n'+c.nameLane;
+    if(c.group!==undefined) return 'g'+c.group+'|'+c.gname;
     if(c.lane!==undefined&&c.tick!==undefined)
       return 'c'+c.lane+'@'+c.tick+'|'+(c.label?'l':'')+(c.tool||'')+(c.cact||'')+(c.meta||'');
     return JSON.stringify(c);
@@ -334,7 +347,7 @@ export function attachInteractions(ctx){
   }
   function editable(c){
     if(!c) return false;
-    if(c.edgeIdx!==undefined||c.nameLane) return true;
+    if(c.edgeIdx!==undefined||c.nameLane||c.group!==undefined) return true;
     return c.lane!==undefined&&c.tick!==undefined&&
       c.label===undefined&&c.tool===undefined&&c.cact===undefined&&
       c.meta===undefined&&c.ch===undefined&&c.col===undefined&&c.rowLane===undefined;
@@ -427,6 +440,7 @@ export function attachInteractions(ctx){
     if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
     if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
     if(c.meta){ if(dbl>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }
+    if(c.group!==undefined){ if(dbl>1) return; e.preventDefault(); openGroupEditor(c.group,c.gname); return; }
     if(c.col!==undefined){
       if(dbl>1) return;
       e.preventDefault(); state.sel=c.col;

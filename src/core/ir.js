@@ -370,6 +370,13 @@ export const Core = (function () {
         break;
       }
       case 'deleteLane': n.lanes=n.lanes.filter(function(l){return l.id!==op.lane;}); break;
+      // 分组改名 / 重分组：把 groupPath 恰好等于 old 的所有行（含 spacer）整体改成新路径。
+      // 空路径 = 取消分组。分组结构变化无法用字面量补丁表达，patchSource 会回落全量 emit。
+      case 'regroup': {
+        var oldKey=String(op.old||'');
+        n.lanes.forEach(function(l){ if(l.groupPath.join('/')===oldKey) l.groupPath=(op.path||[]).slice(); });
+        break;
+      }
       default: changed=false;
     }
     if(changed){ n.rev++; }
