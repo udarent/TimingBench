@@ -426,6 +426,8 @@ export function createShapes(ctx){
     // **竖排**（rotate -90）贴在括号左侧；嵌套时逐层**向右**再让一格（外组在左、内组在右，
     // 与上游一致）。括号本身不吃事件（点它等于点这一行），组名在编辑态可点改。
     // 尺寸对齐上游：组名字号与行名相同（12）、离括号 10、描边实心（上游是不透明的 1px 线）。
+    // 基线不设 dominant-baseline：上游用默认 alphabetic，字形从基线向**左**长；加了 central
+    // 会让字形以基线为轴上下各伸一半，右半正好压到括号竖线上（实测重叠 2.5px）。
     var gEdit=can('laneMeta');
     groupRuns(ir.lanes).forEach(function(g){
       var y0=TOP+g.from*ROW_H+4, y1=TOP+(g.to+1)*ROW_H-4, h=y1-y0;
@@ -435,7 +437,7 @@ export function createShapes(ctx){
       o.push('<g class="groupBrace">'+
         '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>'+
         '<text class="laneGroupName"'+(gEdit?' data-act="group" data-lane="'+ir.lanes[g.from].id+'"':'')+
-        ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle" dominant-baseline="central"'+
+        ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle"'+
         ' font-size="12" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
         '</g>');
     });
