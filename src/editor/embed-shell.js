@@ -4,6 +4,7 @@
 // 不碰渲染内核与编辑语义 —— 只控制「哪些层画、哪些事件放行」。
 import { EMBED, EDIT_ON_START } from './embed.js';
 import { G } from './geometry.js';
+import { TOUCH } from './mode.js';
 import { decodePayload } from './payload.js';
 
 // 只有 iframe、没有脚本的宿主（Obsidian 笔记、只能贴 HTML 的编辑器）走 URL 片段带内容：
@@ -42,7 +43,10 @@ export function attachEmbed(ctx, opts) {
     try { var ua = navigator.userActivation; return !ua || ua.isActive !== false; }
     catch (e) { return true; }
   }
-  function isCramped() { return window.innerWidth < 520 || window.innerHeight < 340; }
+  // 只对「粗指针 + 卡片确实太小」生效：全屏是为手指准备的补救 —— 44px 的动作按钮在小卡片里
+  // 会折成好几排，把画布挤没。细指针没有这个问题（CSS 已把上下文条压成单行、可横向滚动），
+  // 而宿主页面点一下就把整块屏幕抢走，比挤一点更糟。
+  function isCramped() { return TOUCH && (window.innerWidth < 520 || window.innerHeight < 340); }
   function requestFs() {
     var fn = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
     if (!fn) return;

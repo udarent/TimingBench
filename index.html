@@ -3,181 +3,83 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TimingBench · editable WaveJSON timing diagrams</title>
+<title>TimingBench - Editable digital timing diagram everywhere</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.9.24">
-<meta name="description" content="TimingBench draws timing diagrams from WaveJSON — and lets you edit either side. Static, build-free, dependency-free, embeddable anywhere: read-only until clicked, editable in place.">
+<meta name="version" content="0.9.25">
+<meta name="description" content="TimingBench draws your timing diagram from a simple textual description, the WaveJSON format — and lets you edit either side: change a character and the diagram redraws, click the diagram and the description is rewritten.">
 <style>
+  /* Layout mirrors wavedrom.com's front page: one centered column, a logo block,
+     the wordmark, the tagline, four lines of text, and a row of links. */
   :root{
-    --bg:#fff;--panel:#fff;--src-bg:#f7f8fa;--ink:#22262b;--muted:#8a8f96;
-    --line:rgba(0,0,0,.10);--accent:#1a6fb5;--accent-bg:#eaf3fb;--wordmark:#2b3138;
+    --bg:#eee;--ink:#22262b;--muted:#999;--soft:#888;--hot:#f88;--active:#88f;
     --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
-    --sans:system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    --roboto:"Roboto","Segoe UI",helvetica,Arial,sans-serif;
+    --word:"Varela Round",ui-rounded,"Trebuchet MS",helvetica,Arial,sans-serif;
   }
   @media (prefers-color-scheme:dark){
-    :root{--bg:#161719;--panel:#1f2124;--src-bg:#202225;--ink:#e9e9e6;--muted:#9a9a94;
-          --line:rgba(255,255,255,.14);--accent:#6cb0ee;--accent-bg:#12293d;--wordmark:#e9e9e6}
+    :root{--bg:#161719;--ink:#e9e9e6;--muted:#9a9a94;--soft:#a0a09a;--hot:#f88;--active:#9cf}
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-       font:16px/1.75 var(--sans);-webkit-font-smoothing:antialiased}
-  .wrap{max-width:760px;margin:0 auto;padding:40px 24px 72px}
+  body{margin:0;background:var(--bg);color:var(--ink);text-align:center;
+       font:16px/1.6 var(--roboto);-webkit-font-smoothing:antialiased}
+  .roboto{font-family:var(--roboto)}
+  .word{font-family:var(--word)}
+  .lll{margin-top:35px;margin-bottom:35px}
+  .lll > a{padding:30px 20px 0}
+  .lll a:link,.lll a:visited{color:var(--soft);text-decoration:none}
+  .lll a:hover{color:var(--hot)}
+  .lll a:active{color:var(--active)}
+  .word1{font-size:35px;font-weight:700}
+  .word2{font-size:25px;color:var(--muted);margin-bottom:35px}
+  .word3{font-size:18px;margin-bottom:35px;padding:0 16px}
 
-  /* Top navigation — mirrors WaveDrom's Tutorial / Editor / Source / Twitter row. */
-  .topnav{display:flex;align-items:center;justify-content:space-between;gap:16px;
-          padding-bottom:26px;border-bottom:1px solid var(--line);margin-bottom:46px}
-  .brand{font-size:15px;font-weight:600;letter-spacing:-.01em}
-  .topnav nav{display:flex;gap:20px;font-size:14px}
-  .topnav nav a{color:var(--muted);text-decoration:none}
-  .topnav nav a:hover{color:var(--accent)}
-
-  /* Hero: a large wordmark with a tagline, like wavedrom.com's logo block. */
-  .hero{text-align:center;margin:0 0 40px}
-  .wordmark{font-size:56px;line-height:1.05;font-weight:800;letter-spacing:-.03em;color:var(--wordmark)}
-  .tagline{font-size:20px;color:var(--muted);margin-top:10px;letter-spacing:.01em}
-  .hero p{max-width:620px;margin:22px auto 0;color:var(--ink)}
-  .hero p.sub{color:var(--muted);font-size:15px;margin-top:10px}
-
-  .linkrow{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 22px;
-           margin:0 0 52px;font-size:14px}
-  .linkrow a{color:var(--accent);text-decoration:none}
-  .linkrow a:hover{text-decoration:underline}
-
-  /* The live embed example is a real editable card, not a recording. */
-  .live{margin:0 0 20px}
-  .livecard{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
-  .livecard iframe{display:block;width:100%;border:0}
-  .cap{margin:10px 0 0;font-size:13px;line-height:1.7;color:var(--muted)}
-  .cap b{color:var(--ink);font-weight:600}
-  .cap code{font-family:var(--mono);font-size:12.5px}
-
-  figure{margin:0 0 56px}
-  figure img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
-  figcaption{margin-top:10px;font-size:13px;color:var(--muted)}
-
-  h2{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
-     color:var(--muted);margin:0 0 20px}
-  ul.feat{list-style:none;padding:0;margin:0 0 56px;
-          display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px 30px}
-  ul.feat li{font-size:15px;line-height:1.7}
-  ul.feat b{display:block;font-weight:600;margin-bottom:2px}
-  ul.feat span{color:var(--muted)}
-
-  pre{margin:0 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;
-      background:var(--src-bg);overflow:auto;font:12.5px/1.7 var(--mono);tab-size:2}
-  .note{font-size:13px;color:var(--muted);margin:0 0 56px}
-  .note code{font-family:var(--mono);font-size:12.5px}
-
-  footer{border-top:1px solid var(--line);padding-top:22px;font-size:13px;color:var(--muted);line-height:1.9}
-  footer a{color:inherit}
-  footer a:hover{color:var(--accent)}
+  /* The logo slot holds a live, editable diagram drawn for this page — the
+     diagram is the product, so it takes the place of a static logo image. */
+  .logo{width:100%;max-width:360px;margin:0 auto 35px}
+  .logo iframe{display:block;width:100%;border:0}
+  .logo .fallback{font:13px/1.6 var(--roboto);color:var(--muted);margin:0}
 
   @media (max-width:560px){
-    .wrap{padding:28px 20px 56px}
-    .wordmark{font-size:40px}
-    .tagline{font-size:17px}
-    .hero p{font-size:15px}
-    .topnav nav{gap:14px;font-size:13px}
+    .word1{font-size:28px}
+    .word2{font-size:19px;padding:0 12px}
+    .word3{font-size:16px}
+    .lll > a{padding:14px 12px 0;display:inline-block}
   }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header class="topnav">
-    <span class="brand">TimingBench</span>
-    <nav>
-      <a href="tutorial.html">Tutorial</a>
-      <a href="editor.html">Editor</a>
-      <a href="https://github.com/udarent/TimingBench">Source</a>
-      <a href="https://github.com/udarent/TimingBench/issues">Issues</a>
-    </nav>
-  </header>
-
-  <section class="hero">
-    <div class="wordmark">TimingBench</div>
-    <div class="tagline">Editable WaveJSON timing diagrams</div>
-    <p>
-      TimingBench draws your timing diagram from a simple textual description — the WaveJSON format
-      used by WaveDrom. Unlike a plain renderer, the picture is <strong>editable</strong>: change the
-      source and the waveform redraws; click a cell and the source is written back. The two are the
-      same data in two views.
-    </p>
-    <p class="sub">Static. Build-free. Dependency-free. Embeddable on any page.</p>
-  </section>
-
-  <nav class="linkrow">
-    <a href="editor.html">Open the editor</a>
-    <a href="tutorial.html">Read the tutorial</a>
-    <a href="#embed">How to embed</a>
-  </nav>
-
-  <div class="live">
-    <div class="livecard" data-timingbench data-title="TimingBench live demo" data-height="300"
-         data-wavejson="{ signal: [ { name: 'clk', wave: 'p.....|...' }, { name: 'dat', wave: 'x.345x|=.x', data: ['head', 'body', 'tail', 'data'] }, { name: 'req', wave: '0.1..0|1.0', node: '..a...' }, {}, { name: 'ack', wave: '1.....|01.' }, ['Master', { name: 'wr', wave: '01.0....', node: '.b......' }] ], edge: ['a~>b t1'], config: { hscale: 1 } }"></div>
-    <p class="cap">
-      <b>Live, not a recording.</b> This is the real embed running on this page, showing
-      <b>the same document the editor opens with</b> — read-only until you click it. Click a cell,
-      pick a character, double-click to type in place, or press <code>Esc</code> to go back to viewing.
-    </p>
-    <noscript>
-      <p class="cap">JavaScript is off, so the live card can't run here — <a href="editor.html">open the editor</a> instead.</p>
-    </noscript>
+  <div class="roboto lll">
+    <a href="tutorial.html">Tutorial</a>
+    <a href="editor.html">Editor</a>
+    <a href="https://github.com/udarent/TimingBench">Source</a>
+    <a href="https://github.com/udarent/TimingBench/issues">Issues</a>
   </div>
 
-  <figure>
-    <img src="assets/bidirectional-demo.gif" alt="Two-way editing demo: change the source and the diagram redraws; click the canvas and the source is written back; selecting a row opens the context bar" width="1240" height="474">
-    <figcaption>Edit a wave character in the source and the diagram redraws; click a canvas cell and the source is written back. Selecting a row opens the same context bar the touch UI uses.</figcaption>
-  </figure>
+  <!-- Read-only until clicked; click it and the diagram becomes editable in place. -->
+  <div class="logo" data-timingbench data-title="TimingBench live diagram" data-height="240"
+       data-wavejson="{ signal: [ { name: 'clk', wave: 'p.......' }, { name: 'addr', wave: 'x3.x4..x', data: ['A1', 'A2'] }, { name: 'wdata', wave: 'x3..3..x', data: ['D1', 'D2'] }, { name: 'wr', wave: '01..0...', node: '.a......' }, { name: 'ack', wave: '0..1.0..', node: '...b....' } ], edge: ['a~>b t1'] }"></div>
+  <noscript>
+    <p class="fallback">JavaScript is off, so the live diagram can't run here — <a href="editor.html">open the editor</a> instead.</p>
+  </noscript>
 
-  <h2>What it is</h2>
-  <ul class="feat">
-    <li>
-      <b>Two-way editing, one set of semantics</b>
-      <span>Every change from the diagram or the code lands on the same edit operations, so undo and redo stay in sync on both sides.</span>
-    </li>
-    <li>
-      <b>Static, zero build, zero dependencies</b>
-      <span>Native ES modules. Nothing to install, nothing to bundle — serve it from any static host.</span>
-    </li>
-    <li>
-      <b>Fully editable by keyboard and by touch</b>
-      <span>Every edit is reachable without a mouse. On phones it switches to a touch layout with 44&nbsp;px hit targets.</span>
-    </li>
-    <li>
-      <b>Read-only until clicked, when embedded</b>
-      <span>Drop it into an article or a docs page without grabbing attention; one click makes it editable in place, <code>Esc</code> goes back to viewing.</span>
-    </li>
-  </ul>
+  <div class="word word1">TimingBench</div>
+  <div class="word word2">Editable Digital Timing Diagram everywhere</div>
+  <div class="roboto word3">
+TimingBench draws your timing diagram from a simple textual description, the WaveJSON format.<br>
+Edit a wave character and the diagram redraws; click the diagram and the description is rewritten.<br>
+The editor runs in the browser, with no build step and no dependencies.<br>
+The rendering engine can be embedded into any webpage.
+  </div>
 
-  <h2 id="embed">Embed it in your page</h2>
-  <pre>&lt;script src="https://udarent.github.io/TimingBench/embed.js"&gt;&lt;/script&gt;
-&lt;div data-timingbench data-height="240"
-     data-wavejson='{ signal: [ { name: "clk", wave: "p....." } ] }'&gt;&lt;/div&gt;</pre>
-  <p class="note">
-    Two lines, no build step. The card runs in its own iframe, so your CSS can't leak in and its
-    styles can't leak out. For programmatic control and change events, see the
-    <a href="embed-demo.html">embed demo</a> and the
-    <a href="https://github.com/udarent/TimingBench#embed-it-in-your-page">README</a>.
-  </p>
+  <div class="roboto lll">
+    <a href="editor.html">Open editor</a>
+    <a href="embed-demo.html">Embed demo</a>
+    <a href="https://github.com/udarent/TimingBench/issues">Report an issue</a>
+    <a href="https://wavedrom.com/">WaveDrom</a>
+  </div>
 
-  <footer>
-    Diagram rendering and WaveJSON semantics follow
-    <a href="https://wavedrom.com/">WaveDrom</a> — without WaveDrom and WaveJSON this project
-    wouldn't exist.<br>
-    Released under the
-    <a href="https://github.com/udarent/TimingBench/blob/main/LICENSE">MIT license</a> ·
-    <a href="https://github.com/udarent/TimingBench">Source</a> ·
-    <a href="https://github.com/udarent/TimingBench#readme">README</a> ·
-    <a href="https://github.com/udarent/TimingBench/blob/main/README.zh-CN.md">Chinese README</a> ·
-    <a href="https://github.com/udarent/TimingBench/issues">Issues</a>
-  </footer>
-
-</div>
-<!-- The only script on this page: the embed loader. It swaps .livecard for an iframe; everything
-     else here is plain static HTML. The card lives in its own document, so this page's CSS can't
-     leak in and the card's styles can't leak out. -->
-<script src="embed.js"></script>
 </body>
+<script src="embed.js"></script>
 </html>

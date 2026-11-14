@@ -188,11 +188,12 @@ function check() {
   ok(refs.every((r) => !r.startsWith('../')), 'editor.html 存在跳出站点根的相对路径');
   ok(fs.existsSync(path.join(ROOT, '.nojekyll')), '缺少 .nojekyll');
 
-  // 首页是介绍页：极简、自包含（不引外部 CSS），必须有进编辑器的入口与演示动图
+  // 首页照 wavedrom.com 复刻：居中一列，导航行 → logo 位（活图）→ 字标 → 副标题 → 四行说明 → 链接行。
+  // 只保留这一页该有的东西：不引外部 CSS、不引动图 / 特性栅格 / 嵌入代码块 / 页脚。
   const lrefs = [...landing.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
   ok(lrefs.includes('editor.html'), '首页缺少进入编辑器的入口 editor.html');
-  ok(lrefs.some((r) => r === 'assets/bidirectional-demo.gif'), '首页未引用演示动图');
   ok(!/<link[^>]+stylesheet/.test(landing), '首页不应引外部样式表（自带内联样式）');
+  ok(!/bidirectional-demo\.gif/.test(landing), '首页不应再引演示动图（waveDrom 首页没有，改由活图承担）');
   // 唯一允许的脚本是嵌入加载器：首页的「嵌入示例」是活的卡片，不是动图。
   // 除此之外仍须保持零脚本，且脚本路径只能是同目录的本地文件（不能外链 CDN）。
   const lscripts = [...landing.matchAll(/<script[^>]*>/g)].map((m) => m[0]);
@@ -202,20 +203,23 @@ function check() {
     '首页出现了内联脚本（只允许外部 embed.js）');
   ok(/data-timingbench/.test(landing) && /data-wavejson=/.test(landing) && /data-height=/.test(landing),
     '首页缺少可直接编辑的嵌入示例（data-timingbench / data-wavejson / data-height）');
-  // 首页那张卡片必须就是编辑器打开的默认文档 —— 同源同内容，避免两处示例各写一份、各改各的。
-  // 文本可以不同（首页为单行、去注释），判据用 Core.canon 的语义等价，与「图 → 码」用的同一把尺子。
+  // 首页那张图是为本页专门设计的展示图（不是编辑器默认文档）：只需保证它是合法、非空的时序图，
+  // 且确实用上了「波形 + 总线标签 + 连线」这三样，否则它就只是个装饰而不是产品的样子。
   const lm = landing.match(/data-wavejson="([^"]*)"/) || landing.match(/data-wavejson='([^']*)'/);
   ok(!!lm, '首页嵌入示例缺少 data-wavejson 内容');
   if (lm) {
-    let same = false, why = '';
-    try {
-      const a = Core.buildIR(lm[1].replace(/&#10;/g, '\n'));
-      const b = Core.buildIR(EXAMPLE);
-      same = Core.canon(a) === Core.canon(b) && a.ticks === b.ticks &&
-             a.lanes.length === b.lanes.length && a.edges.length === b.edges.length;
-      why = 'ticks=' + a.ticks + '/' + b.ticks + ' lanes=' + a.lanes.length + '/' + b.lanes.length;
-    } catch (e) { why = 'parse: ' + e.message; }
-    ok(same, '首页嵌入示例与编辑器默认示例内容不一致（应为同一份图）：' + why);
+    let ir = null, why = '';
+    try { ir = Core.buildIR(lm[1].replace(/&#10;/g, '\n')); } catch (e) { why = 'parse: ' + e.message; }
+    ok(!!ir, '首页展示图解析失败：' + why);
+    if (ir) {
+      const sig = ir.lanes.filter((l) => l.kind === 'signal');
+      const labelled = sig.some((l) => l.slots.some((s) => s.label));
+      const why2 = 'ticks=' + ir.ticks + ' lanes=' + sig.length + ' edges=' + ir.edges.length;
+      ok(ir.ticks >= 6 && sig.length >= 4 && ir.edges.length >= 1 && labelled,
+        '首页展示图过于单薄（需 ≥6 拍、≥4 条信号、含总线标签与连线）：' + why2);
+      ok(Core.canon(ir) !== Core.canon(Core.buildIR(EXAMPLE)),
+        '首页展示图退回了编辑器默认文档（应为本页专门设计的一张）：' + why2);
+    }
   }
   ok(/<noscript>/.test(landing), '首页缺少 noscript 兜底（脚本被禁用时给出编辑器入口）');
   ok(/prefers-color-scheme/.test(landing), '首页未跟随系统明暗主题');
@@ -451,6 +455,9 @@ function check() {
     '嵌入壳缺少「矮卡片进入编辑时按需请求全屏」的逻辑');
   ok(/allowfullscreen/.test(shareSrc) && /allowfullscreen/.test(read('embed.js')),
     '嵌入片段 / 加载器未放行 allowfullscreen（全屏请求会被宿主 iframe 拒绝）');
+  // 全屏只为「手指」准备：细指针没有按钮折排问题，宿主页点一下就把整屏抢走反而更糟。
+  ok(/import \{ TOUCH \} from '\.\/mode\.js'/.test(shellSrc) && /TOUCH && \(window\.innerWidth/.test(shellSrc),
+    '矮卡片全屏未按指针类型收口（细指针嵌入卡点进编辑会抢全屏）');
   // 全屏里「完成」是唯一出口：小按钮的 click 会被滚动吞掉，必须走 pointerup 主通道 + 全屏放大避让。
   ok(/hint\.addEventListener\('pointerup'/.test(shellSrc) && /hint\.addEventListener\('click'/.test(shellSrc),
     '完成按钮缺少 pointerup 主通道 / click 兜底（全屏里点击可能被吞）');
