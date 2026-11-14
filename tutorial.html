@@ -6,18 +6,18 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.10.0">
+<meta name="version" content="0.10.1">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
     --bg:#fff;--panel:#fff;--src-bg:#f7f8fa;--ink:#22262b;--muted:#8a8f96;
-    --line:rgba(0,0,0,.10);--accent:#1a6fb5;--warn:#b0740f;--warn-bg:#fbf1e0;
+    --line:rgba(0,0,0,.10);--accent:#1a6fb5;
     --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
     --sans:system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
   }
   @media (prefers-color-scheme:dark){
     :root{--bg:#161719;--panel:#1f2124;--src-bg:#202225;--ink:#e9e9e6;--muted:#9a9a94;
-          --line:rgba(255,255,255,.14);--accent:#6cb0ee;--warn:#e0a44a;--warn-bg:#3a2a10}
+          --line:rgba(255,255,255,.14);--accent:#6cb0ee}
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -38,10 +38,7 @@
 
   section.step{margin:0 0 14px;padding-top:8px}
   h2{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:44px 0 6px;padding-top:12px;
-     border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .badge{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
-         padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--panel)}
-  .badge.todo{color:var(--warn);background:var(--warn-bg);border-color:transparent}
+     border-top:1px solid var(--line)}
   section.step > p{margin:6px 0 16px;color:var(--ink)}
   .livecard{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;margin:0 0 8px}
   .livecard iframe{display:block;width:100%;border:0}
@@ -50,7 +47,6 @@
   pre{margin:0 0 14px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;
       background:var(--src-bg);overflow:auto;font:12.5px/1.7 var(--mono);tab-size:2}
   .caveat{font-size:12.5px;color:var(--muted);border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:4px 0 8px}
-  .caveat.todo{border-left-color:var(--warn);color:var(--warn)}
 
   footer{border-top:1px solid var(--line);padding-top:22px;margin-top:52px;
          font-size:13px;color:var(--muted);line-height:1.9}
@@ -90,7 +86,7 @@
   </p>
 
   <section class="step">
-    <h2>Step 1. The signal <span class="badge">done</span></h2>
+    <h2>Step 1. The signal</h2>
     <p>A lane has two required fields: <code>name</code> and <code>wave</code>. Each wave character is
     one period; <code>.</code> repeats the previous state.</p>
 <pre>{ signal: [{ name: "Alfa", wave: "01.zx=ud.23.456789" }] }</pre>
@@ -100,7 +96,7 @@
   </section>
 
   <section class="step">
-    <h2>Step 2. Clock <span class="badge">done</span></h2>
+    <h2>Step 2. Clock</h2>
     <p>A clock is a special signal that changes twice per period, with positive or negative polarity
     and an optional marker on the working edge. Clock blocks can be mixed with other states for gating.</p>
 <pre>{ signal: [
@@ -120,7 +116,7 @@
   </section>
 
   <section class="step">
-    <h2>Step 3. Putting it together <span class="badge">done</span></h2>
+    <h2>Step 3. Putting it together</h2>
     <p>A typical diagram mixes a clock with wires and multi-bit signals. Multi-bit (bus) lanes take
     their labels from the <code>data</code> array.</p>
 <pre>{ signal: [
@@ -133,7 +129,7 @@
   </section>
 
   <section class="step">
-    <h2>Step 4. Spacers and gaps <span class="badge">done</span></h2>
+    <h2>Step 4. Spacers and gaps</h2>
     <p><code>{}</code> inserts a spacer row; <code>|</code> draws a phase line (a gap) at that period.</p>
 <pre>{ signal: [
   { name: "clk",         wave: "p.....|..." },
@@ -148,7 +144,7 @@
   </section>
 
   <section class="step">
-    <h2>Step 5. Groups <span class="badge">done</span></h2>
+    <h2>Step 5. Groups</h2>
     <p>Lanes can be united in named groups written as arrays: the first entry is the group's name and
     groups can be nested.</p>
 <pre>{ signal: [
@@ -175,7 +171,7 @@
   </section>
 
   <section class="step">
-    <h2>Step 6. Period and phase <span class="badge">done</span></h2>
+    <h2>Step 6. Period and phase</h2>
     <p><code>period</code> and <code>phase</code> adjust a lane: period scales a character's width,
     phase shifts it by a fraction of a period. A DDR read transfer is the classic example.</p>
 <pre>{ signal: [
@@ -193,7 +189,7 @@
   </section>
 
   <section class="step">
-    <h2>Step 7. The config, head and foot <span class="badge todo">pending</span></h2>
+    <h2>Step 7. The config, head and foot</h2>
     <p><code>config</code> controls rendering (for example <code>hscale</code>). <code>head</code> and
     <code>foot</code> add text, ticks, tocks and an <code>every</code> interval above and below the diagram.</p>
 <pre>{ signal: [
@@ -215,12 +211,13 @@
 }</pre>
     <div class="livecard" data-timingbench data-height="200"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: 'a b c' }, { name: 'Request', wave: '01..0' } ], head: { text: 'WaveDrom example', tick: 0, every: 2 }, foot: { text: 'Figure 100', tock: 9 } }"></div>
-    <p class="caveat todo">Pending: <code>config</code>, <code>head</code> and <code>foot</code> are kept verbatim and
-    round-trip losslessly, but their visual effects (hscale, titles, ticks / tocks) are not drawn yet.</p>
+    <p class="caveat">What you see above is the diagram itself: <code>config</code>, <code>head</code> and
+    <code>foot</code> stay in your source and survive every edit untouched, but their visual effects
+    (<code>hscale</code>, titles, ticks / tocks) are not drawn yet.</p>
   </section>
 
   <section class="step">
-    <h2>Step 8. Arrows <span class="badge">done</span></h2>
+    <h2>Step 8. Arrows</h2>
     <p>An <code>edge</code> connects two node markers. The body selects the shape —
     <code>~</code> curves, <code>-</code> / <code>|</code> / <code>+</code> are sharp —
     and <code>&lt;</code> / <code>&gt;</code> put arrowheads at the start / end.</p>
@@ -241,10 +238,10 @@ Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|
   </section>
 
   <section class="step">
-    <h2>Step 9. Some code <span class="badge todo">pending</span></h2>
+    <h2>Step 9. Some code</h2>
     <p>WaveDrom's tutorial ends with a JavaScript snippet that builds a document programmatically.
-    TimingBench does not execute arbitrary JavaScript — it parses the WaveJSON object only — so this
-    step is pending: paste the object the code returns into the editor instead.</p>
+    TimingBench reads WaveJSON, not JavaScript, so this one stays a code sample: run it where you like
+    and paste the object it returns into the editor.</p>
 <pre>(function (bits, ticks) {
   var i, t, gray, state, data = [], arr = [];
   for (i = 0; i &lt; bits; i++) {
@@ -260,7 +257,7 @@ Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|
   arr.unshift('gray');
   return { signal: [ { name: 'bin', wave: '='.repeat(ticks), data: data }, arr ] };
 })(5, 16)</pre>
-    <p class="caveat todo">Pending: not executed. Use it as a reference for generating WaveJSON, then paste the result.</p>
+    <p class="caveat">Shown as a reference for generating WaveJSON — the editor itself never runs it.</p>
   </section>
 
   <footer>
