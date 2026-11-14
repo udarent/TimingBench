@@ -13,8 +13,10 @@ var CELL=G.CELL, NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.A
 var COL_Y=G.COL_Y, ACT_H=G.ACT_H;
 var CHIP_W=G.CHIP_W, CHIP_H=G.CHIP_H, CHIP_STEP=G.CHIP_STEP;
 var XS=G.XS, CHIPS_W=G.CHIPS_W;
-// 分组每嵌套一层要在行名左侧让出的槽宽（花括号 + 竖排组名占这一条）
-var GSLOT=T?20:16;
+// 分组每嵌套一层要在行名左侧让出的槽宽（花括号 + 竖排组名占这一条）。
+// 取「格宽的 0.63」—— 与上游一致（WaveDrom 层间距 25 / 格宽 40 = 0.63）；层间距太窄时
+// 竖排组名会贴着内层括号，长组名还会顶到行名。
+var GSLOT=T?30:24;
 
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
@@ -423,17 +425,18 @@ export function createShapes(ctx){
     // 分组括号（对照上游 render-groups 的画法）：一条花括号从该组首行跨到末行，组名
     // **竖排**（rotate -90）贴在括号左侧；嵌套时逐层**向右**再让一格（外组在左、内组在右，
     // 与上游一致）。括号本身不吃事件（点它等于点这一行），组名在编辑态可点改。
+    // 尺寸对齐上游：组名字号与行名相同（12）、离括号 10、描边实心（上游是不透明的 1px 线）。
     var gEdit=can('laneMeta');
     groupRuns(ir.lanes).forEach(function(g){
       var y0=TOP+g.from*ROW_H+4, y1=TOP+(g.to+1)*ROW_H-4, h=y1-y0;
       if(h<10) return;
-      var bx=PAD+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-9;
+      var bx=PAD+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-10;
       var brace='M'+bx+','+y0+' c -3,0 -5,2 -5,5 l 0,'+(h-10)+' c 0,3 2,5 5,5';
       o.push('<g class="groupBrace">'+
-        '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".7" pointer-events="none"/>'+
+        '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>'+
         '<text class="laneGroupName"'+(gEdit?' data-act="group" data-lane="'+ir.lanes[g.from].id+'"':'')+
         ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle" dominant-baseline="central"'+
-        ' font-size="10" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
+        ' font-size="12" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
         '</g>');
     });
     o.push(edgeArcs(ir));
