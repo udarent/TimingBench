@@ -6,18 +6,18 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.9.23">
-<meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. Every diagram is a live, editable embed block — not an image — and the code is the same snippet the editor's share panel produces.">
+<meta name="version" content="0.9.24">
+<meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
     --bg:#fff;--panel:#fff;--src-bg:#f7f8fa;--ink:#22262b;--muted:#8a8f96;
-    --line:rgba(0,0,0,.10);--accent:#1a6fb5;--accent-bg:#eaf3fb;--warn:#b0740f;--warn-bg:#fbf1e0;
+    --line:rgba(0,0,0,.10);--accent:#1a6fb5;--warn:#b0740f;--warn-bg:#fbf1e0;
     --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
     --sans:system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
   }
   @media (prefers-color-scheme:dark){
     :root{--bg:#161719;--panel:#1f2124;--src-bg:#202225;--ink:#e9e9e6;--muted:#9a9a94;
-          --line:rgba(255,255,255,.14);--accent:#6cb0ee;--accent-bg:#12293d;--warn:#e0a44a;--warn-bg:#3a2a10}
+          --line:rgba(255,255,255,.14);--accent:#6cb0ee;--warn:#e0a44a;--warn-bg:#3a2a10}
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -33,9 +33,9 @@
 
   h1{font-size:34px;line-height:1.2;font-weight:800;letter-spacing:-.02em;margin:0 0 8px}
   .sub{color:var(--muted);font-size:15px;margin:0 0 26px}
-  .intro{color:var(--ink);margin:0 0 30px}
+  .intro{color:var(--ink);margin:0 0 28px}
   .intro code{font-family:var(--mono);font-size:13px}
-  .lede{font-size:14px;color:var(--muted);margin:0 0 16px}
+  .lede{font-size:14px;color:var(--muted);margin:0 0 8px}
 
   section.step{margin:0 0 14px;padding-top:8px}
   h2{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:44px 0 6px;padding-top:12px;
@@ -80,29 +80,22 @@
   </header>
 
   <h1>Hitchhiker's Guide to WaveJSON</h1>
-  <p class="sub">The learning order of the WaveDrom tutorial. Unlike WaveDrom's tutorial images, every diagram here is a live, editable embed block — and the code is the same snippet the editor's share panel produces.</p>
+  <p class="sub">Following WaveDrom's tutorial order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the diagrams, however, are not images — each one is a live, editable embed block rendered by the same editor.</p>
 
   <p class="intro">
     WaveJSON is a format that describes digital timing diagrams. A document is a plain object whose
     <code>signal</code> array holds the wave lanes; each character in a lane's <code>wave</code>
     string is one time period and <code>.</code> repeats the previous state.<br>
     <strong>Click any diagram below to edit it.</strong> Change a cell, drag on the canvas, or open the
-    full <a href="editor.html">editor</a> for the source panel. Esc returns to read-only.
+    full <a href="editor.html">editor</a> for the source panel. Esc returns to read-only — this is the
+    one difference from WaveDrom's tutorial, where the diagrams are static.
   </p>
-
-  <p class="lede">Every example is embedded with the same two-line snippet you get from the editor's
-  <strong>&lt;&gt;</strong> panel. Include the loader once, then one <code>&lt;div&gt;</code> per diagram:</p>
-<pre>&lt;script src="https://udarent.github.io/TimingBench/embed.js"&gt;&lt;/script&gt;</pre>
-  <p class="lede">The blocks below show only the per-diagram <code>&lt;div&gt;</code>; the loader line above
-  applies to all of them. Height is set with <code>data-height</code>, and the document travels in
-  <code>data-wavejson</code>.</p>
 
   <section class="step">
     <h2>Step 1. The signal <span class="badge">done</span></h2>
     <p>A lane has two required fields: <code>name</code> and <code>wave</code>. Each wave character is
     one period; <code>.</code> repeats the previous state.</p>
-<pre>&lt;div data-timingbench data-height="120"
-     data-wavejson="{ signal: [{ name: 'Alfa', wave: '01.zx=ud.23.456789' }] }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [{ name: "Alfa", wave: "01.zx=ud.23.456789" }] }</pre>
     <div class="livecard" data-timingbench data-height="120"
          data-wavejson="{ signal: [{ name: 'Alfa', wave: '01.zx=ud.23.456789' }] }"></div>
     <p class="hint">Click a cell, then pick a character; <code>0 1 x z u d p P n N h l H L = 2–9</code> are all supported.</p>
@@ -112,8 +105,18 @@
     <h2>Step 2. Clock <span class="badge">done</span></h2>
     <p>A clock is a special signal that changes twice per period, with positive or negative polarity
     and an optional marker on the working edge. Clock blocks can be mixed with other states for gating.</p>
-<pre>&lt;div data-timingbench data-height="300"
-     data-wavejson="{ signal: [ { name: 'pclk', wave: 'p.......' }, { name: 'Pclk', wave: 'P.......' }, { name: 'nclk', wave: 'n.......' }, { name: 'Nclk', wave: 'N.......' }, {}, { name: 'clk0', wave: 'phnlPHNL' }, { name: 'clk1', wave: 'xhlhLHl.' }, { name: 'clk2', wave: 'hpHplnLn' }, { name: 'clk3', wave: 'nhNhplPl' }, { name: 'clk4', wave: 'xlh.L.Hx' } ] }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "pclk", wave: "p......." },
+  { name: "Pclk", wave: "P......." },
+  { name: "nclk", wave: "n......." },
+  { name: "Nclk", wave: "N......." },
+  {},
+  { name: "clk0", wave: "phnlPHNL" },
+  { name: "clk1", wave: "xhlhLHl." },
+  { name: "clk2", wave: "hpHplnLn" },
+  { name: "clk3", wave: "nhNhplPl" },
+  { name: "clk4", wave: "xlh.L.Hx" }
+] }</pre>
     <div class="livecard" data-timingbench data-height="300"
          data-wavejson="{ signal: [ { name: 'pclk', wave: 'p.......' }, { name: 'Pclk', wave: 'P.......' }, { name: 'nclk', wave: 'n.......' }, { name: 'Nclk', wave: 'N.......' }, {}, { name: 'clk0', wave: 'phnlPHNL' }, { name: 'clk1', wave: 'xhlhLHl.' }, { name: 'clk2', wave: 'hpHplnLn' }, { name: 'clk3', wave: 'nhNhplPl' }, { name: 'clk4', wave: 'xlh.L.Hx' } ] }"></div>
   </section>
@@ -122,8 +125,11 @@
     <h2>Step 3. Putting it together <span class="badge">done</span></h2>
     <p>A typical diagram mixes a clock with wires and multi-bit signals. Multi-bit (bus) lanes take
     their labels from the <code>data</code> array.</p>
-<pre>&lt;div data-timingbench data-height="140"
-     data-wavejson="{ signal: [ { name: 'clk', wave: 'P......' }, { name: 'bus', wave: 'x.==.=x', data: ['head', 'body', 'tail', 'data'] }, { name: 'wire', wave: '0.1..0.' } ] }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "clk",  wave: "P......" },
+  { name: "bus",  wave: "x.==.=x", data: ["head", "body", "tail", "data"] },
+  { name: "wire", wave: "0.1..0." }
+] }</pre>
     <div class="livecard" data-timingbench data-height="140"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'P......' }, { name: 'bus', wave: 'x.==.=x', data: ['head', 'body', 'tail', 'data'] }, { name: 'wire', wave: '0.1..0.' } ] }"></div>
   </section>
@@ -131,8 +137,13 @@
   <section class="step">
     <h2>Step 4. Spacers and gaps <span class="badge">done</span></h2>
     <p><code>{}</code> inserts a spacer row; <code>|</code> draws a phase line (a gap) at that period.</p>
-<pre>&lt;div data-timingbench data-height="220"
-     data-wavejson="{ signal: [ { name: 'clk', wave: 'p.....|...' }, { name: 'Data', wave: 'x.345x|=.x', data: ['head', 'body', 'tail', 'data'] }, { name: 'Request', wave: '0.1..0|1.0' }, {}, { name: 'Acknowledge', wave: '1.....|01.' } ] }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "clk",         wave: "p.....|..." },
+  { name: "Data",        wave: "x.345x|=.x", data: ["head", "body", "tail", "data"] },
+  { name: "Request",     wave: "0.1..0|1.0" },
+  {},
+  { name: "Acknowledge", wave: "1.....|01." }
+] }</pre>
     <div class="livecard" data-timingbench data-height="220"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p.....|...' }, { name: 'Data', wave: 'x.345x|=.x', data: ['head', 'body', 'tail', 'data'] }, { name: 'Request', wave: '0.1..0|1.0' }, {}, { name: 'Acknowledge', wave: '1.....|01.' } ] }"></div>
     <p class="hint">Add a spacer from a row's action bar; toggle a gap from a column's action bar.</p>
@@ -142,8 +153,24 @@
     <h2>Step 5. Groups <span class="badge">done</span></h2>
     <p>Lanes can be united in named groups written as arrays: the first entry is the group's name and
     groups can be nested.</p>
-<pre>&lt;div data-timingbench data-height="360"
-     data-wavejson="{ signal: [ { name: 'clk', wave: 'p..Pp..P' }, ['Master', ['ctrl', { name: 'write', wave: '01.0....' }, { name: 'read', wave: '0...1..0' } ], { name: 'addr', wave: 'x3.x4..x', data: 'A1 A2' }, { name: 'wdata', wave: 'x3.x....', data: 'D1' } ], {}, ['Slave', ['ctrl', { name: 'ack', wave: 'x01x0.1x' } ], { name: 'rdata', wave: 'x.....4x', data: 'Q2' } ] ] }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "clk", wave: "p..Pp..P" },
+  ["Master",
+    ["ctrl",
+      { name: "write", wave: "01.0...." },
+      { name: "read",  wave: "0...1..0" }
+    ],
+    { name: "addr",  wave: "x3.x4..x", data: "A1 A2" },
+    { name: "wdata", wave: "x3.x....", data: "D1" }
+  ],
+  {},
+  ["Slave",
+    ["ctrl",
+      { name: "ack", wave: "x01x0.1x" }
+    ],
+    { name: "rdata", wave: "x.....4x", data: "Q2" }
+  ]
+] }</pre>
     <div class="livecard" data-timingbench data-height="360"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p..Pp..P' }, ['Master', ['ctrl', { name: 'write', wave: '01.0....' }, { name: 'read', wave: '0...1..0' } ], { name: 'addr', wave: 'x3.x4..x', data: 'A1 A2' }, { name: 'wdata', wave: 'x3.x....', data: 'D1' } ], {}, ['Slave', ['ctrl', { name: 'ack', wave: 'x01x0.1x' } ], { name: 'rdata', wave: 'x.....4x', data: 'Q2' } ] ] }"></div>
     <p class="hint">Click the <code>[group]</code> label after a row name to rename it; use <code>/</code> to nest, clear it to ungroup.</p>
@@ -153,8 +180,13 @@
     <h2>Step 6. Period and phase <span class="badge todo">pending</span></h2>
     <p><code>period</code> and <code>phase</code> adjust a lane: period scales a character's width,
     phase shifts it by a fraction of a period. A DDR read transfer is the classic example.</p>
-<pre>&lt;div data-timingbench data-height="240"
-     data-wavejson="{ signal: [ { name: 'CK', wave: 'P.......', period: 2 }, { name: 'CMD', wave: 'x.3x=x4x=x=x=x=x', data: 'RAS NOP CAS NOP NOP NOP NOP', phase: 0.5 }, { name: 'ADDR', wave: 'x.=x..=x........', data: 'ROW COL', phase: 0.5 }, { name: 'DQS', wave: 'z.......0.1010z.' }, { name: 'DQ', wave: 'z.........5555z.', data: 'D0 D1 D2 D3' } ] }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "CK",   wave: "P.......",                                              period: 2 },
+  { name: "CMD",  wave: "x.3x=x4x=x=x=x=x", data: "RAS NOP CAS NOP NOP NOP NOP", phase: 0.5 },
+  { name: "ADDR", wave: "x.=x..=x........", data: "ROW COL",                      phase: 0.5 },
+  { name: "DQS",  wave: "z.......0.1010z." },
+  { name: "DQ",   wave: "z.........5555z.", data: "D0 D1 D2 D3" }
+] }</pre>
     <div class="livecard" data-timingbench data-height="240"
          data-wavejson="{ signal: [ { name: 'CK', wave: 'P.......', period: 2 }, { name: 'CMD', wave: 'x.3x=x4x=x=x=x=x', data: 'RAS NOP CAS NOP NOP NOP NOP', phase: 0.5 }, { name: 'ADDR', wave: 'x.=x..=x........', data: 'ROW COL', phase: 0.5 }, { name: 'DQS', wave: 'z.......0.1010z.' }, { name: 'DQ', wave: 'z.........5555z.', data: 'D0 D1 D2 D3' } ] }"></div>
     <p class="caveat todo">Pending: <code>period</code> / <code>phase</code> are parsed, editable and round-tripped,
@@ -165,12 +197,23 @@
     <h2>Step 7. The config, head and foot <span class="badge todo">pending</span></h2>
     <p><code>config</code> controls rendering (for example <code>hscale</code>). <code>head</code> and
     <code>foot</code> add text, ticks, tocks and an <code>every</code> interval above and below the diagram.</p>
-<pre>&lt;div data-timingbench data-height="140"
-     data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: ['head', 'body', 'tail'] }, { name: 'Request', wave: '01..0' } ], config: { hscale: 1 } }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "clk",     wave: "p...." },
+  { name: "Data",    wave: "x345x", data: ["head", "body", "tail"] },
+  { name: "Request", wave: "01..0" }
+],
+  config: { hscale: 1 }
+}</pre>
     <div class="livecard" data-timingbench data-height="140"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: ['head', 'body', 'tail'] }, { name: 'Request', wave: '01..0' } ], config: { hscale: 1 } }"></div>
-<pre>&lt;div data-timingbench data-height="200"
-     data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: 'a b c' }, { name: 'Request', wave: '01..0' } ], head: { text: 'WaveDrom example', tick: 0, every: 2 }, foot: { text: 'Figure 100', tock: 9 } }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "clk",     wave: "p...." },
+  { name: "Data",    wave: "x345x", data: "a b c" },
+  { name: "Request", wave: "01..0" }
+],
+  head: { text: "WaveDrom example", tick: 0, every: 2 },
+  foot: { text: "Figure 100", tock: 9 }
+}</pre>
     <div class="livecard" data-timingbench data-height="200"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: 'a b c' }, { name: 'Request', wave: '01..0' } ], head: { text: 'WaveDrom example', tick: 0, every: 2 }, foot: { text: 'Figure 100', tock: 9 } }"></div>
     <p class="caveat todo">Pending: <code>config</code>, <code>head</code> and <code>foot</code> are kept verbatim and
@@ -184,8 +227,15 @@
     and <code>&lt;</code> / <code>&gt;</code> put arrowheads at the start / end.</p>
 <pre>Splines:     ~   -~   ~-   &lt;~&gt;  &lt;-~&gt;  ~&gt;   -~&gt;  ~-&gt;
 Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|-&gt;  |-&gt;  +</pre>
-<pre>&lt;div data-timingbench data-height="260"
-     data-wavejson="{ signal: [ { name: 'A', wave: '01........0....', node: '.a........j' }, { name: 'B', wave: '0.1.......0.1..', node: '..b.......i' }, { name: 'C', wave: '0..1....0...1..', node: '...c....h..' }, { name: 'D', wave: '0...1..0.....1.', node: '....d..g...' }, { name: 'E', wave: '0....10.......1', node: '.....ef....' } ], edge: ['a~b t1', 'c-~a t2', 'c-~>d time 3', 'd~-e', 'e~>f', 'f->g', 'g-~>h', 'h~>i some text', 'h~->j'] }"&gt;&lt;/div&gt;</pre>
+<pre>{ signal: [
+  { name: "A", wave: "01........0....", node: ".a........j" },
+  { name: "B", wave: "0.1.......0.1..", node: "..b.......i" },
+  { name: "C", wave: "0..1....0...1..", node: "...c....h.." },
+  { name: "D", wave: "0...1..0.....1.", node: "....d..g..." },
+  { name: "E", wave: "0....10.......1", node: ".....ef...." }
+],
+  edge: ["a~b t1", "c-~a t2", "c-~>d time 3", "d~-e", "e~>f", "f->g", "g-~>h", "h~>i some text", "h~->j"]
+}</pre>
     <div class="livecard" data-timingbench data-height="260"
          data-wavejson="{ signal: [ { name: 'A', wave: '01........0....', node: '.a........j' }, { name: 'B', wave: '0.1.......0.1..', node: '..b.......i' }, { name: 'C', wave: '0..1....0...1..', node: '...c....h..' }, { name: 'D', wave: '0...1..0.....1.', node: '....d..g...' }, { name: 'E', wave: '0....10.......1', node: '.....ef....' } ], edge: ['a~b t1', 'c-~a t2', 'c-~>d time 3', 'd~-e', 'e~>f', 'f->g', 'g-~>h', 'h~>i some text', 'h~->j'] }"></div>
     <p class="hint">Double-click an arc to edit its shape or label.</p>
@@ -217,7 +267,8 @@ Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|
   <footer>
     Based on the WaveDrom tutorial and the WaveJSON format — without
     <a href="https://wavedrom.com/">WaveDrom</a> this project wouldn't exist.
-    Every diagram on this page is a live embed block rendered by the real editor, not an image.<br>
+    Code blocks are WaveJSON, the same as WaveDrom's tutorial; each diagram is a live embed block
+    rendered by the real editor, not an image.<br>
     <a href="index.html">Home</a> ·
     <a href="editor.html">Open the editor</a> ·
     <a href="https://wavedrom.com/tutorial.html">Original WaveDrom tutorial</a> ·
