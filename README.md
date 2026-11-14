@@ -20,7 +20,7 @@ Two lines, no build step, no dependency in your project:
 
 The card is **read-only by default** — readers just see the waveform. Click it once and it becomes editable in place; press `Esc` (or click the pencil icon in the corner) to go back to viewing. On a narrow card the whole diagram is **scaled down to fit the width**, so readers see everything at a glance instead of having to scroll sideways; once they click into editing it goes back to 1:1 with scrolling, so cells stay easy to hit. Nothing else on your page is affected: the card lives in its own iframe, so your CSS can't leak in and its styles can't leak out.
 
-Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the fourth icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
+Don't want to hand-write that snippet? Draw your diagram in the [editor](https://udarent.github.io/TimingBench/editor.html), then click the last icon in the canvas header (`<>`) — it generates exactly this snippet from your current source, ready to copy.
 
 **No script allowed?** Some hosts only render raw HTML and never execute `<script>` — an Obsidian note, for example. Use the `iframe only` tab in that same `<>` panel, or build it yourself: the content travels inside the URL, so nothing else is needed.
 
@@ -62,7 +62,7 @@ Working example: [`embed-demo.html`](embed-demo.html) — serve the folder (`npm
 
 ## See it in action
 
-![Bidirectional editing: source changes redraw the diagram, diagram edits rewrite the source](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif)
+![Bidirectional editing: source changes redraw the diagram, diagram edits rewrite the source, selecting a row opens the context bar](https://github.com/udarent/TimingBench/raw/main/assets/bidirectional-demo.gif)
 
 > ① Change `p` to `0` in `clk` → the square clock collapses to a flat low level. ② Click a cell and write `1`, `x`, `p` → the same positions are patched back into the source. Both directions read the same WaveJSON.
 
@@ -99,10 +99,10 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 | Inline editing | Double-click to edit a cell, signal name, data label, arc, a whole `wave` / `data` / `node` row, or `phase` / `period`; `Shift+Enter` edits the node marker of the selected cell |
 | Keyboard-only | Every edit — cells, rows, cycles, names, labels, arcs, reordering and link mode — has a shortcut. `Tab` / `F6` focuses the canvas and selects the first cell; `F6` returns to the source |
 | Structure editing | Add / remove rows and cycles, phase gaps, row reordering, append a trailing cycle, `group` / `spacer` |
-| Nodes and arcs | Click **◇ Link** in the HUD (or the bottom bar on touch), then click two waveform cells; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
-| Undo / redo | `Ctrl+Z` / `Ctrl+Y`; one paint drag, one row reorder and one arc each count as a single undo step |
+| Nodes and arcs | Click **◇ Link** in the canvas HUD, then click two waveform cells; unused letters a–z are assigned automatically; double-click an arc to change its shape / label, clear it to delete |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Y` (or the ↶ ↷ icons in the HUD); one paint drag, one row move and one arc each count as a single undo step |
 | Tolerant parsing | While the source is incomplete, the last valid diagram stays on screen and a red dot shows the error and offset |
-| Desktop / touch | Two stacked panes on desktop; coarse-pointer devices get tabs + a bottom action bar instead |
+| Desktop / touch | Code on the left, diagram on the right (stacked on narrow windows); coarse-pointer devices show both panes and switch orientation with the ⇄ / ⇅ icon |
 | Privacy | Everything runs in the browser — no requests, no accounts, no backend, no telemetry |
 
 ## Operations at a glance
@@ -111,14 +111,15 @@ No `npm install`, no network access, no uploads. Node is used only for the local
 |---|---|---|
 | Write a waveform | Click a cell → type / click the character bar; hold and drag horizontally to paint | Tap a cell → a character dock slides up at the bottom: `0 1 x z` + `⋯` for all 23, 48 px targets |
 | Inline edit | Double-click the target (or `Enter` on a selected cell) | Double-tap the same target within 330 ms, or long-press for 480 ms |
-| Connect an arc | Click ◇ Link → click two waveform cells (dashed preview follows the pointer) → the mode exits once the arc is drawn | Tap ◇ Link in the bottom bar → tap two waveform cells (a toast confirms the first tap) |
-| Rows / cycles / phase gaps | Hover the right edge of a row or a column number for `+` `−` `\|` | 14 always-visible buttons in the "Object" panel + 4 in the "Column" panel |
-| Reorder rows | Drag the ⠿ handle at the row start | `↑ Move up` / `↓ Move down` |
-| Undo / redo | Top ↶ ↷ or `Ctrl+Z` / `Ctrl+Y` | `↶ Undo` / `↷ Redo` in the bottom bar |
-| Cancel current mode | `Esc` | `✕ Cancel` in the bottom bar |
-| See source / diagram | Both panes visible at once | Switch with the "Diagram / Source" tabs |
+| Connect an arc | Click ◇ Link in the HUD → click two waveform cells (dashed preview follows the pointer) → the mode exits once the arc is drawn | Tap ◇ Link in the canvas HUD → tap two waveform cells (a toast confirms the first tap) |
+| Rows / cycles / phase gaps | Select a row / column → the context bar on the right (11 row actions / 4 column actions) | Select a row / column → the context bar at the bottom (same icons) |
+| Reorder rows | Select the row → `↑` / `↓` in the context bar (or `Ctrl+↑↓`) | Same |
+| Undo / redo | ↶ ↷ in the canvas HUD, or `Ctrl+Z` / `Ctrl+Y` | ↶ ↷ in the canvas HUD |
+| Cancel current mode | `Esc` | Tap empty canvas space (same in all four layouts) |
+| See source / diagram | Code left, diagram right, both visible | Both panes visible; switch orientation with ⇄ / ⇅ |
+| Cell data label / node marker | Select the cell → `✎` or the node icon in the context bar (or `B` / `Shift+Enter`) | Select the cell → the two cell-level icons in the bottom context bar |
 
-TimingBench is built to work as a **waveform card**: every control you need sits inside the visible card. Touch hit targets follow the 44 CSS px guideline (cells 46×50, dock chips 48×44, action-bar buttons ≥44), and hover-only mini controls are removed. On touch the 23 characters live in a **docked bar** at the bottom of the card (not floating over the waveform), so the buttons never move while you scroll the diagram. The waveform itself is one scalable, pannable object and may be wider than the card — scroll or pinch-zoom it. The operation layer (HUD and character chips) is pinned to the card: the HUD stays at the top-left, the chips wrap at the card's **visible width** and grow downward into multiple rows, so no button ever requires horizontal scrolling. The bottom bar shares the card width evenly. At 320 px the 23 chips stack into 4 rows and every control stays reachable without scrolling sideways. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
+TimingBench is built to work as a **waveform card**: every control you need sits inside the visible card. Touch hit targets follow the 44 CSS px guideline (cells 46×50, dock chips 48×44, context-bar icons 44×44, action-bar buttons ≥44), and hover-only mini controls are removed. On touch the 23 characters live in a **docked bar** at the bottom of the card (not floating over the waveform), so the buttons never move while you scroll the diagram. The waveform itself is one scalable, pannable object and may be wider than the card — scroll or pinch-zoom it. The operation layer (HUD and character chips) is pinned to the card: the HUD stays at the top-left, the chips wrap at the card's **visible width** and grow downward into multiple rows, so no button ever requires horizontal scrolling. The bottom bar shares the card width evenly. At 320 px the 23 chips stack into 4 rows and every control stays reachable without scrolling sideways. Default gestures are not blocked, so native canvas scrolling and pinch-zoom still work.
 
 No mouse at all? Every row / cycle / arc / structure action in this table has a key — see the shortcuts below. The canvas shows a focus ring only when reached by keyboard.
 
