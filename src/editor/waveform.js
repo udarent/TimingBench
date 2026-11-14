@@ -28,7 +28,7 @@ var CHIP_W=G.CHIP_W;
     var y0=up?(T+3):(B-3), y1=up?(T+11):(B-11);
     return '<path class="waveArrow" d="M'+(ax-3)+','+y1+' L'+ax+','+y0+' L'+(ax+3)+','+y1+' Q'+ax+','+(y1-2)+' '+(ax-3)+','+y1+' z"/>';
   }
-  // 某个字符画完之后停在**哪条轨**上：T / B；未知（x / z / 总线）返回 null。
+  // 某个字符画完之后停在**哪条轨**上：T / B；判不出电平的（x / z / 总线）返回 null。
   // 时钟字符要据此决定「边界处那条起沿还画不画」—— 上游用一张 xclude 表
   // （hp / Hp / ln / Ln / nh / Nh / pl / Pl 把首个 half-brick 换成纯电平）抑制多余边沿，
   // 否则 `h` 后面接 `p` 会在边界处多出一条横穿整行的竖线（Step 2 的 clk2 = hpHplnLn 最明显）。
@@ -36,7 +36,7 @@ var CHIP_W=G.CHIP_W;
     if(!ch) return null;
     if(/[pPlL]/.test(ch)) return B;      // p / P 收在低；l / L 本身就是低
     if(/[nNhH]/.test(ch)) return T;      // n / N 收在高；h / H 本身就是高
-    return waveLevel(ch,T,B,B);          // 1 / 0 / u / d 等（时钟 / x / z / 总线由上面两条兜住）
+    return waveLevel(ch,T,null,B);       // 1 / 0 / u / d；M 传 null ⇒ 判不出的字符返回 null
   }
   // 相位线：两条 S 曲线 + 白色遮罩（参考上游默认皮肤的视觉风格，自行绘制）
   function waveGap(X,T,B){
@@ -82,11 +82,11 @@ var CHIP_W=G.CHIP_W;
       // 时钟 / 半周期状态的**边沿要不要画**，取决于上一个字符收在哪条轨上（上游 xclude 的语义）：
       // 已经停在目标电平上就只画平段，否则才画那条起沿。少了这一步，`hp` / `pl` 这类连续
       // 字符会在格子边界多出一条横穿整行的竖线（Step 2 的 clk0 / clk2 最显眼）。
-      var up=/[pPhH]/.test(ch), pl=prev?railEnd(prev,T,B):null, d, start;
+      var up=/[pPhH]/.test(ch), pl=prev?railEnd(prev,T,B):null, d;
       if(/[pPnN]/.test(ch)){
-        // 完整时钟：前半段电平 first、后半段 second，中间那次跳变始终要画
-        var first=up?T:B, second=up?B:T;
-        start=(pl===first)?first:second;          // 已在该电平 → 不再画起沿
+        // 完整时钟：前半段电平 first、后半段 second，中间那次跳变始终要画；
+        // 起沿只在「上一格没收在 first」时才画（已在该电平 = 上游 xclude 的情形）。
+        var first=up?T:B, second=up?B:T, start=(pl===first)?first:second;
         d='M'+X+','+start+(start===first?'':' V'+first)+' H'+(X+W/2)+' V'+second+' H'+x1;
       } else {
         // 半周期状态（h/H 高、l/L 低）：目标是单一电平

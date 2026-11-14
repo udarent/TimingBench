@@ -387,9 +387,8 @@ export function createShapes(ctx){
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
         '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+'</text>');
-      // 相邻两状态点决定过渡沿：只有显式状态点才带，repeater 沿用上一状态画稳态
       // 画布按全局 N 个周期绘制；wave 较短的行，尾部缺失周期按 repeater 延续补画并留出可续写格子
-      var lastPoint=null, lastW=l.slots.length?l.slots[l.slots.length-1].w:'x';
+      var lastW=l.slots.length?l.slots[l.slots.length-1].w:'x';
       // bus 段合并：延续格（repeater / 超出行尾的补齐格）与相邻同段格之间不画斜边。
       // 判据用 slot 的 point 标志 —— 它正是「用户写了字符」与「延续而来」的分界。
       var wsAt=function(k){ var q=k<l.slots.length?l.slots[k]:null; return q?q.w:lastW; };
@@ -401,7 +400,6 @@ export function createShapes(ctx){
         // 那条起沿是不是多余的。只传「最近一个显式状态点」会漏掉 `h...` / `l.` 这种
         // 延续同一电平的情况，于是每个延续格边界都多画一条竖线。
         var prevCh=i>0?wsAt(i-1):null;
-        if(isPoint) lastPoint=w;
         var gopt={label:s&&isPoint?s.label:null};
         if(Core.BUS.test(w)){
           var ljoin=i>0&&!ptAt(i)&&Core.BUS.test(wsAt(i-1));
