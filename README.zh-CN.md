@@ -4,7 +4,7 @@
 
 **WaveJSON ⇄ 可编辑时序图。** 改图形回写源码，改源码重绘图形，两侧实时同步。
 
-`0.9.27` · [MIT](LICENSE) · 纯静态 · 零构建 · 零依赖 · 完全本地运行 · [在线打开](https://udarent.github.io/TimingBench/editor.html)
+`0.9.28` · [MIT](LICENSE) · 纯静态 · 零构建 · 零依赖 · 完全本地运行 · [在线打开](https://udarent.github.io/TimingBench/editor.html)
 
 两侧只有一份语义：图形回写优先打最小补丁（注释、缩进、键序、引号原样保留），生成结果若与图形不等价就回滚，不会静默改坏你的源码。
 

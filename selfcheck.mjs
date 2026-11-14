@@ -497,6 +497,12 @@ function check() {
     '分组改名 / 重分组（regroup / openGroupEditor）缺失');
   ok(/laneGroupName/.test(shapesSrc) && /laneGroupName/.test(read('src/editor/interactions.js')),
     '分组名不可点改（缺 laneGroupName 命中或入口）');
+  // 分组显示（0.9.28）：UI 必须画成上游 render-groups 那样 —— 左侧花括号 + 竖排组名，
+  // 行名后缀里不再挂 `[组名]`。退回旧写法（只挂后缀不画括号）就用这条拦住。
+  ok(/function groupRuns\(/.test(shapesSrc) && /class="groupBrace"/.test(shapesSrc) &&
+     /rotate\(-90 /.test(shapesSrc) && !/laneGroupName[^\n]*>\[' \+/.test(shapesSrc) &&
+     /\.laneGroupName\[data-lane/.test(interSrc),
+    '分组未画成「左侧花括号 + 竖排组名」（或组名又退回行名后缀 / 点改命中失效）');
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',

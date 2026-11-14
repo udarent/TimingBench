@@ -41,8 +41,9 @@ export function createShapes(ctx){
     measTxt.setAttribute('font-size',String(size));
     try{ return measTxt.getBBox().width; }catch(e){ return text.length*size*0.6; }
   }
-  // 最宽的一行行名（名字 + φ/T + [分组]）。只读态不画 φ/T（`laneMeta` 能力关闭），
+  // 最宽的一行行名（名字 + φ/T）。只读态不画 φ/T（`laneMeta` 能力关闭），
   // 所以更窄 —— 这是内容差异，不是「另一套版式」：两态用同一个算法，只是喂进去的文本不同。
+  // 分组名不再算进来：它改画在左侧的括号旁（竖排），见 groupRuns 的用法。
   function nameBlockWidth(ir){
     var l, w, max=0, withMeta=can('laneMeta');
     for(var i=0;i<ir.lanes.length;i++){
@@ -52,10 +53,33 @@ export function createShapes(ctx){
       if(withMeta){
         w+=measure(' φ'+l.phase,9)+measure(' T'+l.period,9);
       }
-      if(l.groupPath&&l.groupPath.length) w+=measure(' ['+l.groupPath.join('/')+']',10);
       if(w>max) max=w;
     }
     return max;
+  }
+
+  // 分组区间：把 `groupPath` 相同的连续行收敛成「一段」，供左侧括号使用（上游的做法）。
+  // 逐层扫描：第 d 层里，凡是 groupPath 长度 > d 且前 d+1 段相同的连续行，就是第 d 层的一段。
+  // 返回 [{name, depth, from, to}]，from / to 是行下标（含）。单行分组同样成段 —— 上游也画。
+  function groupRuns(lanes){
+    var out=[], depthMax=0;
+    lanes.forEach(function(l){ if((l.groupPath||[]).length>depthMax) depthMax=l.groupPath.length; });
+    for(var d=0; d<depthMax; d++){
+      var i=0;
+      while(i<lanes.length){
+        var gp=lanes[i].groupPath||[];
+        if(gp.length<=d){ i++; continue; }
+        var pref=gp.slice(0,d+1).join('/'), j=i;
+        while(j+1<lanes.length){
+          var g2=lanes[j+1].groupPath||[];
+          if(g2.length<=d || g2.slice(0,d+1).join('/')!==pref) break;
+          j++;
+        }
+        out.push({name:gp[d], depth:d, from:i, to:j});
+        i=j+1;
+      }
+    }
+    return out;
   }
 
 
@@ -206,8 +230,12 @@ export function createShapes(ctx){
       measKey=nameKey; measW=nameBlockWidth(ir);
     }
     // 行名左界就是内边距：行首拖拽把手已于 0.9.10 撤除，0.9.13 连图元一起删除，
-    // 这里不再为它预留 18px。
-    var leftBound=PAD;
+    // 这里不再为它预留 18px。分组括号要占位：每嵌套一层就让出 GSLOT 宽的一条槽
+    // （上游把括号和竖排组名都画在行名左侧，所以要先把这段宽度让出来，行名才不会被压住）。
+    var gslot=T?20:16;
+    var gDepth=0;
+    ir.lanes.forEach(function(l){ if((l.groupPath||[]).length>gDepth) gDepth=l.groupPath.length; });
+    var leftBound=PAD+gDepth*gslot;
     var minW=64, maxW=T?300:260;                 // 上下限：空图 / 超长名字（两态同值）
     // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T + 10px 的 [分组]」
     // tspan 拼接有 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
@@ -343,18 +371,14 @@ export function createShapes(ctx){
         o.push(rowTools(l,y,ACT_X)); o.push('</g>');
         return;
       }
-      // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉；分组名编辑态可点改（`A/B` 嵌套、
-      // 清空即取消分组），只读卡片只显示、不给编辑入口。
-      var gEdit=can('laneMeta');
-      var gname=l.groupPath.length
-        ? ' <tspan class="laneGroupName"'+(gEdit?' data-act="group" data-lane="'+l.id+'"':'')+' fill="var(--muted)" font-size="10">['+esc(l.groupPath.join('/'))+']</tspan>'
-        : '';
+      // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉。
+      // 分组名不再挂在行名后面：它画在左侧括号旁（竖排，见下面的 groupRuns 渲染）。
       var meta=can('laneMeta')?'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
         '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>':'';
       // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
-        '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+gname+'</text>');
+        '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+'</text>');
       // 相邻两状态点决定过渡沿：只有显式状态点才带，repeater 沿用上一状态画稳态
       // 画布按全局 N 个周期绘制；wave 较短的行，尾部缺失周期按 repeater 延续补画并留出可续写格子
       var lastPoint=null, lastW=l.slots.length?l.slots[l.slots.length-1].w:'x';
@@ -391,6 +415,22 @@ export function createShapes(ctx){
         o.push('<text class="waveNode" x="'+(XS+i*CELL+CELL/2+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
       }
       o.push('</g>');
+    });
+    // 分组括号（对照上游 render-groups 的画法）：一条花括号从该组首行跨到末行，组名
+    // **竖排**（rotate -90）贴在括号左侧；嵌套时逐层向左退一格。括号本身不吃事件
+    // （点它等于点这一行），组名在编辑态可点改（改名 / 用 `/` 嵌套 / 清空取消）。
+    var gEdit=can('laneMeta');
+    groupRuns(ir.lanes).forEach(function(g){
+      var y0=TOP+g.from*ROW_H+4, y1=TOP+(g.to+1)*ROW_H-4, h=y1-y0;
+      if(h<10) return;
+      var bx=PAD+g.depth*gslot+gslot-6, cy=(y0+y1)/2, lx=bx-9;
+      var brace='M'+bx+','+y0+' c -3,0 -5,2 -5,5 l 0,'+(h-10)+' c 0,3 2,5 5,5';
+      o.push('<g class="groupBrace">'+
+        '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".7" pointer-events="none"/>'+
+        '<text class="laneGroupName"'+(gEdit?' data-act="group" data-lane="'+ir.lanes[g.from].id+'"':'')+
+        ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle" dominant-baseline="central"'+
+        ' font-size="10" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
+        '</g>');
     });
     o.push(edgeArcs(ir));
     // 连线模式只画端点光标（键盘操作定位），不画普通选中框、不弹字符条

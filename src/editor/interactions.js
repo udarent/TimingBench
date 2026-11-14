@@ -300,14 +300,20 @@ export function attachInteractions(ctx){
     if(s.lane===undefined||s.tick===undefined) return;
     openCellCharEditor(s.lane,s.tick);
   }
-  // 分组改名 / 重分组：点行名后的 `[A/B]` 打开输入框；`/` 表示嵌套，清空即取消分组。
+  // 分组改名 / 重分组：点左侧括号旁的竖排组名打开输入框；`/` 表示嵌套，清空即取消分组。
   // 提交的 regroup 会作用于所有 groupPath 等于旧路径的行（含 spacer），整组一起改名。
+  // 括号只显示「本层」的组名（与上游一致），但编辑的是**整条路径**：`regroup` 的 `old`
+  // 要按完整路径精确匹配，否则嵌套组的改名 / 取消会落空（点外层 `Outer` 却改不动
+  // `Outer/Inner` 的那几行）。
   function openGroupEditor(laneId,name){
-    var el=wrap.querySelector('tspan.laneGroupName[data-lane="'+laneId+'"]');
+    var el=wrap.querySelector('.laneGroupName[data-lane="'+laneId+'"]');
     if(!el) return;
-    openInline(el,name,function(v){
+    var lane=null;
+    if(state.ir) state.ir.lanes.forEach(function(l){ if(l.id===laneId) lane=l; });
+    var full=lane&&lane.groupPath&&lane.groupPath.length?lane.groupPath.join('/'):name;
+    openInline(el,full,function(v){
       var path=String(v).split('/').map(function(s){return s.trim();}).filter(function(s){return s.length;});
-      ctx.commit({t:'regroup',old:name,path:path},'regroup ['+name+'] -> '+(path.join('/')||'(none)'));
+      ctx.commit({t:'regroup',old:full,path:path},'regroup ['+full+'] -> '+(path.join('/')||'(none)'));
     },{ title:'group name (use / to nest, empty to ungroup)', placeholder:'group', width:150 });
   }
 
