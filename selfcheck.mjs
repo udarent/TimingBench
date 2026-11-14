@@ -431,6 +431,11 @@ function check() {
   ok(/decodePayload/.test(shellSrc) && /wj/.test(shellSrc),
     '嵌入壳未读取 URL 片段载荷（无脚本宿主会退化成默认示例）');
   ok(fs.existsSync(path.join(ROOT, 'src/editor/payload.js')), '缺少载荷编解码模块 payload.js');
+  // 矮卡片编辑：动作条会挤没画布 —— 进编辑时按需请求原生全屏，且只在真实手势下尝试。
+  ok(/requestFullscreen/.test(shellSrc) && /userActivation/.test(shellSrc) && /isCramped/.test(shellSrc),
+    '嵌入壳缺少「矮卡片进入编辑时按需请求全屏」的逻辑');
+  ok(/allowfullscreen/.test(shareSrc) && /allowfullscreen/.test(read('embed.js')),
+    '嵌入片段 / 加载器未放行 allowfullscreen（全屏请求会被宿主 iframe 拒绝）');
   // 往返无损：这份载荷会直接进 iframe 的 src，坏一个字符整张图就没了
   ok(decodePayload(encodePayload(EXAMPLE)) === EXAMPLE, '载荷编解码往返不一致（example）');
   {

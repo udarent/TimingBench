@@ -41,6 +41,9 @@
     frame.loading = 'lazy';
     frame.style.cssText = 'display:block;width:100%;border:0;height:' + (parseInt(height, 10) || 240) + 'px';
     frame.setAttribute('allowtransparency', 'true');
+    // 允许卡片在「进入编辑」时请求原生全屏（矮卡片里动作条会挤没画布，全屏是唯一解）
+    frame.setAttribute('allowfullscreen', '');
+    frame.setAttribute('allow', 'fullscreen');
 
     el.__tbFrame = frame;
     el.innerHTML = '';

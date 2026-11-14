@@ -268,6 +268,10 @@ svg{display:block;font-family:var(--sans)}
    全在 #tbpanel 里，隐藏它等于把行重排、行编辑、列操作整组功能关掉。 */
 /* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；面板挡住波形是瞬时的（选完即收） */
 .is-embed .tbpanel.open{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+/* 嵌入卡片编辑态：上下文条压成**单行横向滚动** —— 矮卡片里 12 个 44px 按钮若折成两三排，
+   会把画布挤到只剩一条缝（用户实测「按钮把界面占满、没法编辑」）。单行是最省纵向空间的形态；
+   放不下的靠横向滑动看。全屏编辑（支持时）同样受益。用 :not(.is-readonly) 免得影响只读态。 */
+.is-embed:not(.is-readonly) .tbpanel.open{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-height:none}
 .is-embed .pane.src{display:none!important}
 /* 卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
    之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，

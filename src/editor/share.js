@@ -60,7 +60,7 @@ export function attachShare(ctx) {
     return '<iframe src="' + attrText(url) + '"\n' +
       '        style="width:100%;height:auto;aspect-ratio:' + w + ' / ' + h +
                 ';border:0;border-radius:10px;display:block"\n' +
-      '        height="' + h + '" loading="lazy" title="Timing diagram"></iframe>';
+      '        height="' + h + '" allowfullscreen allow="fullscreen" loading="lazy" title="Timing diagram"></iframe>';
   }
 
   var HINTS = {
@@ -68,8 +68,8 @@ export function attachShare(ctx) {
             'editable, and the card reports its own height so it never needs a fixed one.',
     iframe: 'No script needed. Paste this as a raw HTML block — in Obsidian, straight into the note ' +
             '(not inside a code fence). The content travels in the URL, so it renders anywhere ' +
-            'that allows an iframe. Height follows the container width (aspect-ratio), so there is ' +
-            'no blank strip under the diagram; editing happens inside the card and scrolls.'
+            'that allows an iframe. Height follows the container width (aspect-ratio). On a small ' +
+            'card a click goes full-screen to edit, then returns to the read-only card.'
   };
 
   function build() {

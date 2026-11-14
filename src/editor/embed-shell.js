@@ -29,6 +29,32 @@ export function attachEmbed(ctx, opts) {
   docEl.classList.add('is-embed');
   state.embedCard=true;        // 画布高度只按内容算，不留视口空白
 
+  // ---- 全屏编辑：卡片太矮时，动作行 + 字符条会把画布挤到几乎不可见 ------------------
+  // 嵌入卡片本质是固定尺寸的 iframe，唯一能真正「变大」的办法是浏览器原生全屏。
+  // 只在「卡片确实太小」且「有真实用户手势」时尝试（脚本合成的 pointer 事件、宿主 setMode
+  // 消息都不算手势）；失败（宿主没给 allowfullscreen、iOS Safari 不支持元素全屏）就静默
+  // 退回卡片内编辑 —— 此时 CSS 会把上下文条压成单行，至少不会折成好几排把画布吃光。
+  var fsRoot = document.documentElement;
+  var fsForEdit = false;   // 当前这次全屏是为「编辑」开的：退出全屏时一并回只读
+  function fsCurrent() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function fsSupported() { return !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen); }
+  function hasGesture() {
+    try { var ua = navigator.userActivation; return !ua || ua.isActive !== false; }
+    catch (e) { return true; }
+  }
+  function isCramped() { return window.innerWidth < 520 || window.innerHeight < 340; }
+  function requestFs() {
+    var fn = fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen;
+    if (!fn) return;
+    try { var p = fn.call(fsRoot); if (p && p.catch) p.catch(function () { /* 被拒绝：留在卡片内编辑 */ }); }
+    catch (e) { /* 同步抛错同样退回卡片内 */ }
+  }
+  function exitFs() {
+    var fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!fn) return;
+    try { var p = fn.call(document); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+  }
+
   function post(type, payload) {
     try {
       if (window.parent && window.parent !== window)
@@ -44,7 +70,7 @@ export function attachEmbed(ctx, opts) {
   // ---- 只读 ↔ 编辑 ---------------------------------------------------------
   // 提示条是一个图标按钮：铅笔 = 点一下可编辑，对勾 = 编辑中、点一下结束。
   // 视觉上零常驻文字，语义只走 aria-label（嵌入页是英文优先）。
-  function setEditing(on, anchor) {
+  function setEditing(on, anchor, keepFs) {
     var wasReadonly = state.readonly;
     ctx.setReadonly(!on);
     if (anchor && wasReadonly && on) anchorCell(anchor);
@@ -53,9 +79,27 @@ export function attachEmbed(ctx, opts) {
       hint.setAttribute('aria-pressed', on ? 'true' : 'false');
       hint.classList.toggle('editing', !!on);
     }
+    // 进入编辑：卡片太小就尝试全屏，把整块屏幕让给波形 + 两条操作条。
+    if (on && wasReadonly && !keepFs && isCramped() && fsSupported() && hasGesture()) {
+      fsForEdit = true;
+      if (!fsCurrent()) requestFs();
+    }
+    // 离开编辑：若这次全屏是为编辑开的，顺带退出全屏。
+    if (!on && !keepFs) {
+      fsForEdit = false;
+      if (fsCurrent()) exitFs();
+    }
     post('mode', { editing: !!on });
   }
   ctx.requestEdit = function (anchor) { setEditing(true, anchor); };
+
+  // 用户按 Esc / 系统手势退出全屏：若这次全屏是为编辑开的，也回到只读卡片。
+  function onFsChange() {
+    if (fsCurrent()) { ctx.redraw(); return; }
+    if (fsForEdit) { fsForEdit = false; if (!state.readonly) setEditing(false, null, true); }
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
 
   // 从只读切到编辑，缩放会从「整图缩进卡片」跳成 1:1 —— 如果不管滚动位置，
   // 手指下面那块内容会整体挪走，第二次点按就落到别的格子上（手机端最难受的地方）。
@@ -139,6 +183,9 @@ export function attachEmbed(ctx, opts) {
   // ---- 高度自适应：把波形真实高度告诉宿主，宿主据此设 iframe 高度 --------
   var lastH = 0;
   function reportHeight() {
+    // 全屏时 contentH 是屏幕高 —— 别把它推给宿主，否则退出全屏瞬间卡片会被撑到整屏高。
+    // 退出全屏会触发 resize→redraw→reportHeight，届时已不在全屏，自然会补上正确高度。
+    if (fsCurrent()) return;
     // 顶栏是页面级 flex 子项（撤销 / 重做 / 嵌入），不在 SVG 的 contentH 里，上报时要加上。
     var topEl = document.getElementById('topbar');
     var topH = topEl && topEl.offsetHeight ? topEl.offsetHeight : 0;
