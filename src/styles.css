@@ -283,6 +283,14 @@ svg{display:block;font-family:var(--sans)}
 .is-embed .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
 .is-embed .pane.diagram{display:block;height:100%}
 .is-embed .svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto}
+/* 全屏编辑：这里已经是整块屏幕，画布要铺满它 —— 图比屏幕宽/高就靠滑动去看（移动端唯一手段）。
+   卡片内 .pane.diagram 是 display:block（高度由内容撑），全屏改成 flex 列，画布吃掉除底部
+   操作条之外的全部高度，纵向滚动才有真正的滚动区间。 */
+.is-embed:fullscreen .pane.diagram,
+.is-embed:-webkit-full-screen .pane.diagram{display:flex;flex-direction:column;height:100%}
+.is-embed:fullscreen .svgwrap,
+.is-embed:-webkit-full-screen .svgwrap{flex:1 1 auto;min-height:0;overflow:auto;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 /* 内容比卡片窄时水平居中（宽于卡片时仍从左侧起排、可横向滚动） */
 /* 只读卡片：让 SVG 自己按视口等比适配（viewBox 不变，preserveAspectRatio 默认 xMidYMid meet）。
    原因有两个：① 纯 iframe 的高度由宿主的 aspect-ratio 决定，而内部几何常量会随指针类型变

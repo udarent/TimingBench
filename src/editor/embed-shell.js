@@ -114,8 +114,12 @@ export function attachEmbed(ctx, opts) {
   // 用户按 Esc / 系统手势退出全屏：若这次全屏是为编辑开的，也回到只读卡片。
   function onFsChange() {
     fsActive = !!fsCurrent();
+    // 全屏态参与布局：全屏时画布按 1:1 画、靠滚动移动（见 shapes.js 的 fit 规则），
+    // 回到卡片后立刻恢复「等比缩进卡片」。两种状态都要重画，否则尺寸会停在旧值上。
+    state.fsEdit = fsActive;
     if (fsActive) { ctx.redraw(); return; }
     if (fsForEdit) { fsForEdit = false; if (!state.readonly) setEditing(false, null, true); }
+    else ctx.redraw();
   }
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);

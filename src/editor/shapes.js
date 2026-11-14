@@ -281,10 +281,17 @@ export function createShapes(ctx){
     //   只读卡片 —— 等比缩到卡片宽，窄图最多放大 2 倍铺满（矢量不糊）；
     //   触摸端 / 卡片编辑态 —— 内容比容器宽就缩到容器宽，**只缩不放大**。手机上不再需要
     //     横向拖动，也不再「进编辑退回 1:1」（那会让手指底下的内容整体跳一次）；
+    //   **全屏编辑**（嵌入卡在手机上点了全屏）—— 恢复 1:1：屏幕已经够大，再压到容器宽
+    //     会让宽图的每格只剩十几像素，用户既点不中也无处可滑（实测反馈「全屏后波形图无法
+    //     移动，部分区域无法编辑」）。1:1 时图比屏幕宽/高就靠滚动，格子回到原尺寸。
     //   桌面整页 —— 保持 1:1 + 横向滚动。宽屏本来就装得下，缩了反而费眼。
     // 纵向不参与 fit：行数随图变化，硬塞进一屏只会把字压糊；横向不滚、纵向照旧滚。
     var rawFit = viewW > 0 ? viewW / W : 1;
-    var fit = (state.embedCard && state.readonly) ? Math.min(2, rawFit)
+    var fsBig = !!state.embedCard && !state.readonly && !!state.fsEdit;
+    // 全屏：比屏幕宽就 1:1 靠滑动，比屏幕窄就放大铺满（上限 2 倍，矢量不糊）——
+    // 两头都让格子保持在「手指点得准」的尺寸上。
+    var fit = fsBig ? Math.min(2, Math.max(1, rawFit))
+            : (state.embedCard && state.readonly) ? Math.min(2, rawFit)
             : (T || state.embedCard) ? Math.min(1, rawFit)
             : 1;
     var outW = fit < 1 ? viewW : Math.round(W * fit);

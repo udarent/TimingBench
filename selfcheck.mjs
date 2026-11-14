@@ -458,6 +458,9 @@ function check() {
   // 全屏只为「手指」准备：细指针没有按钮折排问题，宿主页点一下就把整屏抢走反而更糟。
   ok(/import \{ TOUCH \} from '\.\/mode\.js'/.test(shellSrc) && /TOUCH && \(window\.innerWidth/.test(shellSrc),
     '矮卡片全屏未按指针类型收口（细指针嵌入卡点进编辑会抢全屏）');
+  // 全屏里不能还按卡片宽压缩：图正好等于容器宽 ⇒ 没有滑动区间，宽图每格十几像素、点不中。
+  ok(/state\.fsEdit/.test(shapesSrc) && /\.is-embed:fullscreen \.svgwrap/.test(cssSrc),
+    '全屏编辑缺少「按 1:1 绘制 + 画布可滑动」的规则（波形图在全屏里动不了）');
   // 全屏里「完成」是唯一出口：小按钮的 click 会被滚动吞掉，必须走 pointerup 主通道 + 全屏放大避让。
   ok(/hint\.addEventListener\('pointerup'/.test(shellSrc) && /hint\.addEventListener\('click'/.test(shellSrc),
     '完成按钮缺少 pointerup 主通道 / click 兜底（全屏里点击可能被吞）');
