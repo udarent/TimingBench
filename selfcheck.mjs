@@ -436,6 +436,12 @@ function check() {
     '嵌入壳缺少「矮卡片进入编辑时按需请求全屏」的逻辑');
   ok(/allowfullscreen/.test(shareSrc) && /allowfullscreen/.test(read('embed.js')),
     '嵌入片段 / 加载器未放行 allowfullscreen（全屏请求会被宿主 iframe 拒绝）');
+  // 全屏里「完成」是唯一出口：小按钮的 click 会被滚动吞掉，必须走 pointerup 主通道 + 全屏放大避让。
+  ok(/hint\.addEventListener\('pointerup'/.test(shellSrc) && /hint\.addEventListener\('click'/.test(shellSrc),
+    '完成按钮缺少 pointerup 主通道 / click 兜底（全屏里点击可能被吞）');
+  ok(/is-embed:fullscreen \.embedhint/.test(read('src/styles.css')) &&
+     /env\(safe-area-inset/.test(read('src/styles.css')),
+    '全屏编辑未放大完成按钮或未避开安全区（刘海 / 系统栏）');
   // 往返无损：这份载荷会直接进 iframe 的 src，坏一个字符整张图就没了
   ok(decodePayload(encodePayload(EXAMPLE)) === EXAMPLE, '载荷编解码往返不一致（example）');
   {

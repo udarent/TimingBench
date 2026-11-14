@@ -36,6 +36,7 @@ export function attachEmbed(ctx, opts) {
   // 退回卡片内编辑 —— 此时 CSS 会把上下文条压成单行，至少不会折成好几排把画布吃光。
   var fsRoot = document.documentElement;
   var fsForEdit = false;   // 当前这次全屏是为「编辑」开的：退出全屏时一并回只读
+  var fsActive = false;    // 此刻确实处于全屏（退出失败时不要假装退出了）
   function fsCurrent() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
   function fsSupported() { return !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen); }
   function hasGesture() {
@@ -46,13 +47,27 @@ export function attachEmbed(ctx, opts) {
   function requestFs() {
     var fn = fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen;
     if (!fn) return;
-    try { var p = fn.call(fsRoot); if (p && p.catch) p.catch(function () { /* 被拒绝：留在卡片内编辑 */ }); }
-    catch (e) { /* 同步抛错同样退回卡片内 */ }
+    try {
+      var p = fn.call(fsRoot);
+      if (p && p.then) p.then(function () { fsActive = true; }, function () { /* 被拒绝：留在卡片内编辑 */ });
+    } catch (e) { /* 同步抛错同样退回卡片内 */ }
   }
+  // 退出全屏要够耐用：不同引擎的前缀 API 不同，且首次调用偶尔因「请求仍在 pending」被拒，
+  // 所以按前缀逐个尝试并重试几次。哪怕浏览器脚本退出被拦，用户仍可用系统 Esc / 返回手势退出。
   function exitFs() {
-    var fn = document.exitFullscreen || document.webkitExitFullscreen;
+    var d = document;
+    var fn = d.exitFullscreen || d.webkitExitFullscreen || d.mozCancelFullScreen || d.msExitFullscreen;
     if (!fn) return;
-    try { var p = fn.call(document); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    var tries = 0;
+    (function attempt() {
+      tries++;
+      var retry = function () { if (tries < 4) setTimeout(attempt, 80); };
+      try {
+        var p = fn.call(d);
+        if (p && p.then) p.then(function () { fsActive = false; }, retry);
+        else fsActive = false;
+      } catch (e) { retry(); }
+    })();
   }
 
   function post(type, payload) {
@@ -84,10 +99,10 @@ export function attachEmbed(ctx, opts) {
       fsForEdit = true;
       if (!fsCurrent()) requestFs();
     }
-    // 离开编辑：若这次全屏是为编辑开的，顺带退出全屏。
+    // 离开编辑：若这次全屏是为编辑开的，顺带退出全屏（退出失败会重试，不会假装已退）。
     if (!on && !keepFs) {
       fsForEdit = false;
-      if (fsCurrent()) exitFs();
+      if (fsActive || fsCurrent()) exitFs();
     }
     post('mode', { editing: !!on });
   }
@@ -95,7 +110,8 @@ export function attachEmbed(ctx, opts) {
 
   // 用户按 Esc / 系统手势退出全屏：若这次全屏是为编辑开的，也回到只读卡片。
   function onFsChange() {
-    if (fsCurrent()) { ctx.redraw(); return; }
+    fsActive = !!fsCurrent();
+    if (fsActive) { ctx.redraw(); return; }
     if (fsForEdit) { fsForEdit = false; if (!state.readonly) setEditing(false, null, true); }
   }
   document.addEventListener('fullscreenchange', onFsChange);
@@ -140,12 +156,31 @@ export function attachEmbed(ctx, opts) {
     if (vs) vs.scrollTop = Math.min(vs.scrollHeight - vs.clientHeight, Math.max(0, vs.scrollTop + dy));
   }
 
-  // 点提示条可来回切换：只读时进编辑，编辑态时回只读
+  // 点提示条可来回切换：只读时进编辑，编辑态时回只读。
+  // 主通道用 pointerdown→pointerup 自己判定「一次干净的点按」：手机上小按钮的 click 很可能
+  // 因手指轻微滑动被当成滚动而**被浏览器吞掉**（表现为「点了没反应」）。pointerup 不受影响，
+  // 但只在位移 ≤12px、时长 ≤600ms 时才算点按，拖动看图不会误切。click 仅作兜底（键盘 Enter /
+  // 无 Pointer Events 的环境），与 pointerup 之间有 350ms 去重，避免一次点击触发两次。
   if (hint) {
+    var hintDown = null, suppressClickUntil = 0;
+    function toggleHint() { if (state.readonly) setEditing(true); else setEditing(false); }
+    hint.addEventListener('pointerdown', function (e) {
+      hintDown = { x: e.clientX || 0, y: e.clientY || 0, t: Date.now(), id: e.pointerId };
+    });
+    hint.addEventListener('pointerup', function (e) {
+      var d = hintDown; hintDown = null;
+      if (!d || e.pointerId !== d.id) return;
+      if (Math.abs((e.clientX || 0) - d.x) > 12 || Math.abs((e.clientY || 0) - d.y) > 12) return; // 拖动：不算点按
+      if (Date.now() - d.t > 600) return;                                                        // 长按：不算点按
+      e.stopPropagation();
+      toggleHint();
+      suppressClickUntil = Date.now() + 350;   // 紧随其后补发的 click 属于同一次点按，忽略，避免双切换
+    });
+    hint.addEventListener('pointercancel', function () { hintDown = null; });
     hint.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (state.readonly) setEditing(true);
-      else { setEditing(false); }
+      if (Date.now() < suppressClickUntil) return;
+      toggleHint();
     });
   }
 
