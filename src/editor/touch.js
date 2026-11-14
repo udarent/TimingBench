@@ -34,7 +34,6 @@ export function attachTouchUI(ctx, dom) {
   var TOP_META = {
     undo:   { txt: '↶', name: 'Undo (Ctrl+Z)' },
     redo:   { txt: '↷', name: 'Redo (Ctrl+Y)' },
-    link:   { txt: '◇', name: 'Link mode: click two cells' },
     layout: { txt: '⇄', name: 'Split direction' },
     embed:  { txt: '<>', name: 'Embed code' }
   };
@@ -45,7 +44,7 @@ export function attachTouchUI(ctx, dom) {
     var cols = ctx.currentLayout ? ctx.currentLayout() === 'cols' : true;
     // 只在「按钮集合 / 可用态 / 模式」变化时重建，避免每次 redraw 都闪一下
     var key = cmds.join(',') + '|' + state.undo.length + '|' + state.redo.length + '|' +
-      (state.linkMode ? 'L' : '-') + '|' + (cols ? 'C' : 'R') + '|' + (state.embedCard ? 'E' : '-');
+      (cols ? 'C' : 'R') + '|' + (state.embedCard ? 'E' : '-');
     if (key === topKey && topbar.childNodes.length) return;
     topKey = key;
     topbar.textContent = '';
@@ -60,13 +59,10 @@ export function attachTouchUI(ctx, dom) {
       if (c === 'layout') {
         name = cols ? 'Code left / diagram right — click for stacked'
                     : 'Stacked — click for code left / diagram right';
-      } else if (c === 'link' && state.linkMode) {
-        name = 'Link mode: on — click to exit';
       }
       b.textContent = c === 'layout' ? (cols ? '⇄' : '⇅') : m.txt;
       b.title = name;
       b.setAttribute('aria-label', name);
-      if (c === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
       var dim = (c === 'undo' && !state.undo.length) || (c === 'redo' && !state.redo.length);
       if (dim) { b.disabled = true; b.classList.add('dim'); }
       topbar.appendChild(b);
@@ -92,26 +88,30 @@ export function attachTouchUI(ctx, dom) {
   // 选中格子 → 字符条（画在 SVG 里）；选中行 → 行动作；选中列 → 列动作。
   // 图标尽量画成「被操作对象的缩略图」（方波 / 色块 / 节点圆点 …），
   // 概念符号（相位、周期）保留社区惯用的 φ / T。辨识兜底是「长按出名称」。
+  // 图标重设计（0.9.17）：此前 label / node 用「空心方框 + 小符号」，方框被描边后像「没加载
+  // 出来的空框」，用户误以为是显示 bug。改为清晰的实物化图形：标签=带孔的吊牌、节点=带实心
+  // 点的环、连线=两个节点加连线。其余图标也统一成「描边线条 + 必要处实心」的清晰风格。
   var ICONS = {
-    name:   '<path d="M7 17.5L11 6.5l4 11M8.6 13.6h4.8"/>',
+    name:   '<path d="M5 7h14M5 12h11M5 17h13"/>',
     wave:   '<path d="M3 15h3v-6h4v6h4V9h4v6h3"/>',
-    data:   '<path d="M4 9.5h16v5H4z"/><path d="M10 9.5v5M15 9.5v5"/>',
-    nodeStr:'<path d="M3 12h6M15 12h6"/><circle cx="12" cy="12" r="2.2"/>',
+    data:   '<rect x="4" y="8" width="16" height="8" rx="1"/><path d="M10 8v8M14 8v8"/>',
+    nodeStr:'<path d="M3 12h6M15 12h6"/><circle cx="12" cy="12" r="3.2"/>',
     phase:  '<text x="12" y="17.5" text-anchor="middle" font-size="16" font-family="Georgia,serif" fill="currentColor" stroke="none">φ</text>',
     period: '<path d="M4 12h16"/><path d="M7.5 8.5L4 12l3.5 3.5M16.5 8.5L20 12l-3.5 3.5"/>',
-    up:     '<path d="M12 19.5V6"/><path d="M7 11l5-5 5 5"/>',
-    down:   '<path d="M12 4.5V18"/><path d="M7 13l5 5 5-5"/>',
-    add:    '<path d="M3.5 17.5h9"/><path d="M17 6.5v9M12.5 11h9"/>',
-    spacer: '<path d="M4 8.5h16M4 15.5h16"/>',
-    del:    '<path d="M3.5 17.5h9"/><path d="M15 8.5l6 6M21 8.5l-6 6"/>',
-    // 格级两项画成「这一格 + 格里的东西」：铅笔是标签文字，圆点是锚点字符。
+    up:     '<path d="M12 19V6M7 11l5-5 5 5"/>',
+    down:   '<path d="M12 5v13M7 13l5 5 5-5"/>',
+    add:    '<path d="M12 5v14M5 12h14"/>',
+    spacer: '<path d="M4 9h16M4 15h16"/>',
+    del:    '<path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/>',
+    // 格级：标签=带孔的吊牌（清晰可辨的「标注」意象），节点=带实心点的环（锚点标记）。
     // 与行级的 data / nodeStr（整行）刻意画得不同，免得两个图标看着一样却差一个量级。
-    label:  '<rect x="3.5" y="6" width="10" height="12" rx="1.5"/><path d="M16 15.5l1.5-1.5 3 3-1.5 1.5z"/><path d="M16 15.5l-1.2 3.2 3.2-1.2"/>',
-    node:   '<rect x="3.5" y="6" width="17" height="12" rx="1.5"/><circle cx="12" cy="12" r="2.4"/>',
+    label:  '<path d="M4 7h9l7 7-7 7H4z"/><circle cx="8.5" cy="11.5" r="1.5"/>',
+    node:   '<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/>',
     insert: '<path d="M8.5 5v14M15.5 5v14"/><path d="M12 9.5v5M9.5 12h5"/>',
-    delCol: '<path d="M9 5v14"/><path d="M15.5 9l4.5 6M20 9l-4.5 6"/>',
-    gap:    '<path d="M12 5v14" stroke-dasharray="2.5 2.5"/>',
-    append: '<path d="M9 5v14"/><path d="M14 12h6.5M17.25 8.75v6.5"/>'
+    delCol: '<path d="M9 5v14"/><path d="M15 9l4.5 6M20 9l-4.5 6"/>',
+    gap:    '<path d="M12 5v14" stroke-dasharray="2.4 2.4"/>',
+    append: '<path d="M9 5v14"/><path d="M14 12h6.5M17.25 8.75v6.5"/>',
+    link:   '<circle cx="6.5" cy="12" r="2.6"/><circle cx="17.5" cy="12" r="2.6"/><path d="M9.1 12h5.8"/>'
   };
   var ICON_KEY = { delete: 'delCol' };
   var NAMES = {
@@ -119,7 +119,8 @@ export function attachTouchUI(ctx, dom) {
     label: 'cell data label', node: 'cell node marker',
     phase: 'phase', period: 'period', up: 'move up', down: 'move down', add: 'add row',
     spacer: 'add spacer', del: 'delete row',
-    insert: 'insert cycle', delete: 'delete cycle', gap: 'phase line', append: 'append cycle'
+    insert: 'insert cycle', delete: 'delete cycle', gap: 'phase line', append: 'append cycle',
+    link: 'connect two nodes (wire)'
   };
   // 动作清单来自 cap.js 的 ACTS —— 与桌面行工具 / 列操作是同一份，避免「面板里少一个
   // 动作」与「图元里多一个按钮」各说各话。图标与英文名留在本文件（只有触摸端用得上）。
@@ -146,6 +147,7 @@ export function attachTouchUI(ctx, dom) {
       case 'char':   c = needCell(); if (c) ctx.openCellCharEditor(c.lane, c.tick); return;
       case 'label':  c = needCell(); if (c) ctx.openLabelEditor(c.lane, c.tick); return;
       case 'node':   c = needCell(); if (c) ctx.openNodeEditor(c.lane, c.tick, ''); return;
+      case 'link':   ctx.doCmd('link'); return;
       case 'name':   l = needLane(); if (l) ctx.openInlineFor({ nameLane: l }); return;
       case 'wave': case 'data': case 'nodeStr': case 'phase': case 'period':
         l = needLane();
@@ -189,7 +191,7 @@ export function attachTouchUI(ctx, dom) {
     })(els[i]);
   }
 
-  var ctxKind = null, ctxKey = null;
+  var ctxKind = null, ctxKey = null, ctxLinkFlag = '-';
   // 打开面板那一刻的滚动位置（见 renderContext 末尾）：用于把「布局抖动引发的 scroll」
   // 与「用户真的想滑动」区分开。
   var ctxScroll = null;
@@ -206,7 +208,7 @@ export function attachTouchUI(ctx, dom) {
   // 三级共用同一个容器与同一段渲染代码，差别只是喂进去的动作清单。
   function renderContext() {
     if (!panel) return;                           // 不跑编辑器的页面（如验收页）没有上下文条容器
-    if (state.linkMode || ctx.inlineCtx) { hideContext(); return; }
+    if (ctx.inlineCtx) { hideContext(); return; }
     var kind = null, acts = null, key = null, laneOf = null;
     if (state.selCell && state.ir) {
       // 格级：改这一格的 data 标签 / 节点锚点字符。这两件事原先只有桌面的 ✎ 徽标能做
@@ -222,8 +224,9 @@ export function attachTouchUI(ctx, dom) {
     // 同一对象不重绘（避免连点闪烁）—— 但必须确认面板**当前真的是开着的**：
     // 面板可能被 hideContext 清空过而 key 未变（清空路径不止一条），此时若只看 key
     // 就会跳过重建，表现为「点了行、面板却空着」。
-    if (ctxKind === kind && ctxKey === key && panel.classList.contains('open') && panel.childNodes.length) return;
-    ctxKind = kind; ctxKey = key;
+    var linkFlag = state.linkMode ? 'L' : '-';
+    if (ctxKind === kind && ctxKey === key && ctxLinkFlag === linkFlag && panel.classList.contains('open') && panel.childNodes.length) return;
+    ctxKind = kind; ctxKey = key; ctxLinkFlag = linkFlag;
     panel.textContent = '';
     acts.forEach(function (k) {
       var b = document.createElement('button');
@@ -232,6 +235,7 @@ export function attachTouchUI(ctx, dom) {
       b.setAttribute('data-act', k);
       b.setAttribute('data-name', NAMES[k] || k);
       b.setAttribute('aria-label', NAMES[k] || k);
+      if (k === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
       b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[ICON_KEY[k] || k] || '') + '</svg>';
       panel.appendChild(b);
     });
@@ -299,17 +303,30 @@ export function attachTouchUI(ctx, dom) {
     if (!dock) return;
     var visible = !state.readonly && !state.linkMode && !!state.selCell && !ctx.inlineCtx;
     if (!visible) { hideDock(); return; }
-    var key = state.selCell.lane + '@' + state.selCell.tick + '|' + state.ch + '|' + moreOpen;
+    // 宽度自适应：能放多少颗就放多少颗（常用优先），放不下的收进 ⋯。
+    // 不再按 TOUCH 二选一 —— 宽屏（含宽屏触摸 / 宽嵌卡片）一次铺满全部字符，窄屏才折叠，
+    // 把有限宽度用在刀刃上，避免「明明很宽却只摆 4 颗 + ⋯」的浪费。
+    var chipW = TOUCH ? 48 : 30, gap = TOUCH ? 6 : 4;
+    var clearW = TOUCH ? 44 : 26, moreW = TOUCH ? 44 : 30;
+    var host = dock.parentElement;
+    var budget = (host ? host.clientWidth : dock.clientWidth) - 16;   // 减 dock 左右 padding
+    var order = QUICK.concat(Core.ALL.filter(function (v) { return QUICK.indexOf(v) < 0; }));
+    if (state.ch && order.indexOf(state.ch) < 0) order.unshift(state.ch); // 当前字符永远可见
+    var total = order.length;
+    var fitAll = Math.floor((budget - clearW + gap) / (chipW + gap));
+    var fit, hidden;
+    if (fitAll >= total) { fit = total; hidden = []; }
+    else {
+      fit = Math.max(QUICK.length, Math.floor((budget - clearW - moreW + gap) / (chipW + gap)));
+      fit = Math.min(fit, total);
+      hidden = order.slice(fit);
+    }
+    var key = state.selCell.lane + '@' + state.selCell.tick + '|' + state.ch + '|' + moreOpen + '|' + fit;
     if (key === dockKey) return;                 // 同一状态不重建，避免点一下闪一下
     dockKey = key;
     dock.textContent = '';
-    // 当前字符不在快捷四个里时，把它临时顶到第一位 —— 免得「选中是什么」看不出来
-    // 桌面一条放得下 23 颗（30px × 23 ≈ 690），全平铺；触摸端只放 4 颗 + 「⋯」折叠。
-    // 这是宽度决定的**布局**差异，不是能力差异 —— 控件与写入逻辑是同一份。
-    var quick = TOUCH ? QUICK.slice() : Core.ALL.slice();
-    if (TOUCH && state.ch && quick.indexOf(state.ch) < 0) quick.unshift(state.ch);
-    quick.forEach(function (v) { dock.appendChild(makeChip(v)); });
-    if (more && TOUCH) {                              // 只有触摸端需要折叠入口
+    order.slice(0, fit).forEach(function (v) { dock.appendChild(makeChip(v)); });
+    if (more && hidden.length) {
       var mb = document.createElement('button');
       mb.type = 'button';
       mb.className = 'chipbtn more' + (moreOpen ? ' on' : '');
@@ -322,10 +339,13 @@ export function attachTouchUI(ctx, dom) {
 
       more.textContent = '';
       if (moreOpen) {
-        Core.ALL.forEach(function (v) { more.appendChild(makeChip(v)); });
+        hidden.forEach(function (v) { more.appendChild(makeChip(v)); });
         more.classList.add('open');
       } else more.classList.remove('open');
       document.documentElement.classList.toggle('more-open', moreOpen);
+    } else if (more) {
+      more.textContent = ''; more.classList.remove('open');
+      document.documentElement.classList.remove('more-open');
     }
     var xb = document.createElement('button');
     xb.type = 'button';

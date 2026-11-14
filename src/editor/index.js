@@ -187,7 +187,9 @@ export function createEditor(dom){
       lc=valid?{lane:from.lane,tick:Math.max(0,Math.min(from.tick,N-1))}:firstCell();
     }
     state.linkMode=on; state.connect=null; state.linkCursor=lc;
-    state.selCell=null; state.sel=null; state.selLane=null;
+    // 保留选中：连线按钮已移到底部上下文条（与 label / node 同排），进入连线模式后仍需
+    // 选中态撑住那一行，否则按钮会随选中清空而消失、无法再点它退出。端点只由点击的格子
+    // 决定（见 handleAnchor），不读 selCell，保留它不影响连线。
     ctx.painting=null;
     if(ctx.inlineCtx) ctx.closeInline(true);
     ctx.redraw(); ctx.status();

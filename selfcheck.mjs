@@ -157,7 +157,8 @@ function check() {
   ok(!/\.nodeAnchor|\.connecting/.test(cssSrc), '样式层仍存在锚点规则');
   ok(/linkMode/.test(editorSrc) && /setLinkMode/.test(editorSrc), '状态层缺少唯一的连线模式入口');
   ok(/if\(state\.linkMode\)/.test(interSrc) && !/nodeAnchor/.test(interSrc), '交互层未做互斥分派或仍有锚点命中');
-  // 连线开关在全局顶栏（画布内 HUD 已于 0.9.14 删除）：按钮表来自 cap.js 的 hudCmds，
+  // 连线开关在底部动作行（与 label / node 同排，顶栏 HUD 已于 0.9.14 删除）：按钮表来自
+  // cap.js 的 ACTS，顶栏只留撤销 / 重做 / 布局 / 嵌入。
   ok(/Cap\.hudCmds/.test(read('src/editor/touch.js')) && /'link'/.test(read('src/editor/cap.js')) &&
      !/touchbar/.test(html) && !/hudSVG/.test(shapesSrc),
     '顶栏缺少连线开关，或画布内 HUD / 已删的操作栏又回来了');
@@ -254,11 +255,15 @@ function check() {
   ok(/\.dockzone\{[^}]*display:flex/.test(cssSrc) &&
      /\.is-touch \.chardock \.chipbtn[^{]*\{[^}]*flex:0 0 48px/.test(cssSrc),
     '字符停靠条未收进 dockzone，或触摸端命中区不足 48px');
-  // 字符输入只剩一套实现（HTML 停靠条 #chardock）：桌面全平铺、触摸折叠 4+⋯。
-  // 折叠判据必须由 TOUCH 决定，不能写死数量 —— 23 颗 48px 在 390 宽屏上放不下。
+  // 字符输入只剩一套实现（HTML 停靠条 #chardock）：按**可用宽度**折叠 —— 宽屏（含宽屏触摸 /
+  // 宽嵌卡片）一次铺满全部字符，窄屏才把放不下的收进 ⋯。折叠判据必须按实测宽度，不能写死
+  // 数量，也不能退回「触摸 4 颗 + ⋯」的按指针二选一（宽屏触摸会被浪费）。
   const touchSrcEarly = read('src/editor/touch.js');
-  ok(/TOUCH \? QUICK\.slice\(\) : Core\.ALL\.slice\(\)/.test(touchSrcEarly) && /more && TOUCH/.test(touchSrcEarly),
-    '字符停靠条未按指针决定是否折叠（桌面全平铺 / 触摸 4+⋯）');
+  ok(!/TOUCH \? QUICK\.slice\(\) : Core\.ALL\.slice\(\)/.test(touchSrcEarly) &&
+     /var budget = \(host \? host\.clientWidth : dock\.clientWidth\)/.test(touchSrcEarly) &&
+     /if \(more && hidden\.length\)/.test(touchSrcEarly) &&
+     /fitAll >= total/.test(touchSrcEarly),
+    '字符停靠条未按可用宽度折叠（应改为按宽度决定全平铺 / 折叠，而非按 TOUCH 二选一）');
   ok(!/charChips|actionBar/.test(shapesSrc),
     'SVG 内字符条（charChips / actionBar）应已删除，字符输入只走 #chardock');
   // 顶栏是页面级 HTML（不在 SVG 里），所以「滚动后按钮跑出视野」这类问题从根上没有了：
@@ -359,9 +364,11 @@ function check() {
       '就地编辑在桌面 / 触摸应同为 on，且不是 swap');
     // 格级动作（数据标签 / 节点锚点）是 ACTS 的第三组，四场景共用同一个上下文条。
     // 原先它只有桌面能用（画布上的 ✎ 徽标），那是 CAP 里最后一处 swap —— 现在应彻底消失。
-    ok(Cap.ACTS.cell.length === 2 && Cap.ACTS.cell.indexOf('label') >= 0 &&
-       Cap.ACTS.cell.indexOf('node') >= 0,
-      '格级动作清单缺失（应为 label / node）');
+    ok(Cap.ACTS.cell.length === 3 && Cap.ACTS.cell.indexOf('label') >= 0 &&
+       Cap.ACTS.cell.indexOf('node') >= 0 && Cap.ACTS.cell.indexOf('link') >= 0,
+      '格级动作清单缺失（应为 label / node / link）');
+    ok(Cap.ACTS.row.indexOf('link') >= 0 && Cap.ACTS.col.indexOf('link') >= 0,
+      '行 / 列动作未带上连线按钮（link 应与 label / node 同排，四套场景都带）');
     const swaps = Object.keys(Cap.CAP).filter((n) =>
       Cap.isSwap(n,'deskEdit') !== Cap.isSwap(n,'touchEdit'));
     ok(swaps.length === 0, '桌面与触摸仍有能力差异（swap 标注不一致）：' + swaps.join(' / '));
@@ -435,8 +442,9 @@ function check() {
     ok(/^[A-Za-z0-9_-]*$/.test(encodePayload(EXAMPLE)), '载荷出现需要再转义的字符（不是 base64url）');
   }
   // 动作清单已集中到 cap.js（ACTS），touch.js 只引用；两边任一处脱钩都算失败。
-  ok(Cap.ACTS.row.length === 11 && Cap.ACTS.row.indexOf('name') >= 0 &&
-     Cap.ACTS.col.length === 4 && Cap.ACTS.col.indexOf('insert') >= 0 &&
+  ok(Cap.ACTS.row.length === 12 && Cap.ACTS.row.indexOf('name') >= 0 &&
+     Cap.ACTS.col.length === 5 && Cap.ACTS.col.indexOf('insert') >= 0 &&
+     Cap.ACTS.row.indexOf('link') >= 0 && Cap.ACTS.col.indexOf('link') >= 0 &&
      /ROW_ACTS = Cap\.ACTS\.row/.test(touchSrc) && /COL_ACTS = Cap\.ACTS\.col/.test(touchSrc),
     '上下文动作集缺失或被改成文字面板');
 

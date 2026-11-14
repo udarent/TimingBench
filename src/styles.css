@@ -52,7 +52,7 @@ svg{display:block;font-family:var(--sans)}
   100%{opacity:0;stroke-width:1.2}
 }
 [hidden]{display:none!important}
-/* 画布内不再有 HUD（撤销 / 重做 / 连线 / 分屏 / 嵌入已移到页面顶栏） */
+/* 画布内不再有 HUD（撤销 / 重做 / 分屏 / 嵌入已移到页面顶栏） */
 .charChip{cursor:pointer}
 .colhead text,.colActBtn text,.charChip text{pointer-events:none}
 .cellSel{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:3 2;pointer-events:none}
@@ -117,7 +117,7 @@ svg{display:block;font-family:var(--sans)}
    标签页（.tabbar）已在 0.9.13 删除 —— 两区同屏后它只改一个没有消费者的 data-view 属性。
    --------------------------------------------------------------------------- */
 .tbpanel,.toast{display:none}
-/* 全局顶栏（2026-11-14 起）：撤销 / 重做 / 连线 / 分屏方向 / 生成嵌入代码。
+/* 全局顶栏（2026-11-14 起）：撤销 / 重做 / 布局 / 生成嵌入代码（连线 0.9.17 起移到底部动作行）。
    这些动作与「画布内容」无关，左右分栏时必须横跨两栏 —— 原先它们画在 SVG 里，
    只能在波形区出现，而且要靠 translate 补偿跟随滚动。 */
 .topbar{display:flex;align-items:center;gap:6px;flex:0 0 40px;padding:0 10px;
@@ -152,6 +152,7 @@ svg{display:block;font-family:var(--sans)}
   cursor:pointer}
 .tbpanel button.ctxbtn svg{width:17px;height:17px;fill:none;stroke:currentColor}
 .tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
+.tbpanel button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
 .is-touch .tbpanel{display:none}
 .is-touch .tbpanel.open{display:flex;flex-wrap:wrap;gap:8px;padding:8px;max-height:40dvh;overflow:auto}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
@@ -163,6 +164,7 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .tbpanel button.ctxbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .is-touch .tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.is-touch .tbpanel button.ctxbtn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel button:active{background:var(--accent-bg);border-color:var(--accent)}
 .is-touch .toast{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:30;
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
@@ -203,6 +205,12 @@ svg{display:block;font-family:var(--sans)}
   flex-wrap:wrap;gap:6px;padding:8px;max-height:min(62dvh,260px);overflow:auto;
   background:var(--panel);border-top:1px solid var(--line);
   box-shadow:0 -6px 18px rgba(0,0,0,.12)}
+/* 桌面端「⋯」弹层：与触摸端同一套弹出逻辑（钉在停靠条上方），只是尺寸更小。
+   此前桌面端没有这条规则，折叠只在触摸端生效 —— 现在字符条按宽度折叠，桌面窄窗也需要它。 */
+.charmore.open{display:flex;position:absolute;left:0;right:0;bottom:100%;z-index:23;
+  flex-wrap:wrap;gap:4px;padding:6px 8px;max-height:200px;overflow:auto;
+  background:var(--panel);border-top:1px solid var(--line);
+  box-shadow:0 -4px 14px rgba(0,0,0,.12)}
 .is-touch .chardock .chipbtn,.is-touch .charmore .chipbtn{position:relative;flex:0 0 48px;
   width:48px;height:44px;min-width:48px;padding:0;border:1px solid var(--line);border-radius:10px;
   background:var(--src-bg);color:var(--ink);touch-action:manipulation;overflow:hidden}

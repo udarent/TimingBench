@@ -392,8 +392,7 @@ export function attachInteractions(ctx){
     if(ctx.inlineCtx) closeInline(true);
     if(!c){
       // 点到画布空白 = 清掉选中。四场景一致：桌面本来有 Esc，触摸端没有键盘 ——
-      // 这条手势就是触摸端唯一的「取消选中」，有了它底部那排撤销 / 重做 / 连线 / 取消的
-      // 常驻操作栏（#touchbar）才成为纯冗余（前三项 HUD 都有）。
+      // 这条手势就是触摸端唯一的「取消选中」，让底部动作行（#tbpanel）成为唯一的上下文入口。
       if(state.selCell||state.selLane||(state.sel!==null&&state.sel!==undefined)){
         state.selCell=null; state.sel=null; state.selLane=null; ctx.redraw();
       }

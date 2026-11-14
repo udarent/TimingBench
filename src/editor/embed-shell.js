@@ -139,7 +139,7 @@ export function attachEmbed(ctx, opts) {
   // ---- 高度自适应：把波形真实高度告诉宿主，宿主据此设 iframe 高度 --------
   var lastH = 0;
   function reportHeight() {
-    // 顶栏是页面级 flex 子项（撤销 / 重做 / 连线），不在 SVG 的 contentH 里，上报时要加上。
+    // 顶栏是页面级 flex 子项（撤销 / 重做 / 嵌入），不在 SVG 的 contentH 里，上报时要加上。
     var topEl = document.getElementById('topbar');
     var topH = topEl && topEl.offsetHeight ? topEl.offsetHeight : 0;
     var h = Math.ceil((state.contentH || state.H || 0) + topH + 2);

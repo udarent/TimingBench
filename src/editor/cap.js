@@ -27,7 +27,8 @@ export function sceneOf(state) {
 }
 
 export var CAP = {
-  // 画布 HUD：撤销 / 重做 / 连线（/ 生成嵌入代码，卡片里去掉）
+  // 画布 HUD：撤销 / 重做 / 分屏方向 / 生成嵌入代码（卡片里去掉）。
+  // 连线按钮在 0.9.17 从 HUD 移到底部上下文条（与 label / node 同排），见 ACTS。
   hud:        { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
   colhead:    { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
   // 列操作 / 行工具不再画在画布上（桌面列头只有编号、行末不再常驻 5 个按钮）：
@@ -44,9 +45,10 @@ export var CAP = {
   spacerMark: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   // 字符输入只剩一套实现：HTML 停靠条（`#chardock`）。桌面原来在 SVG 里画一条 23 颗的
   // 字符条（旧 `actionBar`），触摸端是固定停靠条 —— 同一件事两套渲染、两套布局、两套点击。
-  // 现在统一为前者：桌面放得下 23 颗就全平铺，触摸放 4 颗 + `⋯`，这是**布局**差异
-  // （宽度决定折叠），不是能力差异。顺带删掉了 SVG 字符条那段「滚动时反向位移把 chips
-  // 钉回可视区」的历史包袱，以及 `charChips` 图元。
+  // 现在统一为前者，并按**实际可用宽度**折叠：宽屏（含宽屏触摸 / 宽嵌卡片）一次铺满全部
+  // 字符，窄屏才把放不下的收进 `⋯`。这是**布局**差异（宽度决定折叠），不是能力差异。
+  // 顺带删掉了 SVG 字符条那段「滚动时反向位移把 chips 钉回可视区」的历史包袱，以及
+  // `charChips` 图元。
   dock:       { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   // 上下文条：四场景同一套图标（触摸钉底部、桌面钉右侧），是行 / 列动作的唯一入口。
   tbpanel:    { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
@@ -58,12 +60,12 @@ export var CAP = {
 
 // HUD 图标的顺序。之前这里是两句写死的 cmd()，外加一个 `if (!(T && embedCard))` 把
 // 「连线」和「嵌入代码」一起摘掉。两张图标的去留其实各有理由，现在分开声明：
-//   · 连线（◇）：四个场景全留。触摸卡片原本被顺带摘掉，可行/列动作表里没有 edge，
-//     等于在触摸卡片里完全加不了连线 —— 这是漏，不是取舍。
+//   · 连线（◇）：0.9.17 从 HUD 移到底部上下文条（与 label / node 同排，见 ACTS），
+//     四场景统一走动作行，不再占顶栏。触摸卡片因此也能连线（旧实现里被顺带摘掉了）。
 //   · 嵌入代码（<>）：只在「触摸卡片」里去掉。卡片本身只有三四百像素宽，四个图标
 //     就是 190px 的浮层；而「把这张卡片再嵌一次」在那里确实没有意义。桌面卡片保留
 //     —— 边画边取片段是常见用法（工作台离得远时）。
-var HUD_ITEMS = ['undo', 'redo', 'link', 'layout', 'embed'];
+var HUD_ITEMS = ['undo', 'redo', 'layout', 'embed'];
 
 export function hudCmds(scene, inCard) {
   if (!can('hud', scene)) return [];
@@ -92,9 +94,11 @@ export function isSwap(name, scene) {
 // 直接画同名动作。动作名 → 图标 / 英文名在 touch.js，动作本身由 interactions.js 执行，
 // 三处共用这一份清单，避免「面板里少一个动作」与「图元里多一个按钮」各说各话。
 export var ACTS = {
-  row: ['name', 'wave', 'data', 'nodeStr', 'phase', 'period', 'up', 'down', 'add', 'spacer', 'del'],
-  col: ['insert', 'delete', 'gap', 'append'],
+  row: ['name', 'wave', 'data', 'nodeStr', 'phase', 'period', 'up', 'down', 'add', 'spacer', 'del', 'link'],
+  col: ['insert', 'delete', 'gap', 'append', 'link'],
   // 格级：作用对象是「某一个格子」而不是整行 / 整列。行级的 data / nodeStr 改的是整行
   // 全部标签 / 整行锚点串；这两项才是「只改这一格」，原先只有桌面的徽标能触发。
-  cell: ['label', 'node']
+  // link（连线）三套场景都带：它原本在顶栏，0.9.17 移到底部动作行、与 label / node 同排，
+  // 选中任意对象都能起手连线。
+  cell: ['label', 'node', 'link']
 };
