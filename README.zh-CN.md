@@ -8,6 +8,8 @@
 
 两侧只有一份语义：图形回写优先打最小补丁（注释、缩进、键序、引号原样保留），生成结果若与图形不等价就回滚，不会静默改坏你的源码。
 
+不熟悉这个格式？[教程](https://udarent.github.io/TimingBench/tutorial.html) 按 [WaveDrom 的学习顺序](https://wavedrom.com/tutorial.html) 走一遍 WaveJSON —— 每步都给代码，配一张点开就能编辑的实时图。
+
 ## 嵌入到你的页面
 
 两行，不需要构建、不需要在项目里装依赖：

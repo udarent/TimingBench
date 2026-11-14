@@ -35,7 +35,6 @@
   .sub{color:var(--muted);font-size:15px;margin:0 0 26px}
   .intro{color:var(--ink);margin:0 0 28px}
   .intro code{font-family:var(--mono);font-size:13px}
-  .lede{font-size:14px;color:var(--muted);margin:0 0 8px}
 
   section.step{margin:0 0 14px;padding-top:8px}
   h2{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:44px 0 6px;padding-top:12px;
@@ -80,15 +79,14 @@
   </header>
 
   <h1>Hitchhiker's Guide to WaveJSON</h1>
-  <p class="sub">Following WaveDrom's tutorial order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the diagrams, however, are not images — each one is a live, editable embed block rendered by the same editor.</p>
+  <p class="sub">Following WaveDrom's tutorial order: the code blocks are plain WaveJSON, exactly as in the original tutorial — the diagrams below each one are live, editable embed blocks rendered by the same editor, not images.</p>
 
   <p class="intro">
     WaveJSON is a format that describes digital timing diagrams. A document is a plain object whose
     <code>signal</code> array holds the wave lanes; each character in a lane's <code>wave</code>
     string is one time period and <code>.</code> repeats the previous state.<br>
     <strong>Click any diagram below to edit it.</strong> Change a cell, drag on the canvas, or open the
-    full <a href="editor.html">editor</a> for the source panel. Esc returns to read-only — this is the
-    one difference from WaveDrom's tutorial, where the diagrams are static.
+    full <a href="editor.html">editor</a> for the source panel. <code>Esc</code> returns to read-only.
   </p>
 
   <section class="step">
@@ -266,9 +264,7 @@ Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|
 
   <footer>
     Based on the WaveDrom tutorial and the WaveJSON format — without
-    <a href="https://wavedrom.com/">WaveDrom</a> this project wouldn't exist.
-    Code blocks are WaveJSON, the same as WaveDrom's tutorial; each diagram is a live embed block
-    rendered by the real editor, not an image.<br>
+    <a href="https://wavedrom.com/">WaveDrom</a> this project wouldn't exist.<br>
     <a href="index.html">Home</a> ·
     <a href="editor.html">Open the editor</a> ·
     <a href="https://wavedrom.com/tutorial.html">Original WaveDrom tutorial</a> ·

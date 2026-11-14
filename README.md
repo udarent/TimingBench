@@ -8,6 +8,8 @@ English · [简体中文](README.zh-CN.md)
 
 There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
 
+New to the format? The [tutorial](https://udarent.github.io/TimingBench/tutorial.html) walks through WaveJSON in [WaveDrom's learning order](https://wavedrom.com/tutorial.html) — each step shows the code and a live diagram you can click and edit.
+
 ## Embed it in your page
 
 Two lines, no build step, no dependency in your project:
