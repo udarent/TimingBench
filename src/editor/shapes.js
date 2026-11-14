@@ -13,6 +13,8 @@ var CELL=G.CELL, NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.A
 var COL_Y=G.COL_Y, ACT_H=G.ACT_H;
 var CHIP_W=G.CHIP_W, CHIP_H=G.CHIP_H, CHIP_STEP=G.CHIP_STEP;
 var XS=G.XS, CHIPS_W=G.CHIPS_W;
+// 分组每嵌套一层要在行名左侧让出的槽宽（花括号 + 竖排组名占这一条）
+var GSLOT=T?20:16;
 
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
@@ -61,9 +63,13 @@ export function createShapes(ctx){
   // 分组区间：把 `groupPath` 相同的连续行收敛成「一段」，供左侧括号使用（上游的做法）。
   // 逐层扫描：第 d 层里，凡是 groupPath 长度 > d 且前 d+1 段相同的连续行，就是第 d 层的一段。
   // 返回 [{name, depth, from, to}]，from / to 是行下标（含）。单行分组同样成段 —— 上游也画。
+  function groupDepth(lanes){
+    var d=0;
+    lanes.forEach(function(l){ if((l.groupPath||[]).length>d) d=l.groupPath.length; });
+    return d;
+  }
   function groupRuns(lanes){
-    var out=[], depthMax=0;
-    lanes.forEach(function(l){ if((l.groupPath||[]).length>depthMax) depthMax=l.groupPath.length; });
+    var out=[], depthMax=groupDepth(lanes);
     for(var d=0; d<depthMax; d++){
       var i=0;
       while(i<lanes.length){
@@ -231,14 +237,12 @@ export function createShapes(ctx){
     }
     // 行名左界就是内边距：行首拖拽把手已于 0.9.10 撤除，0.9.13 连图元一起删除，
     // 这里不再为它预留 18px。分组括号要占位：每嵌套一层就让出 GSLOT 宽的一条槽
-    // （上游把括号和竖排组名都画在行名左侧，所以要先把这段宽度让出来，行名才不会被压住）。
-    var gslot=T?20:16;
-    var gDepth=0;
-    ir.lanes.forEach(function(l){ if((l.groupPath||[]).length>gDepth) gDepth=l.groupPath.length; });
-    var leftBound=PAD+gDepth*gslot;
+    // （括号与竖排组名都画在行名左侧，先把这段宽度让出来，行名才不会被压住）。
+    var gDepth=groupDepth(ir.lanes);
+    var leftBound=PAD+gDepth*GSLOT;
     var minW=64, maxW=T?300:260;                 // 上下限：空图 / 超长名字（两态同值）
-    // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T + 10px 的 [分组]」
-    // tspan 拼接有 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
+    // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T」tspan 拼接有
+    // 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
     // 实测下来行名左缘正好落在 leftBound 上，既不压拖拽把手也不浪费宽度。
     // 量化到 8px：行名区随输入逐像素变化时，波形会跟着横向挪，观感像抽搐。对齐到一个
     // 固定粒度后，小于一粒的改动不再重排，平移量也可预期。
@@ -417,13 +421,13 @@ export function createShapes(ctx){
       o.push('</g>');
     });
     // 分组括号（对照上游 render-groups 的画法）：一条花括号从该组首行跨到末行，组名
-    // **竖排**（rotate -90）贴在括号左侧；嵌套时逐层向左退一格。括号本身不吃事件
-    // （点它等于点这一行），组名在编辑态可点改（改名 / 用 `/` 嵌套 / 清空取消）。
+    // **竖排**（rotate -90）贴在括号左侧；嵌套时逐层**向右**再让一格（外组在左、内组在右，
+    // 与上游一致）。括号本身不吃事件（点它等于点这一行），组名在编辑态可点改。
     var gEdit=can('laneMeta');
     groupRuns(ir.lanes).forEach(function(g){
       var y0=TOP+g.from*ROW_H+4, y1=TOP+(g.to+1)*ROW_H-4, h=y1-y0;
       if(h<10) return;
-      var bx=PAD+g.depth*gslot+gslot-6, cy=(y0+y1)/2, lx=bx-9;
+      var bx=PAD+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-9;
       var brace='M'+bx+','+y0+' c -3,0 -5,2 -5,5 l 0,'+(h-10)+' c 0,3 2,5 5,5';
       o.push('<g class="groupBrace">'+
         '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".7" pointer-events="none"/>'+
