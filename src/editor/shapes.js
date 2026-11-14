@@ -97,38 +97,74 @@ export function createShapes(ctx){
   // 行首拖拽把手：行位置调整的唯一交互
   // 只读卡片不画：没有拖拽这回事，画出来只是个不能用的点心。
 
+  // 一次解析 edge 字符串：<from><shape><to> [label]
+  // shape 取教程列出的字符：`~` 曲线、`-` 水平、`|` 垂直、`+` 直角；`<` / `>` 是两端的箭头。
+  function parseEdge(s) {
+    var m = /^([A-Za-z0-9_]+)([<>~\-|+]*)([A-Za-z0-9_]+)(?:\s+([\s\S]*))?$/.exec(String(s).trim());
+    if (!m) return null;
+    var tok = m[2] || '';
+    return {
+      from: m[1], to: m[3], label: (m[4] || '').trim(),
+      start: tok.indexOf('<') >= 0, end: tok.indexOf('>') >= 0,
+      shape: tok.replace(/[<>]/g, '')
+    };
+  }
+  // 端点箭头：三角沿切线方向指到 tip（back/half 与旧实现一致，保证 a~>b 的 d 逐字节不变）
+  function arrowTri(tip, from) {
+    var ux = tip.x - from.x, uy = tip.y - from.y, ul = Math.sqrt(ux * ux + uy * uy) || 1;
+    ux /= ul; uy /= ul;
+    var back = 7.5, half = 3.2;
+    var abx = tip.x - ux * back, aby = tip.y - uy * back, apx = -uy, apy = ux;
+    return 'M' + tip.x + ',' + tip.y + ' L' + (abx + apx * half) + ',' + (aby + apy * half) +
+      ' L' + (abx - apx * half) + ',' + (aby - apy * half) + ' z';
+  }
+  // 形状 → 路径。含 `~`（或空）走三次贝塞尔（控制点与旧实现一致）；其余（`-`/`|`/`+`）走正交折线：
+  // 无竖段=直线，一段横+竖=L 形，两段横=Z 形 —— 对应教程的 Splines / Sharp lines 两类。
+  function edgePath(a, b, shape) {
+    if (shape.indexOf('~') >= 0 || shape === '') {
+      var c1x = a.x + 10, c1y = a.y - 26, c2x = b.x - 10, c2y = b.y - 26;
+      return {
+        d: 'M' + a.x + ',' + a.y + ' C' + c1x + ',' + c1y + ' ' + c2x + ',' + c2y + ' ' + b.x + ',' + b.y,
+        endFrom: { x: c2x, y: c2y }, startFrom: { x: c1x, y: c1y }
+      };
+    }
+    var vert = 0, horiz = 0, i;
+    for (i = 0; i < shape.length; i++) { if (shape[i] === '|') vert++; else horiz++; }
+    var pts = [{ x: a.x, y: a.y }];
+    if (vert === 0) pts.push({ x: b.x, y: b.y });
+    else if (horiz <= 1) { pts.push({ x: b.x, y: a.y }); pts.push({ x: b.x, y: b.y }); }
+    else { var mx = (a.x + b.x) / 2; pts.push({ x: mx, y: a.y }); pts.push({ x: mx, y: b.y }); pts.push({ x: b.x, y: b.y }); }
+    var d = 'M' + pts[0].x + ',' + pts[0].y;
+    for (i = 1; i < pts.length; i++) d += ' L' + pts[i].x + ',' + pts[i].y;
+    return { d: d, endFrom: pts[pts.length - 2], startFrom: pts[1] };
+  }
   // 弧线：唯一「编辑 / 删除 edge」入口是双击弧线本体；清空字符串即删除
-  function edgeArcs(ir){
-    var map={};
-    ir.lanes.forEach(function(l,li){
-      if(l.kind!=='signal') return;
-      l.node.forEach(function(ch,t){ if(ch&&ch!=='.'&&!map[ch]) map[ch]={x:XS+t*CELL+CELL/2,y:TOP+li*ROW_H+7}; });
+  function edgeArcs(ir) {
+    var map = {};
+    ir.lanes.forEach(function (l, li) {
+      if (l.kind !== 'signal') return;
+      l.node.forEach(function (ch, t) { if (ch && ch !== '.' && !map[ch]) map[ch] = { x: XS + t * CELL + CELL / 2, y: TOP + li * ROW_H + 7 }; });
     });
-    var o=[];
-    ir.edges.forEach(function(e,i){
-      var s=String(e), head=s.trim().split(/\s+/)[0]||'', a=map[head.charAt(0)], b=map[head.charAt(head.length-1)];
-      if(!a||!b) return;
-      var c2x=b.x-10, c2y=b.y-26;
-      var d='M'+a.x+','+a.y+' C'+(a.x+10)+','+(a.y-26)+' '+c2x+','+c2y+' '+b.x+','+b.y;
-      // 箭头（上游 `~>` 的终点就是一个实心三角）：沿末端切线方向摆，指到 b 点上。
-      // 不画箭头的话曲线末端只是一个圆头，读者分不清方向。
-      var ux=b.x-c2x, uy=b.y-c2y, ul=Math.sqrt(ux*ux+uy*uy)||1;
-      ux/=ul; uy/=ul;
-      var back=7.5, half=3.2;
-      var abx=b.x-ux*back, aby=b.y-uy*back, apx=-uy, apy=ux;
-      var arrow='M'+b.x+','+b.y+' L'+(abx+apx*half)+','+(aby+apy*half)+' L'+(abx-apx*half)+','+(aby-apy*half)+' z';
+    var o = [];
+    ir.edges.forEach(function (e, i) {
+      var pe = parseEdge(e); if (!pe) return;
+      var a = map[pe.from], b = map[pe.to];
+      if (!a || !b) return;
+      var g = edgePath(a, b, pe.shape), paths = [];
+      // 曲线本体 + 末端 / 首端箭头 + 命中带（顺序与旧实现一致：默认 a~>b 的 .edgeArc path 指纹不变）
+      paths.push('<path d="' + g.d + '" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>');
+      var explicitArrow = pe.start || pe.end;
+      if (pe.end || !explicitArrow) paths.push('<path d="' + arrowTri(b, g.endFrom) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
+      if (pe.start) paths.push('<path d="' + arrowTri(a, g.startFrom) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
       // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
-      o.push('<g class="edgeArc" data-eidx="'+i+'" role="button" aria-label="Edit edge '+esc(s)+'">'+
-        '<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>'+
-        '<path d="'+arrow+'" fill="var(--accent)" opacity=".85" pointer-events="none"/>'+
-        '<path d="'+d+'" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="'+(T?20:8)+'" pointer-events="'+(state.linkMode?'none':'stroke')+'"/>');
-      var rest=s.slice(head.length).trim();
-      if(rest){
-        var mx=(a.x+b.x)/2, my=(a.y+b.y)/2-22, lw=Math.max(22,rest.length*6+10);
-        o.push('<rect x="'+(mx-lw/2)+'" y="'+(my-9)+'" width="'+lw+'" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>'+
-          '<text x="'+mx+'" y="'+(my+1)+'" text-anchor="middle" dominant-baseline="central" font-size="9" fill="var(--accent)" pointer-events="none">'+esc(cut(rest,18))+'</text>');
+      paths.push('<path d="' + g.d + '" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="' + (T ? 20 : 8) + '" pointer-events="' + (state.linkMode ? 'none' : 'stroke') + '"/>');
+      var inner = paths.join('');
+      if (pe.label) {
+        var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 22, lw = Math.max(22, pe.label.length * 6 + 10);
+        inner += '<rect x="' + (mx - lw / 2) + '" y="' + (my - 9) + '" width="' + lw + '" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>' +
+          '<text x="' + mx + '" y="' + (my + 1) + '" text-anchor="middle" dominant-baseline="central" font-size="9" fill="var(--accent)" pointer-events="none">' + esc(cut(pe.label, 18)) + '</text>';
       }
-      o.push('</g>');
+      o.push('<g class="edgeArc" data-eidx="' + i + '" role="button" aria-label="Edit edge ' + esc(String(e)) + '">' + inner + '</g>');
     });
     return o.join('');
   }

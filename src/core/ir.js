@@ -112,7 +112,11 @@ export const Core = (function () {
     var pw=parseWave(w, d?d.list:[]);
     var slots=pw.slots, n=slots.length;
     var node=[];
-    for (var i=0;i<n;i++) node.push(nd && i<nd.length ? nd[i] : '.');
+    // 只有 node、没有 wave 的行（教程 `{ node: '...g..h' }`）用它自己的 node 字符串定长，
+    // 否则会因 slots 为空而丢掉锚点、引用它的 edge 找不到端点。有 slots 的行仍按 slots 定长
+    // （保持既有行为与往返不变量：node 与 slots 一一对应）。
+    var nn = n > 0 ? n : (nd ? nd.length : 0);
+    for (var i=0;i<nn;i++) node.push(nd && i<nd.length ? nd[i] : '.');
     var lane = {
       id:id, kind:'signal', name:strOf(item,'name','sig'), phase:numOf(item,'phase',0), period:numOf(item,'period',1),
       groupPath:groupPath.slice(), slots:slots, subs:pw.subs, node:node,

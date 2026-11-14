@@ -459,6 +459,15 @@ function check() {
      /ROW_ACTS = Cap\.ACTS\.row/.test(touchSrc) && /COL_ACTS = Cap\.ACTS\.col/.test(touchSrc),
     '上下文动作集缺失或被改成文字面板');
 
+  // 箭头语法（教程 Step 8）：解析 <from><shape><to>，shape 含 < > ~ - | +；Splines / Sharp lines 两类。
+  ok(/function parseEdge\(/.test(shapesSrc) && /function arrowTri\(/.test(shapesSrc) &&
+     /function edgePath\(/.test(shapesSrc) && /indexOf\('~'\)/.test(shapesSrc) &&
+     /parseEdge\(e\)/.test(shapesSrc),
+    'edge 箭头语法解析缺失（< > ~ - | + / 起止箭头）');
+  // 纯 node 行（无 wave）必须保留锚点：否则引用它的 edge 找不到端点（教程 Sharp lines 样例）。
+  ok(/var nn = n > 0 \? n :/.test(read('src/core/ir.js')),
+    '只有 node、没有 wave 的行会丢锚点，导致 edge 找不到端点');
+
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',
     'src/editor/touch.js', 'src/editor/index.js', 'src/editor/share.js',
