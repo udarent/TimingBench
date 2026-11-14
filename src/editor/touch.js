@@ -269,16 +269,15 @@ export function attachTouchUI(ctx, dom) {
   // 改成停在卡片底部的 HTML 条：固定高度、不随画布滚动、命中区 44px 起。
   // 第一排只放最常用的几个 + 「⋯」，其余 23 个进一个可收起的面板，避免横向滑好几屏。
   var QUICK = ['0', '1', 'x', 'z'];
-  var dockKey = null, moreOpen = false, dockOpen = false;
+  var dockKey = null, moreOpen = false;
 
   // 收起停靠条。写成幂等函数而不是「判 dockKey 有没有值」——
   // closeCharDock 会主动把 dockKey 置 null，用 dockKey 当开关会让清理条件失效，
   // 表现为「Esc 清掉了选中，底部字符条还挂着 6 个按钮」。
   function hideDock() {
-    // 无条件清空：原先靠 dockOpen 早退，一旦 renderDock 半途失败（或从别的场景切进来）
-    // 就会留下一排点不动的按钮。清空是幂等的，代价只是一次 innerHTML 赋值。
+    // 无条件清空：一旦 renderDock 半途失败（或从别的场景切进来），靠状态早退会留下一排
+    // 点不动的按钮。清空是幂等的，代价只是一次 innerHTML 赋值。
     dockKey = null; moreOpen = false;
-    dockOpen = false;
     if (dock) { dock.textContent = ''; dock.classList.remove('open'); }
     if (more) { more.textContent = ''; more.classList.remove('open'); }
     document.documentElement.classList.remove('more-open');
@@ -356,7 +355,6 @@ export function attachTouchUI(ctx, dom) {
     xb.innerHTML = '<span>✕</span>';
     dock.appendChild(xb);
     dock.classList.add('open');
-    dockOpen = true;
     bindLongName(dock);
     if (moreOpen && more) bindLongName(more);
   }

@@ -34,21 +34,20 @@ export function attachEmbed(ctx, opts) {
   // 只在「卡片确实太小」且「有真实用户手势」时尝试（脚本合成的 pointer 事件、宿主 setMode
   // 消息都不算手势）；失败（宿主没给 allowfullscreen、iOS Safari 不支持元素全屏）就静默
   // 退回卡片内编辑 —— 此时 CSS 会把上下文条压成单行，至少不会折成好几排把画布吃光。
-  var fsRoot = document.documentElement;
   var fsForEdit = false;   // 当前这次全屏是为「编辑」开的：退出全屏时一并回只读
   var fsActive = false;    // 此刻确实处于全屏（退出失败时不要假装退出了）
   function fsCurrent() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
-  function fsSupported() { return !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen); }
+  function fsSupported() { return !!(docEl.requestFullscreen || docEl.webkitRequestFullscreen); }
   function hasGesture() {
     try { var ua = navigator.userActivation; return !ua || ua.isActive !== false; }
     catch (e) { return true; }
   }
   function isCramped() { return window.innerWidth < 520 || window.innerHeight < 340; }
   function requestFs() {
-    var fn = fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen;
+    var fn = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
     if (!fn) return;
     try {
-      var p = fn.call(fsRoot);
+      var p = fn.call(docEl);
       if (p && p.then) p.then(function () { fsActive = true; }, function () { /* 被拒绝：留在卡片内编辑 */ });
     } catch (e) { /* 同步抛错同样退回卡片内 */ }
   }
