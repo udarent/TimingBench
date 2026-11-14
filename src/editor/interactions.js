@@ -431,8 +431,10 @@ export function attachInteractions(ctx){
     if(c.col!==undefined){
       if(dbl>1) return;
       e.preventDefault(); state.sel=c.col;
-      // 触摸端：选中列就让出格子选中，底部上下文条随即换成列动作
-      if(TOUCH){ state.selCell=null; state.selLane=null; }
+      // 列选中与格 / 行选中互斥 —— **四场景一致**（原先只在触摸端清，桌面点列头后面板
+      // 仍停在「格级动作」上，因为 renderContext 的优先级是 格 > 列 > 行）。0.9.12 修行
+      // 分支时漏了这一处，同一个 `if(TOUCH)` 的残留。
+      state.selCell=null; state.selLane=null;
       ctx.redraw(); ctx.status(); return;
     }
     if(c.nameLane||c.rowLane){
