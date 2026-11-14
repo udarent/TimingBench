@@ -60,7 +60,8 @@ export function attachEmbed(ctx, opts) {
   // 从只读切到编辑，缩放会从「整图缩进卡片」跳成 1:1 —— 如果不管滚动位置，
   // 手指下面那块内容会整体挪走，第二次点按就落到别的格子上（手机端最难受的地方）。
   // 这里把被点的格子「钉」在原来的屏幕位置上：知道它的内部坐标、知道手指在视口里的位置，
-  // 反解出该有的 scrollLeft / scrollTop。编辑态是 1:1，所以内部坐标与像素一一对应。
+  // 反解出该有的 scrollLeft / scrollTop。视图可能被等比缩过（触摸端 / 只读卡放大），
+  // 所以内部坐标要乘 state.fit 才是像素。
   // 纵向到底是谁在滚，不能想当然：独立编辑器里是 .svgwrap（inset:0 + overflow:auto），
   // 嵌入卡片里 .svgwrap 的高度被内容撑开、自己滚不动，真正滚的是 body（body{overflow:auto}）
   // —— 这时改 wrap.scrollTop 和 window.scrollBy 都没反应。往上找第一个真能滚的祖先。
@@ -82,8 +83,9 @@ export function attachEmbed(ctx, opts) {
     var li = -1;
     ir.lanes.forEach(function (l, i) { if (l.id === anchor.cell.lane) li = i; });
     if (li < 0) return;
-    var cx = G.XS + anchor.cell.tick * G.CELL + G.CELL / 2;
-    var cy = G.TOP + li * G.ROW_H + G.ROW_H / 2;
+    var k = st.fit || 1;
+    var cx = (G.XS + anchor.cell.tick * G.CELL + G.CELL / 2) * k;
+    var cy = (G.TOP + li * G.ROW_H + G.ROW_H / 2) * k;
     var r = wrap.getBoundingClientRect();
     var vx = (anchor.x || 0) - r.left, vy = (anchor.y || 0) - r.top;
     var maxL = Math.max(0, wrap.scrollWidth - wrap.clientWidth);

@@ -241,10 +241,20 @@ export function createShapes(ctx){
     // 只读卡片：按卡片宽度等比缩放，整张图一次全显示。上限 2 倍 —— 比卡片窄时也放大铺满
     // （SVG 是矢量，放大不糊），否则宽笔记里会左右各留一条；超过 2 倍才保持比例居中。
     // 进入编辑态回到 1:1 + 滚动，保证点选精度。
-    var fit=(state.embedCard&&state.readonly)?Math.min(2, viewW/W):1;
-    var outW=fit<1?viewW:Math.round(W*fit);
-    var outH=fit<1?Math.round(vbH*outW/W):Math.round(vbH*fit);
-    state.barY=actY; state.barH=barH; state.viewW=viewW; state.fit=fit;
+    // fit 规则（2026-11-14 起）：
+    //   只读卡片 —— 等比缩到卡片宽，窄图最多放大 2 倍铺满（矢量不糊）；
+    //   触摸端 / 卡片编辑态 —— 内容比容器宽就缩到容器宽，**只缩不放大**。手机上不再需要
+    //     横向拖动，也不再「进编辑退回 1:1」（那会让手指底下的内容整体跳一次）；
+    //   桌面整页 —— 保持 1:1 + 横向滚动。宽屏本来就装得下，缩了反而费眼。
+    // 纵向不参与 fit：行数随图变化，硬塞进一屏只会把字压糊；横向不滚、纵向照旧滚。
+    var rawFit = viewW > 0 ? viewW / W : 1;
+    var fit = (state.embedCard && state.readonly) ? Math.min(2, rawFit)
+            : (T || state.embedCard) ? Math.min(1, rawFit)
+            : 1;
+    var outW = fit < 1 ? viewW : Math.round(W * fit);
+    var outH = Math.round(vbH * outW / W);
+    // state.fit 记**真实渲染比**（outW/W，含取整误差），凡「用户坐标 ↔ 像素」的换算都用它。
+    state.barY=actY; state.barH=barH; state.viewW=viewW; state.fit=outW/W;
     // 高度上报用缩放后的真实像素高，否则宿主会按原始高设 iframe，底部留一片空白。
     state.contentH=state.embedCard?outH:contentH;
     state.W=W; state.H=H;

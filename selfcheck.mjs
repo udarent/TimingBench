@@ -318,14 +318,26 @@ function check() {
     '顶栏未提供嵌入代码入口');
   // 嵌入只读卡片必须按容器宽度等比缩小：否则 320/360px 手机上只能看到半张波形，
   // 而读者不会去横向拖一张只读卡片。缩放只改 svg 渲染尺寸，viewBox 保持内部坐标。
-  ok(/state\.embedCard&&state\.readonly/.test(shapesSrc) && /var fit=/.test(shapesSrc),
-    '嵌入只读卡片缺少按容器宽度等比缩放（窄屏会只显示部分波形）');
+  // 缩放规则（2026-11-14 起）：内容比容器宽就等比缩到容器宽，只改 svg 渲染尺寸，
+  // viewBox 保持内部坐标。只读卡片允许放大到 2× 铺满；触摸端与卡片的编辑态只缩不放大
+  // （不再「进编辑退回 1:1」—— 那会让手指底下的内容跳一次）；桌面整页保持 1:1。
+  // 不用 `var fit=` 这类字面量，格式一动就失效（踩过）。
+  ok(/var rawFit = viewW/.test(shapesSrc) &&
+     /Math\.min\(2, rawFit\)/.test(shapesSrc) &&
+     /Math\.min\(1, rawFit\)/.test(shapesSrc) &&
+     /state\.fit = outW \/ W|state\.fit=outW\/W/.test(shapesSrc),
+    '缩放规则不完整：只读卡应可放大 2×、触摸/卡片编辑态应只缩不放大，且 state.fit 记真实渲染比');
+  // 坐标换算不得再假设 1:1：屏幕坐标 → 用户坐标必须走 viewBox 比例
+  ok(/function svgXY\(/.test(read('src/editor/interactions.js')) &&
+     /vb\.width\s*\/\s*r\.width/.test(read('src/editor/interactions.js')),
+    '连线预览缺少「屏幕坐标 → SVG 用户坐标」比例换算（缩放后预览会偏移）');
   // 只缩不放会导致宽笔记里左右各留一条（卡片宽度 > 画布宽时 fit 被 1 卡住），
   // 所以现在按卡片宽铺满、上限 2 倍；viewBox 仍必须是内部坐标，几何与就地编辑换算才不错位。
-  ok(/var fit=\(state\.embedCard&&state\.readonly\)\?Math\.min\(2, viewW\/W\):1/.test(shapesSrc) &&
-     /outW=fit<1\?viewW:Math\.round\(W\*fit\)/.test(shapesSrc) &&
-     /viewBox="0 '\+vbTop\+' '\+W\+' '\+vbH\+'"/.test(shapesSrc),
-    '缩放未按卡片宽铺满或未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
+  // viewBox 必须是内部坐标，缩放只改渲染尺寸 —— 这样图元几何、getBBox 与就地编辑的
+  // 换算都不受影响，波形层指纹也不会因缩放而变。
+  ok(/viewBox="0 '\+vbTop\+' '\+W\+' '\+vbH\+'"/.test(shapesSrc) &&
+     /var outW = fit < 1 \? viewW : Math\.round\(W \* fit\)|var outW=fit<1\?viewW:Math\.round\(W\*fit\)/.test(shapesSrc),
+    '缩放未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
   // 只读卡片不能追加周期，末尾那一列也没有任何波形内容 —— 必须整列不画
   // （否则只留一个空编号框，悬停还会露出一个点不动的 +，且右侧白占一格宽度）。
   // 列号 + 列操作整组都是「编辑定位器」，只读卡片一律不画（上游 WaveDrom 也从不画列号）。

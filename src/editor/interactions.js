@@ -174,12 +174,15 @@ export function attachInteractions(ctx){
     var sc=state.selCell; if(!sc||!state.ir||!wrap.clientWidth) return;
     var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===sc.lane) li=i; });
     if(li<0) return;
-    var cx=G.XS+sc.tick*CELL+CELL/2, cy=TOP+li*ROW_H+ROW_H/2;
+    // 视图可能是等比缩小过的（触摸端 / 卡片），状态里一律是**用户坐标**，
+    // 而 scrollLeft / clientWidth 是像素 —— 先乘 fit 再比较，否则滚到错地方。
+    var k=state.fit||1;
+    var cx=(G.XS+sc.tick*CELL+CELL/2)*k, cy=(TOP+li*ROW_H+ROW_H/2)*k;
     var vw=wrap.clientWidth, vh=wrap.clientHeight-Math.max(0,state.barH||0);
     var maxL=Math.max(0,wrap.scrollWidth-vw), maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
     var left=wrap.scrollLeft, top=wrap.scrollTop;
-    if(cx<left+CELL*0.6||cx>left+vw-CELL*0.6) left=Math.min(maxL,Math.max(0,cx-vw/2));
-    if(cy<top+ROW_H*0.6||cy>top+vh-ROW_H*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
+    if(cx<left+CELL*k*0.6||cx>left+vw-CELL*k*0.6) left=Math.min(maxL,Math.max(0,cx-vw/2));
+    if(cy<top+ROW_H*k*0.6||cy>top+vh-ROW_H*k*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
     if(left!==wrap.scrollLeft) wrap.scrollLeft=left;
     if(top!==wrap.scrollTop) wrap.scrollTop=top;
   }
@@ -190,12 +193,13 @@ export function attachInteractions(ctx){
     if(!state.ir||!wrap.clientWidth) return;
     var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===laneId) li=i; });
     if(li<0) return;
-    var cy=TOP+li*ROW_H+ROW_H/2;
+    var k=state.fit||1;                        // 用户坐标 → 像素，见 revealSel 的说明
+    var cy=(TOP+li*ROW_H+ROW_H/2)*k;
     var vh=wrap.clientHeight-Math.max(0,state.barH||0)-Math.max(0,bottomPad||0);
-    if(vh<ROW_H*2) vh=ROW_H*2;                 // 卡片太矮时至少保证两行之内的判断可用
+    if(vh<ROW_H*k*2) vh=ROW_H*k*2;             // 卡片太矮时至少保证两行之内的判断可用
     var maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
     var top=wrap.scrollTop;
-    if(cy<top+ROW_H*0.6||cy>top+vh-ROW_H*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
+    if(cy<top+ROW_H*k*0.6||cy>top+vh-ROW_H*k*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
     if(top!==wrap.scrollTop) wrap.scrollTop=top;
   }
 
@@ -466,6 +470,16 @@ export function attachInteractions(ctx){
     ctx.focusCanvas();
     ctx.redraw();
   }
+  // 屏幕坐标 → SVG 用户坐标。视图可能是等比缩小过的（触摸端 / 看卡片），
+  // 所以必须按 viewBox 与渲染尺寸的比例换算，不能拿 clientX-rect.left 直接当用户坐标 ——
+  // 那是 1:1 时代的老假设，缩放后预览弧线会整体偏移。
+  function svgXY(cx,cy){
+    var svg=svgRoot(); if(!svg) return {x:cx,y:cy};
+    var r=svg.getBoundingClientRect(), vb=svg.viewBox&&svg.viewBox.baseVal;
+    var kx=(vb&&r.width)?vb.width/r.width:1, ky=(vb&&r.height)?vb.height/r.height:1;
+    return {x:(cx-r.left)*kx+(vb?vb.x:0), y:(cy-r.top)*ky+(vb?vb.y:0)};
+  }
+
   function showConnectPreview(mx,my){
     var svg=svgRoot(); if(!svg||!state.connect) return;
     var p=svg.querySelector('path.connectPreview');
@@ -489,8 +503,7 @@ export function attachInteractions(ctx){
   wrap.addEventListener('mousemove',function(e){
     var svg=svgRoot();
     if(state.connect&&svg){
-      var r=svg.getBoundingClientRect();
-      showConnectPreview(e.clientX-r.left,e.clientY-r.top);
+      var q=svgXY(e.clientX,e.clientY); showConnectPreview(q.x,q.y);
     }
     var hc=cellAt(e);
     if(!ctx.painting||!e.buttons) return;
@@ -532,8 +545,7 @@ export function attachInteractions(ctx){
     if(state.connect){
       var svg=svgRoot();
       if(svg){
-        var r=svg.getBoundingClientRect();
-        showConnectPreview((e.clientX||0)-r.left,(e.clientY||0)-r.top);
+        var q2=svgXY(e.clientX||0,e.clientY||0); showConnectPreview(q2.x,q2.y);
       }
     }
   });
@@ -588,7 +600,7 @@ export function attachInteractions(ctx){
       if(longPress&&(Math.abs(t.clientX-longPress.x)>12||Math.abs(t.clientY-longPress.y)>12)) clearLong();
       if(state.connect){
         var svg=svgRoot();
-        if(svg){ var r=svg.getBoundingClientRect(); showConnectPreview(t.clientX-r.left,t.clientY-r.top); }
+        if(svg){ var q3=svgXY(t.clientX,t.clientY); showConnectPreview(q3.x,q3.y); }
       }
     },{passive:true});
     document.addEventListener('touchend',function(e){

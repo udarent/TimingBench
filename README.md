@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **WaveJSON ⇄ editable timing diagrams.** Edit the diagram and the source is rewritten; edit the source and the diagram redraws — both stay in sync.
 
-`0.9.14` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
+`0.9.15` · [MIT](LICENSE) · static-only · zero build · zero dependencies · runs entirely locally · [Open online](https://udarent.github.io/TimingBench/editor.html)
 
 There is only one source of truth: diagram edits are written back as a minimal patch (comments, indentation, key order and quotes are preserved), and the result is rolled back if it is not equivalent to the diagram. Your source is never silently corrupted.
 
@@ -52,7 +52,7 @@ el.addEventListener('timingbench:change', e => {
 | Enter editing | click the waveform (the clicked cell is selected for you) |
 | Leave editing | `Esc`, or the pencil icon in the bottom-right corner (it turns into a check mark while editing) |
 | Auto height | the card reports its real (post-scaling) height via `postMessage`; `embed.js` applies it |
-| Narrow cards | the read-only diagram scales to fit the card width; editing restores 1:1 |
+| Narrow cards | the diagram scales to fit the card width — in editing too, no 1:1 jump, no horizontal scroll |
 | Host events | `timingbench:ready` · `timingbench:change` · `timingbench:mode` |
 | Host commands | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |
 | Params | `?embed=1` (card mode) · `&mode=edit` (start editable) |
