@@ -181,7 +181,7 @@ export function attachInteractions(ctx){
     // 格心与格宽都走行级标尺（period 行更宽、phase 行整体左移）；period:1 时与 CELL 等价。
     var geo=cellGeo(lane,sc.tick), cw=geo.w*k;
     var cx=geo.cx*k, cy=(TOP+li*ROW_H+ROW_H/2)*k;
-    var vw=wrap.clientWidth, vh=wrap.clientHeight-Math.max(0,state.barH||0);
+    var vw=wrap.clientWidth, vh=wrap.clientHeight;
     var maxL=Math.max(0,wrap.scrollWidth-vw), maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
     var left=wrap.scrollLeft, top=wrap.scrollTop;
     if(cx<left+cw*0.6||cx>left+vw-cw*0.6) left=Math.min(maxL,Math.max(0,cx-vw/2));
@@ -192,13 +192,15 @@ export function attachInteractions(ctx){
 
   // 触摸端选中一行后，上下文条会从底部升起；把这一行滚到「条上方」的可视区里，
   // 否则矮卡片（嵌入 340px）里被选中的行正好藏在面板后面，点 up / down 时看不见效果。
-  function revealLane(laneId,bottomPad){
+  // 面板是 .pane.diagram 的真实 flex 子项，wrap.clientHeight 已经把它的高度让出来了 ——
+  // 这里不能再减一次面板高度（旧版面板是绝对浮层才需要补），否则会多滚一截、底部空一片。
+  function revealLane(laneId){
     if(!state.ir||!wrap.clientWidth) return;
     var li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===laneId) li=i; });
     if(li<0) return;
     var k=state.fit||1;                        // 用户坐标 → 像素，见 revealSel 的说明
     var cy=(TOP+li*ROW_H+ROW_H/2)*k;
-    var vh=wrap.clientHeight-Math.max(0,state.barH||0)-Math.max(0,bottomPad||0);
+    var vh=wrap.clientHeight;
     if(vh<ROW_H*k*2) vh=ROW_H*k*2;             // 卡片太矮时至少保证两行之内的判断可用
     var maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
     var top=wrap.scrollTop;

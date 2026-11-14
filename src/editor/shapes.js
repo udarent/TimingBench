@@ -305,12 +305,11 @@ export function createShapes(ctx){
     if(isEmpty) bottom=TOP+ROW_H;
     var actY=bottom+4;
     // 底部两条（动作 / 字符）现在是 .pane.diagram 里的真实 flex 子项，不再盖在画布上，
-    // 所以画布不必为它们预留高度 —— barH 恒为 0，画布高度由 flex 自动让出。
-    var barH=0;
+    // 所以画布不必为它们预留高度 —— 画布高度由 flex 自动让出，这里不记任何「底栏预留」。
     // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
-    var contentH=actY+barH+((state.embedCard&&state.readonly)?roTrimBottom:20);
+    var contentH=actY+((state.embedCard&&state.readonly)?roTrimBottom:20);
     var H=state.embedCard?contentH:Math.max(contentH, viewH), c, x;
     // 只读卡片把顶部那段「HUD 区」从 viewBox 里裁掉：渲染高度同步变矮，卡片不再顶着一条死白。
     var vbTop=(state.embedCard&&state.readonly)?roTrimTop:0;
@@ -337,7 +336,7 @@ export function createShapes(ctx){
     var outW = fit < 1 ? viewW : Math.round(W * fit);
     var outH = Math.round(vbH * outW / W);
     // state.fit 记**真实渲染比**（outW/W，含取整误差），凡「用户坐标 ↔ 像素」的换算都用它。
-    state.barY=actY; state.barH=barH; state.viewW=viewW; state.fit=outW/W;
+    state.barY=actY; state.viewW=viewW; state.fit=outW/W;
     // 高度上报用缩放后的真实像素高，否则宿主会按原始高设 iframe，底部留一片空白。
     state.contentH=state.embedCard?outH:contentH;
     state.W=W; state.H=H;

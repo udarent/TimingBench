@@ -270,6 +270,31 @@ function check() {
   ok(/\.is-embed \.pane\.diagram\{[^}]*display:flex/.test(cssSrc) &&
      !/\.is-embed[^{}]*\.dockzone\{[^}]*position:absolute/.test(cssSrc),
     '嵌入态的底部两条又变成浮层了（浮层不进滚动范围，最后几行会被挡住无法编辑）');
+  // 同类问题的其余出口：凡是「浮在画布上、又不占版式」的东西，都要自己算清账。
+  //   ① 轻提示钉在视口底部，触摸端字符停靠条也在那儿 —— 必须按停靠区高度抬起来，
+  //      否则每次拦截提示都会盖在最常用的那排字符上。
+  //   ② ⋯ 弹层按 bottom:100% 钉在停靠条上方，高度上限必须扣掉停靠区，否则 200px 高的
+  //      卡片里弹层会顶到视口之外，顶部几颗字符落在负坐标（滚也滚不到）。
+  //   ③ 分享面板不能自己截断（截断会让复制按钮掉到面板外），改由遮罩滚动兜底。
+  //   ④ 行号槽要让出横向滚动的空间：textarea 后出现且透明，不给它不透明底色 + 层序，
+  //      长行往左滚时字符会压在行号上。
+  //   ⑤ 宿主 iframe 的高度上报必须含停靠区，否则卡片进编辑后 chrome 把画布挤成一条缝。
+  ok(/--toast-lift/.test(cssSrc) && /setProperty\('--toast-lift'/.test(read('src/editor/touch.js')),
+    '轻提示没有按停靠区高度抬升（会压在字符停靠条上）');
+  ok(/\.charmore\.open\{[^}]*max-height:max\(72px,min\(200px,calc\(100dvh - 100% - 8px\)\)\)/.test(cssSrc) &&
+     /\.is-touch \.charmore\.open\{[^}]*calc\(100dvh - 100% - 8px\)/.test(cssSrc),
+    '⋯ 弹层的高度上限没有扣掉停靠区（矮卡片里会顶出视口，顶部字符滚不到）');
+  ok(!/\.sharePanel\{[^}]*max-height:calc\(100dvh/.test(cssSrc) &&
+     /\.shareMask\{[^}]*overflow:auto/.test(cssSrc) &&
+     /\.sharePanel\{[^}]*margin:auto/.test(cssSrc),
+    '分享面板仍在按视口截断（复制按钮会掉到面板外），或遮罩没有做成可滚动');
+  ok(/\.gutter\{[^}]*background:var\(--src-bg\)[^}]*z-index:2/.test(cssSrc),
+    '行号槽没有不透明底色 / 层序（横向滚动后源码会压在行号上）');
+  ok(/dockEl[\s\S]{0,120}dockH[\s\S]{0,200}state\.contentH/.test(read('src/editor/embed-shell.js')),
+    '高度上报没算底部两条的高度（宿主卡片进编辑后画布会被挤没）');
+  ok(!/revealLane\(laneOf, panel\.offsetHeight\)/.test(read('src/editor/touch.js')) &&
+     !/state\.barH/.test(read('src/editor/interactions.js')),
+    'revealLane 仍在重复扣面板高度（面板已是 flex 子项，多扣会多滚一截）');
   // 字符停靠条：必须固定在卡片底部（不随画布滚动）、命中区 ≥44px
   // 字符停靠条：在 dockzone 内（不再全屏 fixed）、命中区 ≥44px
   ok(/\.dockzone\{[^}]*display:flex/.test(cssSrc) &&

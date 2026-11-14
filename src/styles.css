@@ -19,7 +19,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
   .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
   .pane.src{border-right:0;border-bottom:1px solid var(--line)}
 }
-.gutter{position:absolute;left:0;top:0;bottom:0;width:40px;padding:12px 9px 12px 0;text-align:right;font:12px/1.65 var(--mono);color:var(--muted);border-right:1px solid var(--line);overflow:hidden;white-space:pre;user-select:none;pointer-events:none}
+.gutter{position:absolute;left:0;top:0;bottom:0;width:40px;padding:12px 9px 12px 0;text-align:right;font:12px/1.65 var(--mono);color:var(--muted);border-right:1px solid var(--line);overflow:hidden;white-space:pre;user-select:none;pointer-events:none;
+  /* 行号槽必须**盖住**横向滚动后钻到它下面的源码：textarea 是后出现的绝对定位元素，
+     不给这一层加不透明底色和层序，长行往左滚时字符会压在行号上（两串数字 / 字母叠在一起）。
+     底色与 .pane.src 一致，视觉上仍是「一条让出来的边」。 */
+  background:var(--src-bg);z-index:2}
 /* 只作用于源码框：.shareCode 等其它 textarea 不能被这条绝对定位规则误伤 */
 .pane.src textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;background:transparent;color:var(--ink);padding:12px 10px 12px 50px;font:12px/1.65 var(--mono);tab-size:2;white-space:pre;overflow:auto}
 /* 波形区 = 画布 + 底部两条（动作 / 字符）。两条是**真实的 flex 子项**，
@@ -166,7 +170,7 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel button.ctxbtn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel button:active{background:var(--accent-bg);border-color:var(--accent)}
-.is-touch .toast{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:30;
+.is-touch .toast{display:none;position:fixed;left:50%;bottom:calc(12px + var(--toast-lift,0px));transform:translateX(-50%);z-index:30;
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
   font:12px/1.5 var(--sans);box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none}
 .is-touch .toast.show{display:block}
@@ -201,14 +205,20 @@ svg{display:block;font-family:var(--sans)}
   background:var(--panel);border-top:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
   touch-action:pan-x;user-select:none}
+/* 弹层高度不能超过「停靠条上方真正剩下的空间」：弹层按 bottom:100% 钉在停靠条上方，
+   卡片只有 200px 高时，62dvh 的弹层会顶到视口上沿之外 —— 顶部几颗字符落在负坐标里，
+   既看不见也滚不到（负坐标无法靠滚动抵达）。100% 指的是停靠区自身高度（它是 position:relative
+   的包含块），所以 100dvh - 100% 正好是「上方可用空间」；再留 8px 缝隙与外层 72px 下限兜底。 */
 .is-touch .charmore.open{display:flex;position:absolute;left:0;right:0;bottom:100%;z-index:23;
-  flex-wrap:wrap;gap:6px;padding:8px;max-height:min(62dvh,260px);overflow:auto;
+  flex-wrap:wrap;gap:6px;padding:8px;overflow:auto;
+  max-height:max(72px,min(62dvh,260px,calc(100dvh - 100% - 8px)));
   background:var(--panel);border-top:1px solid var(--line);
   box-shadow:0 -6px 18px rgba(0,0,0,.12)}
 /* 桌面端「⋯」弹层：与触摸端同一套弹出逻辑（钉在停靠条上方），只是尺寸更小。
    此前桌面端没有这条规则，折叠只在触摸端生效 —— 现在字符条按宽度折叠，桌面窄窗也需要它。 */
 .charmore.open{display:flex;position:absolute;left:0;right:0;bottom:100%;z-index:23;
-  flex-wrap:wrap;gap:4px;padding:6px 8px;max-height:200px;overflow:auto;
+  flex-wrap:wrap;gap:4px;padding:6px 8px;overflow:auto;
+  max-height:max(72px,min(200px,calc(100dvh - 100% - 8px)));
   background:var(--panel);border-top:1px solid var(--line);
   box-shadow:0 -4px 14px rgba(0,0,0,.12)}
 .is-touch .chardock .chipbtn,.is-touch .charmore .chipbtn{position:relative;flex:0 0 48px;
@@ -336,9 +346,12 @@ html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
    嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。
    浮层只在交互时出现，不进入 SVG，因此不影响波形层指纹。
    --------------------------------------------------------------------------- */
-.shareMask{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
-  padding:24px;background:rgba(0,0,0,.32)}
-.sharePanel{width:min(620px,100%);max-height:calc(100dvh - 48px);display:flex;flex-direction:column;
+/* 遮罩自己可以滚：面板高度不再被「视口 − 48」截断（截断会让底部的复制按钮落在面板之外，
+   小卡片里根本点不到）。改用「面板不定高 + 遮罩滚动」：装得下时靠 margin:auto 居中，
+   装不下时 overshoot 到下方、由遮罩滚出来 —— 顶部不会被 flex 居中挤到负坐标。 */
+.shareMask{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;
+  padding:24px;background:rgba(0,0,0,.32);overflow:auto;overscroll-behavior:contain}
+.sharePanel{width:min(620px,100%);margin:auto;display:flex;flex-direction:column;
   border-radius:12px;border:1px solid var(--line);background:var(--panel);
   box-shadow:0 12px 40px rgba(0,0,0,.28);overflow:hidden}
 .shareHead{display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -363,6 +376,14 @@ html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
 .shareCopy:hover{background:var(--accent);color:var(--panel)}
 .shareTip{font:12px var(--sans);color:var(--muted)}
 .shareTip.ok{color:var(--ok)}
+/* 矮容器（嵌入卡片通常 200–320 高）：9 行代码框 + 说明段会把面板撑到视口之外。
+   收成「5 行代码 + 隐藏说明」，面板就地装得下 —— 不必让人在 240px 的卡片里滚动找复制按钮。
+   装不下时仍由遮罩滚动兜底（上面的 overflow:auto）。 */
+@media (max-height:460px){
+  .shareMask{padding:12px}
+  .shareHint{display:none}
+  .shareCode{height:calc(5 * 1.55em)}
+}
 /* 手机上这块面板没有 hover 可用，关闭 / 页签 / 复制一律按触摸口径放大到 44px 命中区；
    遮罩留白收窄，让片段文本框在小屏上更宽（片段本来就长，横向多一列字符都是收益）。 */
 .is-touch .shareMask{padding:16px}

@@ -20,6 +20,10 @@ export function attachTouchUI(ctx, dom) {
   function say(t) {
     if (!toast) return;
     toast.textContent = String(t);
+    // 轻提示钉在视口底部，而触摸端的字符停靠条也在那儿 —— 不算出停靠区高度，
+    // 拦截类提示会正好盖在最常用的那排字符上（1.9 秒，正好是用户要接着点的那一刻）。
+    var dz = document.getElementById('dockzone');
+    toast.style.setProperty('--toast-lift', ((dz && dz.offsetHeight) || 0) + 'px');
     toast.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1900);
@@ -249,7 +253,7 @@ export function attachTouchUI(ctx, dom) {
     // 当成「用户想看更多」，把刚打开的面板立刻收掉（选中靠下的行时表现为面板一闪就没）。
     if (laneOf !== null && ctx.revealLane && TOUCH) {
       var top0 = ctx.wrap ? ctx.wrap.scrollTop : 0;
-      ctx.revealLane(laneOf, panel.offsetHeight);
+      ctx.revealLane(laneOf);
       // 只有真的滚动了才记；横纵两个方向都要记 —— 用户随后横向滑动画布时 scrollTop 不变，
       // 只比 scrollTop 会把手势误判成「程序自己滚的」而放过，面板就再也收不起来了。
       selfScrollTop = ctx.wrap && ctx.wrap.scrollTop !== top0

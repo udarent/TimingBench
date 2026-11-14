@@ -229,10 +229,15 @@ export function attachEmbed(ctx, opts) {
     // 全屏时 contentH 是屏幕高 —— 别把它推给宿主，否则退出全屏瞬间卡片会被撑到整屏高。
     // 退出全屏会触发 resize→redraw→reportHeight，届时已不在全屏，自然会补上正确高度。
     if (fsCurrent()) return;
-    // 顶栏是页面级 flex 子项（撤销 / 重做 / 嵌入），不在 SVG 的 contentH 里，上报时要加上。
+    // 顶栏与底部两条（上下文条 / 字符停靠条）都是**页面级 flex 子项**，不在 SVG 的 contentH 里，
+    // 上报时要一起加上 —— 少算它们，宿主 iframe 还是只读时的高度，chrome 一出现就把画布挤成
+    // 一条缝：tutorial 第 1 步那种 96px 的卡片进编辑后画布高度会是 0（顶栏 40 + 停靠区 91 > 96）。
+    // 只读态底部两条不展开（高度 0），所以算出来的值与之前完全一致，卡片高度不会变。
     var topEl = document.getElementById('topbar');
     var topH = topEl && topEl.offsetHeight ? topEl.offsetHeight : 0;
-    var h = Math.ceil((state.contentH || state.H || 0) + topH + 2);
+    var dockEl = document.getElementById('dockzone');
+    var dockH = dockEl && dockEl.offsetHeight ? dockEl.offsetHeight : 0;
+    var h = Math.ceil((state.contentH || state.H || 0) + topH + dockH + 2);
     if (h > 0 && Math.abs(h - lastH) >= 1) { lastH = h; post('height', { height: h }); }
   }
   var baseRedraw = ctx.redraw;
