@@ -686,6 +686,9 @@ function check() {
   }
   const modules = walk('src');
   ok(modules.length >= 9, 'src/ 模块数异常：' + modules.length);
+  // 聚合成**一条**断言：以前每个 import 各算一条，于是「删掉一个未使用的 import」会让总数变少，
+  // 报出来的 n/n 不稳定、也没人知道到底少的是哪一类检查。判据本身不变。
+  const broken = [];
   for (const file of modules) {
     const src = read(file);
     const re = /(?:from|import)\s*['"]([^'"]+)['"]/g;
@@ -694,9 +697,29 @@ function check() {
       const spec = m[1];
       if (!spec.startsWith('.')) continue;   // 无第三方运行时依赖；裸说明符交给浏览器报错
       const target = path.resolve(path.dirname(path.join(ROOT, file)), spec);
-      ok(fs.existsSync(target), file + ' 引用了不存在的模块：' + spec);
+      if (!fs.existsSync(target)) broken.push(file + ' → ' + spec);
     }
   }
+  ok(broken.length === 0, '存在失效的相对 import：' + broken.slice(0, 3).join('；'));
+
+  // 运行时文件里不得出现「导入了但没用」的名字（0.14.0 清掉 6 个：EMBED / chipGlyph / chipDesc /
+  // esc / cut / Core）。这类残留不会报错，只会在读代码时制造「它好像有别的用途」的错觉。
+  const idle = [];
+  for (const file of modules) {
+    const src = read(file);
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+    const im = /import\s*\{([^}]*)\}\s*from/g;
+    let g;
+    while ((g = im.exec(code)) !== null) {
+      for (const raw of g[1].split(',')) {
+        const name = raw.trim().split(/\s+as\s+/).pop().trim();
+        if (!name) continue;
+        if (code.split(new RegExp('\\b' + name + '\\b')).length - 1 <= 1) idle.push(file + ' → ' + name);
+      }
+    }
+  }
+  ok(idle.length === 0, '存在导入了但没用的名字：' + idle.slice(0, 4).join('；'));
 }
 
 try {

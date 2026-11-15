@@ -4,18 +4,16 @@ import { Core } from '../core/ir.js';
 import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
-import { EMBED } from './embed.js';
 import * as Cap from './cap.js';
-import { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, fitLabel } from './waveform.js';
+import { waveGlyph, waveGap, busClassOf, fitLabel } from './waveform.js';
 
 var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元里的 T 是上沿 y 坐标，已移到 waveform.js）
 // 基准格宽（桌面 38 / 触摸 48）。文档里的 config.hscale 会把它乘掉，所以 CELL 是
 // **每次 redraw 现算**的：BASE_CELL 是常量，CELL 是这一帧的值。
 var BASE_CELL=G.CELL, CELL=BASE_CELL;
 var NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
-var COL_Y=G.COL_Y, ACT_H=G.ACT_H;
-var CHIP_W=G.CHIP_W, CHIP_H=G.CHIP_H, CHIP_STEP=G.CHIP_STEP;
-var XS=G.XS, CHIPS_W=G.CHIPS_W;
+var COL_Y=G.COL_Y;
+var XS=G.XS;
 // 分组每嵌套一层要在行名左侧让出的槽宽（花括号 + 竖排组名占这一条）。
 // 取「格宽的 0.63」—— 与上游一致（WaveDrom 层间距 25 / 格宽 40 = 0.63）；层间距太窄时
 // 竖排组名会贴着内层括号，长组名还会顶到行名。
@@ -311,7 +309,6 @@ export function createShapes(ctx){
     XS=NAME_W+8;                                 // 行名右缘（NAME_W-6）到波形 8px
     // 其它模块（interactions 的键盘滚动定位、embed-shell 的进编辑锚定）读 G 的实时值
     G.NAME_W=NAME_W; G.XS=XS;
-    G.CHIPS_W=XS+Core.ALL.length*CHIP_STEP+16;
     var N=ir.ticks;
     // 全图列数（参考周期）：period≠1 的行一个字符占多列，行宽不再都等于字符数，
     // 所以按「最宽的那一行」定画布宽度。全为 period:1 时 COLS 恒等于 N（默认情形零变化）。

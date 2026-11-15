@@ -5,10 +5,9 @@
 import { Core } from '../core/ir.js';
 import { G, cellGeo, PHASE_STEP } from './geometry.js';
 import { TOUCH } from './mode.js';
-import { esc, cut } from '../core/util.js';
 
 // 格宽受 config.hscale 影响，是每帧重算的运行时值 —— 这里一律现读 G.CELL，不缓存。
-var ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD;
+var ROW_H=G.ROW_H, TOP=G.TOP;
 // 行名区宽度按内容自适应 → 波形起点 XS 是运行时值，必须每次现读 G.XS，
 // 不能像以前那样在模块加载时缓存一份（名字变长变短后它会过期）。
 
