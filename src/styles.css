@@ -156,7 +156,10 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .svgwrap{touch-action:manipulation;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* 相位尺打开时，画布这一层不参与原生平移。原因是浏览器的「滚动仲裁」：`touch-action:manipulation`
    允许平移，一次横向拖动会被判成滚动并发出 pointercancel —— 尺子每帧重绘，指针流一断，拖动就只剩
-   前两帧（Android 实测：按下去跳到 0.1，后面怎么拖都不动）。只在尺子开着时禁用，其余时候照常滑动看图。 */
+   前两帧（Android 实测：按下去跳到 0.1，后面怎么拖都不动）。只在尺子开着时禁用，其余时候照常滑动看图。
+   **代价与补偿**：这一段手势期间原生滚动不可用，所以「拖别处 = 移动视图」由交互层按指针位移手写
+   `scrollLeft / scrollTop`（0.14.2，见 interactions.js 的 tPan*）；尺子一收下就撤掉这个类，立刻回到
+   原生滚动 —— 跟手、回弹、滚动条都还在。 */
 .svgwrap.is-ruler{touch-action:none}
 /* hover 才显现的细小控件在触摸端全部撤下，改由操作栏承担 */
 .is-touch .rowCtl,.is-touch .rowHint,.is-touch .colAct{display:none}

@@ -115,6 +115,19 @@ function check() {
   const html = read('editor.html');
   ok(html.includes('content="' + version + '"'), 'editor.html 版本不一致');
   ok(landing.includes('content="' + version + '"'), 'index.html 版本不一致');
+  // tutorial.html 也是线上页面（Pages 的 /tutorial.html），它的 meta 版本同样得跟上来 ——
+  // 以前只查 editor / index，发版时最容易漏的就是它。
+  ok(read('tutorial.html').includes('content="' + version + '"'), 'tutorial.html 版本不一致');
+  // HTML 里的正文是 HTML，不是 Markdown：`**强调**` 会原样把星号显示给人看（0.14.2 修掉三处）。
+  // 判据：站点页面与指南页（仓库根的 editor-guide.html）正文里不得出现 `**`。
+  {
+    const pages = ['editor.html', 'index.html', 'tutorial.html', 'embed-demo.html'];
+    const guide = path.join(ROOT, '..', 'editor-guide.html');
+    const bad = [];
+    for (const f of pages) if (read(f).includes('**')) bad.push(f);
+    if (fs.existsSync(guide) && fs.readFileSync(guide, 'utf8').includes('**')) bad.push('../editor-guide.html');
+    ok(bad.length === 0, 'HTML 正文里混入了 Markdown 的 `**`（会原样显示星号）：' + bad.join('；'));
+  }
   // 双语 README：英文为主文件、中文独立成篇，两边互链且版本号同步
   const enReadme = read('README.md'), zhName = 'README.zh-CN.md';
   const hasZh = fs.existsSync(path.join(ROOT, zhName));

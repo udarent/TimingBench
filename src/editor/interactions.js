@@ -219,8 +219,8 @@ export function attachInteractions(ctx){
     try{ if(e.pointerId!==undefined&&wrap.setPointerCapture) wrap.setPointerCapture(e.pointerId); }catch(err){}
     // 记下这次手势**开始前**的值：手势被改判成「移动视图」时要能原地撤回，
     // 否则两根手指一落下就把相位改了 —— 那正是要消灭的误操作。
-    var l0=findLane(state.phaseEdit&&state.phaseEdit.lane);
-    if(state.phaseEdit) state.phaseEdit.gest0=l0?l0.phase:0;
+    var pe=state.phaseEdit, l0=pe&&findLane(pe.lane);
+    if(pe) pe.gest0=l0?l0.phase:0;
     ctx.phaseDrag=true; applyPhase(v); return true;
   }
   function movePhaseDrag(e){
@@ -769,7 +769,7 @@ export function attachInteractions(ctx){
   // 就是移动视图，所以这里**手写平移**把它补回来。规则只有一条，起点定身份：
   //   · 起点在尺子上        → 改相位（单指）；|dy| 明显大于 |dx| 时改判为移动视图
   //   · 起点不在尺子上      → 移动视图（并把尺子收下，与点别处一致）
-  //   · 第二根手指落下      → 一律移动视图（相位手势就地收成一步撤销）
+  //   · 第二根手指落下      → 一律移动视图，且**撤回本次手势改出的相位**（见 tHandOffToPan）
   // 于是「平移」与「改相位」不再抢同一个手势，也不会有拖动无反应的死手势。
   var tPts={}, tPan=null, tDown=null;   // tPts: pointerId → {x,y}；tPan: 平移锚点；tDown: 手势起点
   function tCount(){ return Object.keys(tPts).length; }
@@ -811,7 +811,8 @@ export function attachInteractions(ctx){
     var id=e.pointerId||0, cx=e.clientX||0, cy=e.clientY||0;
     tPts[id]={ x:cx, y:cy };
     if(tCount()===1) tDown={ x:cx, y:cy };
-    // 第二根手指落下：不管理由都算「我要移动视图」——正在拖的尺子就地收下（值保留、一步撤销）
+    // 第二根手指落下：不管理由都算「我要移动视图」；正在拖的尺子被改判 —— 本次手势改出来的
+    // 相位会撤回（尺子本身留着，手放开后还能继续调）
     if(tCount()>=2){ tHandOffToPan(); return; }
     handleDown(pointerShim(e),true);
   });

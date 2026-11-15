@@ -192,7 +192,10 @@
     <p class="hint">Both fields are applied to the drawing and can be edited in place. Click <code>&phi;</code> next
     to a row name and that row turns into a <strong>phase ruler</strong> &mdash; press anywhere to jump there, then drag:
     one cell is one period, the arrow keys nudge by 0.05, <code>0</code> resets, <code>Esc</code> cancels and
-    <code>Enter</code> accepts. Phase shifts the lane left by exactly that many periods &mdash; it is continuous, so
+    <code>Enter</code> accepts. On touch the same action lives in the context bar (select the row, tap the phase
+    icon): the <code>&phi;</code> / <code>T</code> glyphs beside a row name are drawn but not tappable there &mdash;
+    after the whole picture is scaled down they are a few pixels wide, and reaching for a row name would open the
+    ruler by accident. Phase shifts the lane left by exactly that many periods &mdash; it is continuous, so
     <code>0.1</code> and <code>0.2</code> differ by a tenth of a cell (WaveDrom shifts it the same way but throws away
     the leading half&nbsp;bricks; we keep them and clip at the wave origin). <code>T</code> is the period: it stretches
     every character of that row and is edited as a number. The numbered ruler above still counts reference periods, so a
