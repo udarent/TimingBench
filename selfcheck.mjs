@@ -344,11 +344,13 @@ function check() {
     'waveform.js 反向依赖了 UI 模块（渲染内核必须保持底层）');
   // 行级时间标尺（教程 Step 6）：period/phase 必须真的参与绘制，不能只当元信息。
   // 口径对齐上游 parse-wave-lanes：period 把字符拆成 2·period 个 half-brick（每格宽 period 倍）；
-  // phase 以 half-brick 计、非整数向上取整到半个周期。
+  // phase 以 half-brick 计 —— 上游是 `for (i=0;i<phase*2;i++) R.shift()`，只移**整数**个半格，
+  // 即 `floor(phase*2)/2` 个周期（0.1 / 0.4 与 0 相同，0.5 才移半格）。
+  // 这条锁以前把 ceil 写成了标准答案：0.1 被抬到 0.5，于是「0.1 和 0.5 看不出区别」。
   const geoSrc = read('src/editor/geometry.js');
   ok(/export function lanePeriod/.test(geoSrc) && /export function laneShift/.test(geoSrc) &&
      /export function laneChars/.test(geoSrc) && /export function cellGeo/.test(geoSrc) &&
-     /Math\.ceil\(p\*2\)\/2/.test(geoSrc),
+     /Math\.floor\(p\*2\)\/2/.test(geoSrc) && !/Math\.ceil\(p\*2\)/.test(geoSrc),
     '行级时间标尺缺失（period/phase 又退回「只存不画」）');
   ok(/var P=lanePeriod\(l\), sh=laneShift\(l\), cw=P\*CELL, chars=laneChars\(l,N\)/.test(shapesSrc) &&
      /cellGeo\(l,i\)/.test(shapesSrc) && /lclip-/.test(shapesSrc) &&

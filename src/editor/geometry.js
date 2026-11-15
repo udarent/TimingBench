@@ -42,9 +42,13 @@ export function lanePeriod(l){
   return (isFinite(p)&&p>=1) ? Math.round(p) : 1;
 }
 // 该行墨迹相对参考网格的左移量，单位是「周期」，恒为 0.5 的整数倍。
+// phase → 整行左移多少个周期。**与上游同一套量化**：wavedrom 把 phase 乘 2 当成「半格数」，
+// 然后 `for (i=0; i<phase*2; i++) R.shift()` —— 只移整数个半格，也就是 `floor(phase*2)/2` 个周期。
+// 所以 0.1 / 0.4 与 0 完全一样，0.6 与 0.5 一样，1.2 与 1 一样（步长是半个周期，不是 0.1）。
+// 曾经这里写的是 ceil：0.1 被抬到 0.5，于是 0.1 和 0.5 看起来一模一样 —— 「相位精度太低」的根因。
 export function laneShift(l){
   var p=Number(l&&l.phase);
-  return (isFinite(p)&&p>0) ? Math.ceil(p*2)/2 : 0;
+  return (isFinite(p)&&p>0) ? Math.floor(p*2)/2 : 0;
 }
 // 这一行要画多少个字符格：自身字符数与「补齐到全图参考宽度」取大。
 // period=1 时恒等于 ticks（与改造前完全一致）；period=2 时补一半。
