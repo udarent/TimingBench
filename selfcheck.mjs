@@ -535,10 +535,24 @@ function check() {
   // ---- 零常驻文字：桌面用 aria-label 替代 tooltip，触摸端用图标 + 长按出名称 ----
   // <title> 在 SVG 里必然变成浏览器 tooltip，画布层一律不允许出现。
   ok(!/<title>/.test(shapesSrc), '画布层仍在使用 <title>（会显示成 tooltip 文字）');
-  ok(/role="button" aria-label="'\+esc\(title\)/.test(shapesSrc),
-    '画布按钮缺少 aria-label（视觉无文字时读屏会失去名称）');
+  // 判据不锁某一种写法（原先锁的是 `role="button" aria-label="'+esc(title)`，那是行工具 /
+  // 列按钮的拼法；0.15.1 把它们删掉后，锁就变成「指着不存在的东西」）。现在逐个点数：
+  // 画布上每个按钮都必须在同一标签里带上 aria-label，新增按钮漏了立刻报。
+  {
+    const btns = (shapesSrc.match(/role="button"/g) || []).length;
+    const labeled = (shapesSrc.match(/role="button"[^>]*aria-label="/g) || []).length;
+    ok(btns > 0 && btns === labeled,
+      '画布按钮缺少 aria-label（视觉无文字时读屏会失去名称）：' + btns + ' 个按钮 / ' + labeled + ' 处命名');
+  }
   ok(/b\.setAttribute\('aria-label', 'Write ' \+ name\)/.test(touchSrc),
     '字符停靠条缺少 aria-label');
+  // 0.15.1：画布上的行工具 / 列按钮 / SVG 字符条已删净 —— 渲染函数、命中分支、CSS 一起消失，
+  // 全部改由上下文条（#tbpanel）承担。这里焊死，防止只加回一半：加了 `rowTools` 却没恢复
+  // CSS（画出来是裸的）、或恢复了命中分支却没人产生那种命中（又是一条死路）。
+  ok(!/rowTools|rowCtl|rowHint|'rowTool'/.test(shapesSrc) &&
+     !/rowTool|colActBtn|charChip/.test(interSrc) &&
+     !/\.rowCtl|\.rowHint|\.rowTool\b|\.colAct\b|\.colActBtn|\.charChip|\.chipWave/.test(cssSrc),
+    '已删除的画布控件又长回来了（行工具 / 列按钮 / SVG 字符条）');
   // 触摸端：操作栏 4 个符号、标签页 2 个图标，上下文条随选中对象自动切换
   ok(!/data-panel=/.test(html), '触摸操作栏仍保留「对象 / 列」文字面板入口');
   ok(touchSrc.indexOf("className = 'ctxbtn'") >= 0 && /function renderContext/.test(touchSrc),

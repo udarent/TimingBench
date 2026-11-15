@@ -63,8 +63,7 @@ svg{display:block;font-family:var(--sans)}
 }
 [hidden]{display:none!important}
 /* 画布内不再有 HUD（撤销 / 重做 / 分屏 / 嵌入已移到页面顶栏） */
-.charChip{cursor:pointer}
-.colhead text,.colActBtn text,.charChip text{pointer-events:none}
+.colhead text{pointer-events:none}
 .cellSel{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:3 2;pointer-events:none}
 /* 连线模式的端点光标：与普通选中框互斥，只服务键盘 / 触摸端点定位 */
 .linkCursor{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:5 3;pointer-events:none}
@@ -81,25 +80,13 @@ svg{display:block;font-family:var(--sans)}
 .emptyRow:hover rect{stroke:var(--accent)}
 .emptyRow:hover .plusBox{fill:var(--accent-bg)}
 .emptyRow:hover .emptyWave{opacity:.7}
-/* 行工具：只有悬停 / 选中该行时才显现，且始终画在这一行的 SVG 图元里 */
-.rowCtl{opacity:0;pointer-events:none;transition:opacity .12s}
-.laneGrp:hover .rowCtl,.laneGrp.sel .rowCtl{opacity:1;pointer-events:auto}
-.rowHint{opacity:.35;pointer-events:none}
-.laneGrp:hover .rowHint,.laneGrp.sel .rowHint{opacity:0}
-.rowTool{cursor:pointer}
-.rowTool text{font:11px var(--mono);pointer-events:none}
-.rowTool rect{fill:var(--panel)}
-.rowTool:hover rect{fill:var(--accent-bg);stroke:var(--accent)}
 .laneMeta{cursor:text}
 .laneMeta:hover{fill:var(--accent)}
 /* 分组名仅在编辑态可点改（有 data-act 时才是可点区域） */
 .laneGroupName[data-act]{cursor:text}
 .laneGroupName[data-act]:hover{fill:var(--accent)}
-/* 列头：悬停 / 选中该列才出现 + − |；幽灵列头只在末尾追加周期 */
-.colAct{opacity:0;pointer-events:none;transition:opacity .12s}
-.colhead:hover .colAct,.colhead.sel .colAct,.colhead.ghost .colAct{opacity:1;pointer-events:auto}
-.colhead,.colActBtn,.charChip{cursor:pointer}
-.colActBtn:hover rect,.charChip:hover rect,.charChip.on rect{fill:var(--accent-bg);stroke:var(--accent)}
+/* 列头只剩编号：+ − | 三个列动作已收进上下文条（#tbpanel），画布上不再悬停出按钮 */
+.colhead{cursor:pointer}
 /* 参考上游默认皮肤外观规范自行绘制：实线 / 斜线阴影 / 虚线 / 箭头 / 总线配色 */
 .waveInk,.waveHair,.waveDash,.waveArrow,.waveBus,.waveLabel{pointer-events:none}
 .waveInk{fill:none;stroke:var(--wave-ink);stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
@@ -117,12 +104,6 @@ svg{display:block;font-family:var(--sans)}
 .tailCell:hover{fill:var(--accent-bg)}
 .bus2{fill:var(--bus2)}.bus3{fill:var(--bus3)}.bus4{fill:var(--bus4)}.bus5{fill:var(--bus5)}
 .bus6{fill:var(--bus6)}.bus7{fill:var(--bus7)}.bus8{fill:var(--bus8)}.bus9{fill:var(--bus9)}
-/* 候选字符背后复用同一个 waveGlyph，只把线色降为背景层 */
-.chipWave{--wave-ink:var(--muted);opacity:.8;pointer-events:none}
-.charChip:hover .chipWave,.charChip.on .chipWave{--wave-ink:var(--accent);opacity:1}
-.charChip:hover .chipWave .waveBus,.charChip.on .chipWave .waveBus{fill:var(--accent-bg)}
-.charChip text{paint-order:stroke;stroke:var(--panel);stroke-width:2.6;stroke-linejoin:round}
-.charChip:hover text,.charChip.on text{stroke:var(--accent-bg)}
 /* ---------------------------------------------------------------------------
    触摸版式：粗指针（或 ?touch=1）时由 main.js 在 <html> 上加 .is-touch。
    桌面是「左代码 / 右时序图」+ 无常驻文字；触摸端同屏两区、方向可由 HUD 切换，
@@ -162,8 +143,6 @@ svg{display:block;font-family:var(--sans)}
    `scrollLeft / scrollTop`（0.14.2，见 interactions.js 的 tPan*）；模式一收就撤掉这个类，立刻回到
    原生滚动 —— 跟手、回弹、滚动条都还在。 */
 .svgwrap.is-phase{touch-action:none}
-/* hover 才显现的细小控件在触摸端全部撤下，改由操作栏承担 */
-.is-touch .rowCtl,.is-touch .rowHint,.is-touch .colAct{display:none}
 .is-touch .cellSel{stroke-width:2.4}
 /* 桌面：上下文条钉在右侧（触摸端钉底部，规则在下面 .is-touch 段里）。
    行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头按钮都已撤掉。 */
@@ -325,8 +304,6 @@ svg{display:block;font-family:var(--sans)}
 .is-embed .svgwrap svg{margin-inline:auto}
 /* 只读态：画布只承担查看，光标不暗示可编辑 */
 .is-embed.is-readonly .svgwrap{cursor:default}
-/* 只读态不出现任何编辑控件：行工具 / 列操作 / 拖拽把手 */
-.is-embed.is-readonly .rowCtl,.is-embed.is-readonly .rowHint,.is-embed.is-readonly .colAct{display:none}
 .is-embed.is-readonly .svgwrap:focus-visible{outline:none}
 /* 退出 / 进入编辑的图标按钮：钉在卡片**右上角**，压在波形图的一个角上。
    为什么不是左上：只读态不再画列号行，第一行行名紧贴顶部，左上角放按钮会正好压住它；

@@ -88,10 +88,7 @@ export function attachInteractions(ctx){
     while(g&&g!==wrap){
       if(g.getAttribute){
         var ln=g.getAttribute('data-lane');
-        if(g.classList&&g.classList.contains('charChip')) return {ch:g.getAttribute('data-ch')};
         if(g.classList&&g.classList.contains('emptyRow')) return {empty:1};
-        if(g.classList&&g.classList.contains('rowTool')) return {tool:g.getAttribute('data-act'),lane:ln};
-        if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         // 只有带 data-act 的徽标才是可点入口（触摸端不接线，见 shapes.js）：否则落到外层行名上，
         // 一次「想选中这一行」的轻点不会顺手打开相位尺。
@@ -133,15 +130,14 @@ export function attachInteractions(ctx){
     if(l.kind==='spacer'){ ctx.notify('Spacer rows have no editable field',true,laneRowEl(laneId)); return; }
     if(act==='wave'&&!rawWaveGuard(l)) return;
     var spec=rowSpec(l,act); if(!spec) return;
+    // 锚点只有两种规格：wide（整行波形区）与 meta（行名旁的 φ / T）。三级回落是为了
+    // 触摸端 —— 那里的徽标「只画不接线」（没有 data-act），只能按 data-lane 找；
+    // 而读数命中区会随 closePhaseEdit 的 redraw 消失，所以它排最后、只当兜底。
     var anchor=spec.wide
       ? wrap.querySelector('rect.waveZone[data-lane="'+laneId+'"]')
-      : spec.meta
-        // 桌面锚在行名旁的 φ 徽标；触摸端那两个字形「只画不接线」（没有 data-act），
-        // 退到同一位置的 tspan —— 读数命中区此时已随 closePhaseEdit 的 redraw 消失，不能当锚点。
-        ? (wrap.querySelector('tspan.laneMeta[data-act="'+act+'"][data-lane="'+laneId+'"]')
-           || wrap.querySelector('tspan.laneMeta[data-lane="'+laneId+'"]')
-           || wrap.querySelector('rect.phaseValueHit[data-lane="'+laneId+'"]'))
-        : wrap.querySelector('g.rowTool[data-act="'+act+'"][data-lane="'+laneId+'"] rect');
+      : (wrap.querySelector('tspan.laneMeta[data-act="'+act+'"][data-lane="'+laneId+'"]')
+         || wrap.querySelector('tspan.laneMeta[data-lane="'+laneId+'"]')
+         || wrap.querySelector('rect.phaseValueHit[data-lane="'+laneId+'"]'));
     if(!anchor) return;
     openInline(anchor,spec.val,function(v){
       var op=spec.makeOp(v);
@@ -162,7 +158,6 @@ export function attachInteractions(ctx){
   // 为什么不用「按下即定位」：那是控件的语义。抓着波形按下去就先跳一下值，用户只想按住
   // 看一眼也会误改 —— 所以按下不改值，超过 PHASE_DEAD 才动。
   var PHASE_DEAD=4;                       // 手指位移小于 4px 不动值（按住看一眼不该跳值）
-  function phaseTrackEl(){ return wrap.querySelector('rect.phaseTrack'); }
   function openPhaseEdit(laneId){
     var l=findLane(laneId); if(!l||l.kind!=='signal'||!state.ir) return;
     if(state.phaseEdit&&state.phaseEdit.lane===laneId){ closePhaseEdit(true); return; }  // 再点一次收起
@@ -258,7 +253,6 @@ export function attachInteractions(ctx){
     return false;
   }
   function handleTool(act,laneId){
-    if(act==='wave'||act==='data'||act==='node'){ openRowEditor(laneId,act); return; }
     if(act==='del'){ state.selLane=null; ctx.commit({t:'deleteLane',lane:laneId},'delete row'); return; }
     if(act==='add'||act==='spacer'){
       var at=0; state.ir.lanes.forEach(function(x,i){ if(x.id===laneId) at=i+1; });
@@ -528,8 +522,7 @@ export function attachInteractions(ctx){
     if(c.edgeIdx!==undefined) return 'e'+c.edgeIdx;
     if(c.nameLane) return 'n'+c.nameLane;
     if(c.group!==undefined) return 'g'+c.group;
-    if(c.lane!==undefined&&c.tick!==undefined)
-      return 'c'+c.lane+'@'+c.tick+'|'+(c.label?'l':'')+(c.tool||'')+(c.cact||'')+(c.meta||'');
+    if(c.lane!==undefined&&c.tick!==undefined) return 'c'+c.lane+'@'+c.tick;
     return JSON.stringify(c);
   }
   function touchDetail(c){
@@ -544,9 +537,9 @@ export function attachInteractions(ctx){
   function editable(c){
     if(!c) return false;
     if(c.edgeIdx!==undefined||c.nameLane||c.group!==undefined) return true;
+    // 「格本身」才可编辑：同一条 lane 上的其它命中（φ/T 徽标、整行空白）不算格子。
     return c.lane!==undefined&&c.tick!==undefined&&
-      c.label===undefined&&c.tool===undefined&&c.cact===undefined&&
-      c.meta===undefined&&c.ch===undefined&&c.col===undefined&&c.rowLane===undefined;
+      c.meta===undefined&&c.col===undefined&&c.rowLane===undefined;
   }
   function startLong(c,x,y){
     clearLong();
@@ -648,16 +641,13 @@ export function attachInteractions(ctx){
       }
       return;
     }
-    if(c.ch!==undefined){ if(dbl>1) return; e.preventDefault(); writeChar(c.ch); return; }
-    if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
-    if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
     if(c.meta){
       if(dbl>1) return;
       e.preventDefault();
       // 行名旁的 φ / T 都是「一个数」→ 直接就地输入（Enter 确认 / Esc 取消）。
-      // 相位的**图形化粗调**不再占这个入口：它挪到行工具的 φ 按钮上（见 shapes.js 的 rowTools）。
-      // 分工：行名给精确值（有键盘的用户敲 0.35 一步到位），行工具给手感（拖着看波形怎么挪）。
-      // 两个入口随时都在、互不打断 —— 拖完想精调就点数字，敲完想微调就去拖。
+      // 相位的**图形化粗调**不占这个入口：它挂在上下文条（`#tbpanel`）的 φ 按钮上，
+      // 进模式后抓这一行的波形横拖。分工：行名给精确值（敲 0.35 一步到位），上下文条给手感
+      // （拖着看波形怎么挪）。两条路随时都在、互不打断 —— 拖完想精调就点数字，敲完想微调就去拖。
       openRowEditor(c.lane,c.meta);
       return;
     }

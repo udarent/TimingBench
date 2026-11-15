@@ -31,9 +31,11 @@ export var CAP = {
   // 连线按钮在 0.9.17 从 HUD 移到底部上下文条（与 label / node 同排），见 ACTS。
   hud:        { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
   colhead:    { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
-  // 列操作 / 行工具不再画在画布上（桌面列头只有编号、行末不再常驻 5 个按钮）：
-  // 两者都收进下面同一个上下文条，选中行 / 列时出现。列头那三颗 11×14px 的按钮
-  // 命中率本来就差，收进面板后还能顺带把 ACT_W 的用途说清楚。
+  // 列操作 / 行工具在画布上**没有渲染实现**了（0.15.1 删净：`colBtn` / `rowTools` 连同行内
+  // 命中分支与 CSS 一起消失）。两者都收进下面同一个上下文条，选中行 / 列时出现。
+  // 这两项仍留在表里，是两个理由：① 记录「画布上不画、改由谁承担」这个去向，后来人不必
+  // 从 git 历史里考古；② 让下面 `editEntries` 的「只读不泄漏编辑入口」检查继续覆盖它们 ——
+  // 真有人把行工具加回去，只读卡片那条断言立刻会红。
   colAct:     { deskEdit: SW,  deskView: OFF, touchEdit: SW,  touchView: OFF },
   rowTool:    { deskEdit: SW,  deskView: OFF, touchEdit: SW,  touchView: OFF },
   // 行首拖拽把手（`rowDrag`）已在 0.9.13 删净 —— 图元、命中分支、拖拽结算一起走，

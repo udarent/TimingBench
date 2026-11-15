@@ -22,7 +22,7 @@ var GSLOT=T?30:24;
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
   // 当前场景（desk|touch × Edit|Card）。所有「画不画某个控件」的判据一律查 cap.js 的能力表：
-  // `can('rowTool')` 读起来就是「这个场景该不该画行工具」，比 `if(T||state.readonly)` 好审。
+  // `can('laneMeta')` 读起来就是「这个场景该不该画 φ/T 徽标」，比 `if(T||state.readonly)` 好审。
   // 仍直接读 T / readonly 的地方都是**布局派生**（因为没画控件而少留的高度 / 少留的边距），
   // 不是能力 —— 那条界线见 cap.js 顶部注释。
   var SC='deskEdit';
@@ -91,40 +91,6 @@ export function createShapes(ctx){
       }
     }
     return out;
-  }
-
-  // 列头 + / − / |：悬停才显现；第 N 个「幽灵列头」只承担末尾追加周期。
-  // 竖直位置压在 COL_Y+16 … COL_Y+30 这一条：上边留给列号，下边正好抵到 TOP，
-  // 不与第一行 laneRow 重叠 —— 否则按钮下沿会被行矩形盖住、点上去命中的是行。
-  function colBtn(c,cx,k,act,txt,title,on){
-    if(!can('colAct')) return '';   // 触摸端换成上下文图标条（swap）；只读态不提供列操作（off）
-    var x=cx-18+k*12.5, w=11;
-    return '<g class="colActBtn" data-cact="'+act+'" data-c="'+c+'" role="button" aria-label="'+esc(title)+'">'+
-      '<rect x="'+x+'" y="'+(COL_Y+16)+'" width="'+w+'" height="14" rx="3" fill="'+(on?'var(--accent-bg)':'var(--panel)')+'" stroke="'+(on?'var(--accent)':'var(--line2)')+'" stroke-width="0.6"/>'+
-      '<text x="'+(x+w/2)+'" y="'+(COL_Y+23)+'" text-anchor="middle" dominant-baseline="central" font-size="9" fill="'+(on?'var(--accent)':'var(--muted)')+'">'+esc(txt)+'</text></g>';
-  }
-
-  // 行工具：只保留互不重复的修改；行重排已统一交给行首拖拽把手
-  // 只读卡片上整组撤掉：它们是编辑入口，点上去也只会被「点一下进编辑」拦下来。
-  function rowTools(l,y,ACT_X){
-    if(!can('rowTool')) return '';   // 触摸端换成上下文条（swap）；只读卡片整组撤掉（off）
-    var o=[], x=ACT_X+4, isSp=l.kind==='spacer';
-    function add(act,txt,w,title){
-      o.push('<g class="rowTool" data-act="'+act+'" data-lane="'+l.id+'" role="button" aria-label="'+esc(title)+'" style="cursor:pointer">'+
-        '<rect x="'+x+'" y="'+(y+8)+'" width="'+w+'" height="20" rx="4" stroke="var(--line2)" stroke-width="0.6"/>'+
-        '<text x="'+(x+w/2)+'" y="'+(y+18)+'" text-anchor="middle" dominant-baseline="central" fill="var(--ink)">'+esc(txt)+'</text></g>');
-      x+=w+3;
-    }
-    if(!isSp){
-      add('wave','~',20,'Row wave string — click to edit');
-      add('data','=',20,'Row data labels — click to edit');
-      add('node','◇',20,'Row node markers — click to edit');
-    }
-    add('add','+',20,'Add a signal below this row');
-    add('spacer','∅',20,'Add a spacer below this row');
-    add('del','✕',20,'Delete this row');
-    return '<g class="rowCtl">'+o.join('')+'</g>'+
-      '<text class="rowHint" x="'+(ACT_X+8)+'" y="'+(y+23)+'" font-size="13" fill="var(--muted)">⋯</text>';
   }
 
   // 行首拖拽把手：行位置调整的唯一交互
@@ -414,11 +380,6 @@ export function createShapes(ctx){
       var cw=T?Math.min(CELL-2,44):30, ch=T?28:20;
       o.push('<rect x="'+(cx-cw/2)+'" y="'+COL_Y+'" width="'+cw+'" height="'+ch+'" rx="4" fill="'+(selc?'var(--accent-bg)':'transparent')+'" stroke="'+(selc?'var(--accent)':'var(--line)')+'" stroke-width="0.5" '+(ghost?'stroke-dasharray="2 2"':'')+'/>');
       o.push('<text x="'+cx+'" y="'+(COL_Y+ch/2)+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?13:11)+'" fill="'+(selc?'var(--accent)':'var(--muted)')+'">'+c+'</text>');
-      // 列动作（+ − |）已收进上下文条：这里只在能力表允许时画（目前四场景都是 off，
-      // 桌面改成「选中列 → 右侧面板」）。
-      if(can('colAct')) o.push('<g class="colAct">'+colBtn(c,cx,0,'insert','+',ghost?'Append a cycle at the end':'Insert a cycle before column '+c)+
-        (!ghost ? colBtn(c,cx,1,'delete','−','Delete the cycle of column '+c)+
-        colBtn(c,cx,2,'gap','|','Toggle the phase line on column '+c,gapc) : '')+'</g>');
       o.push('</g>');
     }
     if(isEmpty) o.push(emptyRow(W));
@@ -449,7 +410,7 @@ export function createShapes(ctx){
           o.push('<line x1="'+XS+'" y1="'+yM+'" x2="'+ACT_X+'" y2="'+yM+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2 5"/>');
           o.push('<text x="'+(XS+8)+'" y="'+(yM-6)+'" font-size="9" fill="var(--muted)">spacer</text>');
         }
-        o.push(rowTools(l,y,ACT_X)); o.push('</g>');
+        o.push('</g>');
         return;
       }
       // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉。
@@ -529,7 +490,6 @@ export function createShapes(ctx){
       }
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
       o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(chars*P*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');
-      o.push(rowTools(l,y,ACT_X));
       // node 字母：上游会把 `node: '..a...'` 的 a / b 画成小字母标在锚点处，
       // 它是 edge 的可读锚点 —— 不画的话读者只看到一条曲线，不知道连的是哪两点。
       // 这属于「图的内容」，与 data 标签同类，不受零常驻文字约束。
