@@ -319,7 +319,10 @@ export const Core = (function () {
       case 'moveLane':
         var mi=-1; n.lanes.forEach(function(l,i){ if(l.id===op.lane) mi=i; });
         var mj=mi+(op.v==='up'?-1:1);
-        if(mi>=0&&mj>=0&&mj<n.lanes.length){ var mtmp=n.lanes[mi]; n.lanes[mi]=n.lanes[mj]; n.lanes[mj]=mtmp; }
+        if(mi>=0&&mj>=0&&mj<n.lanes.length){
+          var mtmp=n.lanes[mi]; n.lanes[mi]=n.lanes[mj]; n.lanes[mj]=mtmp;
+          rehomeAfterMove(n.lanes, op.lane);
+        }
         break;
       case 'setPhase': case 'setPeriod':
         n.lanes.forEach(function(l){ if(l.id===op.lane) l[op.t==='setPhase'?'phase':'period']=op.v; });
@@ -370,17 +373,50 @@ export const Core = (function () {
         break;
       }
       case 'deleteLane': n.lanes=n.lanes.filter(function(l){return l.id!==op.lane;}); break;
-      // 分组改名 / 重分组：把 groupPath 恰好等于 old 的所有行（含 spacer）整体改成新路径。
+      // 分组改名 / 重分组。两种定址方式，语义都是「把这些行的 groupPath 设成 path」：
+      //   · 传 lanes（行 id 数组）—— 行上下文条的「组」动作 / 范围归组用这条；
+      //   · 传 old（旧路径字符串）—— 点组名改整组用这条，含 spacer，整组一起改。
       // 空路径 = 取消分组。分组结构变化无法用字面量补丁表达，patchSource 会回落全量 emit。
       case 'regroup': {
         var oldKey=String(op.old||'');
-        n.lanes.forEach(function(l){ if(l.groupPath.join('/')===oldKey) l.groupPath=(op.path||[]).slice(); });
+        var ids=op.lanes||null;
+        n.lanes.forEach(function(l){
+          var hit = ids ? ids.indexOf(l.id)>=0 : l.groupPath.join('/')===oldKey;
+          if(hit) l.groupPath=(op.path||[]).slice();
+        });
         break;
       }
       default: changed=false;
     }
     if(changed){ n.rev++; }
     return n;
+  }
+
+  // 行被移动之后重新判定它的分组归属 —— 组是「连续行」的概念，一旦不再连续就会渲染成
+  // 两个同名括号（实测：组内末行下移一格就变成两段 ['bus', …], {c}, ['bus', …]）。
+  // 规则（只在移动后对**被移动的那一行**生效，不碰别人）：
+  //   ① 上下邻居里还有同路径的 → 它仍在自己的组里，不动；
+  //   ② 上下邻居同属一个（非空）组、而它自己不在 → 它被插到组中间，入组，组保持完整；
+  //   ③ 否则从深到浅找一个「上下邻居至少有一行的路径前缀能对上」的层，落到那一层；
+  //      一层都找不到就退成无组（不制造「只有自己一段」的幽灵组）。
+  function rehomeAfterMove(lanes, id){
+    var i=-1; for(var k=0;k<lanes.length;k++){ if(lanes[k].id===id){ i=k; break; } }
+    if(i<0) return;
+    var self=lanes[i], path=self.groupPath;
+    var above=i>0?lanes[i-1]:null, below=i+1<lanes.length?lanes[i+1]:null;
+    function key(l){ return l?l.groupPath.join('/'):null; }
+    if(path.length && (key(above)===key(self) || key(below)===key(self))) return;
+    if(above && below && (above.groupPath||[]).length &&
+       key(above)===key(below) && above.kind===self.kind){
+      self.groupPath=above.groupPath.slice(); return;
+    }
+    for(var d=path.length-1; d>=1; d--){
+      var pref=path.slice(0,d).join('/');
+      var up=above&&above.groupPath.slice(0,d).join('/')===pref;
+      var dn=below&&below.groupPath.slice(0,d).join('/')===pref;
+      if(up||dn){ self.groupPath=path.slice(0,d); return; }
+    }
+    self.groupPath=[];
   }
 
   function slotsEqual(a,b){

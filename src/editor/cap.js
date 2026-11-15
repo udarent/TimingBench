@@ -94,7 +94,11 @@ export function isSwap(name, scene) {
 // 直接画同名动作。动作名 → 图标 / 英文名在 touch.js，动作本身由 interactions.js 执行，
 // 三处共用这一份清单，避免「面板里少一个动作」与「图元里多一个按钮」各说各话。
 export var ACTS = {
-  row: ['name', 'wave', 'data', 'nodeStr', 'phase', 'period', 'up', 'down', 'add', 'spacer', 'del', 'link'],
+  // group / spanUp / spanDown 是「分组」这一组动作：group 按当前**行范围**归组（输入组名，
+  // 可用 / 嵌套，清空 = 退出这一层）；spanUp / spanDown 把范围向外推一行 —— 触摸端没有
+  // Shift，这是它唯一能表达「一段连续行」的方式（桌面另有 Shift+点行名 / Shift+↑↓）。
+  row: ['name', 'wave', 'data', 'nodeStr', 'phase', 'period', 'up', 'down', 'add', 'spacer', 'del',
+        'group', 'spanUp', 'spanDown', 'link'],
   col: ['insert', 'delete', 'gap', 'append', 'link'],
   // 格级：作用对象是「某一个格子」而不是整行 / 整列。行级的 data / nodeStr 改的是整行
   // 全部标签 / 整行锚点串；这两项才是「只改这一格」，原先只有桌面的徽标能触发。

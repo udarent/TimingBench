@@ -533,7 +533,10 @@ function check() {
     ok(/^[A-Za-z0-9_-]*$/.test(encodePayload(EXAMPLE)), '载荷出现需要再转义的字符（不是 base64url）');
   }
   // 动作清单已集中到 cap.js（ACTS），touch.js 只引用；两边任一处脱钩都算失败。
-  ok(Cap.ACTS.row.length === 12 && Cap.ACTS.row.indexOf('name') >= 0 &&
+  // 行动作 15 个：12 个行编辑 + 分组三件套（group / spanUp / spanDown）。
+  // 分组动作必须在行动作里 —— 「从 0 建组」的唯一入口就是它（组名只在组已存在时才可点）。
+  ok(Cap.ACTS.row.length === 15 && Cap.ACTS.row.indexOf('name') >= 0 &&
+     ['group', 'spanUp', 'spanDown'].every((k) => Cap.ACTS.row.indexOf(k) >= 0) &&
      Cap.ACTS.col.length === 5 && Cap.ACTS.col.indexOf('insert') >= 0 &&
      Cap.ACTS.row.indexOf('link') >= 0 && Cap.ACTS.col.indexOf('link') >= 0 &&
      /ROW_ACTS = Cap\.ACTS\.row/.test(touchSrc) && /COL_ACTS = Cap\.ACTS\.col/.test(touchSrc),

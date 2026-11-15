@@ -11,7 +11,7 @@ export function createEditor(dom){
   var ctx={
     code:dom.code, wrap:dom.wrap, gutter:dom.gutter, errdot:dom.errdot,
     EXAMPLE:EXAMPLE,
-    state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, ratio:1, parseOK:false,
+    state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, selRows:null, ratio:1, parseOK:false,
             ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0,
             W:0, H:0, drag:null, rev:0, readonly:false },
     inlineCtx:null, painting:null
@@ -102,6 +102,7 @@ export function createEditor(dom){
       });
     }
     state.rev++;
+    clampSpan();
     ctx.redraw(); ctx.status(); notify(label);
     var l=null; state.ir.lanes.forEach(function(x){ if(x.id===(first.lane||(first.lanes&&first.lanes[0]))) l=x; });
     // 图形提交后把源码选区锚到对应位置（焦点仍留在画布，选中格能接着接键盘字符）
@@ -150,15 +151,69 @@ export function createEditor(dom){
   }
   ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout;
 
+  // ---- 行范围：分组是「一段连续行」的概念，单选一行表达不了 ------------------
+  // `state.selRows` 是行 id 数组（按行序、连续），null 表示「就是 selLane 那一行」。
+  // 为什么要单独一份状态：`selLane` 是「当前对象」（决定面板显示哪组动作），
+  // 而组动作要作用在一段上；两者共存才能「选着行 3，同时把 3..5 归成一个组」。
+  function spanLanes(){
+    if(!state.ir) return [];
+    var ids=state.selRows;
+    if(!ids||!ids.length) return state.selLane?state.ir.lanes.filter(function(l){ return l.id===state.selLane; }):[];
+    return state.ir.lanes.filter(function(l){ return ids.indexOf(l.id)>=0; });
+  }
+  function spanIds(){ return spanLanes().map(function(l){ return l.id; }); }
+  // 把 a..b（含两端）之间的所有行（含 spacer）设成范围；anchorId 决定面板停在谁身上
+  function setRowSpan(aId,bId,anchorId){
+    if(!state.ir) return;
+    var a=-1,b=-1;
+    state.ir.lanes.forEach(function(l,i){ if(l.id===aId) a=i; if(l.id===bId) b=i; });
+    if(a<0||b<0||a===b){ state.selRows=null; if(a>=0) state.selLane=aId; return; }
+    var lo=Math.min(a,b), hi=Math.max(a,b), out=[];
+    for(var i=lo;i<=hi;i++) out.push(state.ir.lanes[i].id);
+    state.selRows=out;
+    state.selLane=anchorId||aId;
+    state.selCell=null; state.sel=null;
+  }
+  // 触摸端没有 Shift：用「范围 ↑ / ↓」把范围**向外**推一行（只增不减；
+  // 要缩小就点一下该行行名回到单选，再往外推）。
+  function extendSpan(dir){
+    if(!state.ir||!state.selLane) return;
+    var cur=spanLanes(); if(!cur.length) return;
+    var top=cur[0], bot=cur[cur.length-1], ti=-1, bi=-1;
+    state.ir.lanes.forEach(function(l,i){ if(l.id===top.id) ti=i; if(l.id===bot.id) bi=i; });
+    if(dir<0){ if(ti<=0) return; setRowSpan(bot.id, state.ir.lanes[ti-1].id, state.selLane); }
+    else { if(bi>=state.ir.lanes.length-1) return; setRowSpan(top.id, state.ir.lanes[bi+1].id, state.selLane); }
+    ctx.redraw();
+  }
+  // 结构变化（加 / 删 / 移行）之后把范围裁回去：仍连续就保留，断了就退回单选
+  function clampSpan(){
+    if(!state.selRows||!state.ir) return;
+    var idxs=[], anchor=-1;
+    state.ir.lanes.forEach(function(l,i){
+      if(state.selRows.indexOf(l.id)>=0) idxs.push(i);
+      if(l.id===state.selLane) anchor=i;
+    });
+    var contiguous = idxs.length>=2 && idxs[idxs.length-1]-idxs[0]+1===idxs.length;
+    var anchorInside = anchor>=0 && idxs.length>0 && anchor>=idxs[0] && anchor<=idxs[idxs.length-1];
+    if(!contiguous || !anchorInside) state.selRows=null;
+  }
   function signalLanes(){
     var out=[];
     if(state.ir) state.ir.lanes.forEach(function(l){ if(l.kind==='signal') out.push(l); });
     return out;
   }
   function firstCell(){ var ls=signalLanes(); return ls.length?{lane:ls[0].id,tick:0}:null; }
+  // 画布没选中格时补一个「可操作格子」。**必须优先落在当前选中的那一行**：
+  // 原来无条件取第一行的 t0，于是「选中第 3 行后按任意编辑键」会把选中抢回第一行 ——
+  // 按 R 改名改的是第 1 行、按 Shift+↑ 扩选从第 1 行开始（分组功能一上手就撞上）。
   function ensureSelCell(){
     if(!state.ir||state.linkMode) return state.selCell;
-    if(!state.selCell){ state.selCell=firstCell(); if(state.selCell){ state.selLane=state.selCell.lane; ctx.redraw(); } }
+    if(!state.selCell){
+      var seated=null;
+      if(state.selLane) state.ir.lanes.forEach(function(l){ if(l.id===state.selLane&&l.kind==='signal') seated={lane:l.id,tick:0}; });
+      state.selCell=seated||firstCell();
+      if(state.selCell){ state.selLane=state.selCell.lane; ctx.redraw(); }
+    }
     return state.selCell;
   }
   // 结构编辑会改变行数 / 周期数，命令结束后把选中格夹回有效范围（不改 IR）
@@ -239,6 +294,8 @@ export function createEditor(dom){
   ctx.syncCode=syncCode; ctx.commit=commit; ctx.fromCode=fromCode;
   ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
   ctx.focusPane=focusPane; ctx.ensureSelCell=ensureSelCell; ctx.clampSel=clampSel;
+  ctx.spanLanes=spanLanes; ctx.spanIds=spanIds; ctx.setRowSpan=setRowSpan;
+  ctx.extendSpan=extendSpan; ctx.clearSpan=function(){ state.selRows=null; };
 
   try{ var saved=localStorage.getItem('tb-layout'); if(saved==='rows'||saved==='cols') state.layout=saved; }catch(e){}
   applyLayout();

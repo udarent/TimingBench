@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **Timing diagrams you edit directly.** Click a waveform cell and the WaveJSON source is rewritten; change the source and the diagram redraws. Neither side is ever treated as the "real" one.
 
-`0.10.4` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
+`0.11.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
 
 Your source is not reformatted behind your back: diagram edits are written back as a minimal patch — comments, indentation, key order and quotes survive — and any result that would not round-trip is rolled back.
 
@@ -89,6 +89,7 @@ On touch devices the same editor runs in a dedicated layout: 44 px targets, the 
 | `Ctrl+Home` / `Ctrl+End` | First / last cell of the whole diagram |
 | `0 1 x z u d p P n N h l H L = 2…9` | Write to the current cell and move right |
 | `Shift+←` / `Shift+→` | Write the last character and move that way (paint) |
+| `Shift+↑` / `Shift+↓` | Extend the row range up / down (then **group rows** in the action bar) |
 | `Enter` | Edit the current cell's waveform character |
 | `Shift+Enter` | Edit the current cell's node marker |
 | `R` | Rename the current signal |

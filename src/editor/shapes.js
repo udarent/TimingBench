@@ -384,10 +384,13 @@ export function createShapes(ctx){
       clips.push('<clipPath id="lclip-'+l.id+'"><rect x="'+XS+'" y="'+(TOP+li*ROW_H)+'" width="'+w+'" height="'+ROW_H+'"/></clipPath>');
     });
     if(clips.length) o.push('<defs>'+clips.join('')+'</defs>');
+    // 行范围（分组用）：范围内的行一起高亮，看上去是「一段」而不是单选一行
+    var spanSet={};
+    (state.selRows||[]).forEach(function(id){ spanSet[id]=1; });
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*ROW_H;
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
-      var cellH=ROW_H-10, i, hi=state.selLane===l.id;
+      var cellH=ROW_H-10, i, hi=state.selLane===l.id||!!spanSet[l.id];
       o.push('<g class="laneGrp'+(hi?' sel':'')+'" data-lane="'+l.id+'">');
       o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(ROW_H-2)+'" rx="3" fill="'+(hi?'var(--accent-bg)':'transparent')+'" style="cursor:pointer"/>');
       if(l.kind==='spacer'){
@@ -469,8 +472,13 @@ export function createShapes(ctx){
       // bx 是括号的**起点**：钩子向右伸 5px，竖线落在 bx-5；组名放在 bx-10（与上游同值）。
       var bx=PAD+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-10;
       var brace='M'+bx+','+y0+' c -3,0 -5,2 -5,5 l 0,'+(h-10)+' c 0,3 2,5 5,5';
+      // 编辑态的可点区：整条括号高度 × 本层槽位宽（原来只有竖排名字形本身 —— 实测 15×21px，
+      // 触摸端 10×14px，手指根本点不中，等于「组只能靠源码改」）。它画在括号之前、
+      // 只做命中，不改任何视觉。
+      var hit=gEdit?'<rect class="groupHit" data-lane="'+ir.lanes[g.from].id+'" x="'+(bx-GSLOT)+'" y="'+y0+
+        '" width="'+GSLOT+'" height="'+h+'" fill="transparent" style="cursor:text"/>':'';
       o.push('<g class="groupBrace">'+
-        '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>'+
+        '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>'+hit+
         '<text class="laneGroupName"'+(gEdit?' data-act="group" data-lane="'+ir.lanes[g.from].id+'"':'')+
         ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle"'+
         ' font-size="12" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+

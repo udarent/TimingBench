@@ -115,6 +115,10 @@ export function attachTouchUI(ctx, dom) {
     delCol: '<path d="M9 5v14"/><path d="M15 9l4.5 6M20 9l-4.5 6"/>',
     gap:    '<path d="M12 5v14" stroke-dasharray="2.4 2.4"/>',
     append: '<path d="M9 5v14"/><path d="M14 12h6.5M17.25 8.75v6.5"/>',
+    // 分组三件套：花括号 + 行线 / 范围向外推一行的箭头（画成「范围在长」而不是「行在动」）
+    group:  '<path d="M8 4c-2.2 0-3 1-3 3v10c0 2 .8 3 3 3"/><path d="M12 8h8M12 12h8M12 16h8"/>',
+    spanUp: '<path d="M4 20h16"/><path d="M12 16V7M8 11l4-4 4 4"/>',
+    spanDown:'<path d="M4 4h16"/><path d="M12 8v9M8 13l4 4 4-4"/>',
     link:   '<circle cx="6.5" cy="12" r="2.6"/><circle cx="17.5" cy="12" r="2.6"/><path d="M9.1 12h5.8"/>'
   };
   var ICON_KEY = { delete: 'delCol' };
@@ -124,6 +128,7 @@ export function attachTouchUI(ctx, dom) {
     phase: 'phase', period: 'period', up: 'move up', down: 'move down', add: 'add row',
     spacer: 'add spacer', del: 'delete row',
     insert: 'insert cycle', delete: 'delete cycle', gap: 'phase line', append: 'append cycle',
+    group: 'group rows', spanUp: 'extend row range up', spanDown: 'extend row range down',
     link: 'connect two nodes (wire)'
   };
   // 动作清单来自 cap.js 的 ACTS —— 与桌面行工具 / 列操作是同一份，避免「面板里少一个
@@ -163,6 +168,15 @@ export function attachTouchUI(ctx, dom) {
         return;
       case 'add': case 'spacer': case 'del':
         l = needLane(); if (l) ctx.handleTool(k, l); return;
+      // 分组：group 打开组名输入（作用于当前行范围），spanUp / spanDown 把范围向外推一行
+      case 'group':
+        if (!needLane()) return;
+        if (ctx.openGroupEditor) ctx.openGroupEditor();
+        return;
+      case 'spanUp': case 'spanDown':
+        if (!needLane()) return;
+        if (ctx.extendSpan) ctx.extendSpan(k === 'spanUp' ? -1 : 1);
+        return;
       case 'insert': case 'delete': case 'gap':
         c = needCol(); if (c === null) return;
         n = state.ir.ticks;

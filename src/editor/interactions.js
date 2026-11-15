@@ -84,6 +84,7 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('laneGroupName')) return {group:ln};
+        if(g.classList&&g.classList.contains('groupHit')) return {group:ln};
         if(g.classList&&g.classList.contains('colhead')) return {col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('laneName')) return {nameLane:ln};
         if(g.classList&&g.classList.contains('cell')) return {lane:ln,tick:+g.getAttribute('data-tick')};
@@ -309,17 +310,61 @@ export function attachInteractions(ctx){
   // 括号只显示「本层」的组名（与上游一致），但编辑的是**整条路径**：`regroup` 的 `old`
   // 要按完整路径精确匹配，否则嵌套组的改名 / 取消会落空（点外层 `Outer` 却改不动
   // `Outer/Inner` 的那几行）。
+  // 组名的两种入口，同一个 EditOp：
+  //   · 点左侧括号旁的竖排组名（传 laneId）—— 改**整组**：所有 groupPath 等于该完整路径的行
+  //     一起改（含 spacer）。括号只显示本层名字，但编辑的是整条路径，嵌套组的改名 / 取消才落得准。
+  //   · 行上下文条的「组」动作（不传参数）—— 改**当前行范围**：把这一段设成同一个路径，
+  //     这就是「从 0 建组」与「扩 / 缩组」的唯一入口（范围是 1 行时就是单行归组）。
+  // 输入框里可用 `/` 直接写嵌套；清空 = 退出到父路径（嵌套组退一级；顶层则完全解散）。
   function openGroupEditor(laneId){
-    var el=wrap.querySelector('.laneGroupName[data-lane="'+laneId+'"]');
-    if(!el) return;
-    var lane=null;
-    if(state.ir) state.ir.lanes.forEach(function(l){ if(l.id===laneId) lane=l; });
-    if(!lane||!lane.groupPath.length) return;
-    var full=lane.groupPath.join('/');
-    openInline(el,full,function(v){
-      var path=String(v).split('/').map(function(s){return s.trim();}).filter(function(s){return s.length;});
-      ctx.commit({t:'regroup',old:full,path:path},'regroup ['+full+'] -> '+(path.join('/')||'(none)'));
-    },{ title:'group name (use / to nest, empty to ungroup)', placeholder:'group', width:150 });
+    var el, prefill, target;
+    if(laneId!==undefined){
+      el=wrap.querySelector('.laneGroupName[data-lane="'+laneId+'"]');
+      var lane=null;
+      if(state.ir) state.ir.lanes.forEach(function(l){ if(l.id===laneId) lane=l; });
+      if(!lane||!lane.groupPath.length) return;
+      prefill=lane.groupPath.join('/');
+      target={old:prefill};
+    } else {
+      var span=ctx.spanLanes?ctx.spanLanes():[];
+      if(!span.length||!state.ir) return;
+      // 输入框贴在被选范围的首行行名上（没有行名时贴画布左上）
+      el=wrap.querySelector('text.laneName[data-lane="'+span[0].id+'"]')||wrap.querySelector('svg');
+      // 预填：整段共同路径（都在同一组里就是该组名，混选则留空）
+      prefill=commonPath(span.map(function(l){ return l.groupPath; }));
+      target={lanes:span.map(function(l){ return l.id; })};
+    }
+    openInline(el,prefill,function(v){
+      var parts=String(v).split('/').map(function(x){return x.trim();}).filter(function(x){return x.length;});
+      // 清空输入 = 退出到父路径（不是清光）：嵌套组退一级才符合「移出这一层」的直觉，
+      // 顶层组清空即完全解散。规则只有一条 —— 取目标行里最浅的路径，砍掉最后一段。
+      var path=parts.length?parts:parentPathOf(target);
+      var op=target.old!==undefined?{t:'regroup',old:target.old,path:path}:{t:'regroup',lanes:target.lanes,path:path};
+      var label=(target.old!==undefined?'regroup ['+target.old+']':'group '+target.lanes.length+' row(s)')+
+        ' -> '+(path.join('/')||'(none)');
+      ctx.commit(op,label);
+    },{ title:'group path (use / to nest, empty to move out of this group)', placeholder:'group', width:160 });
+  }
+  // 目标行的「父路径」：取其中最短的路径砍掉最后一段（混选里有未归组的行 → 直接空）
+  function parentPathOf(target){
+    var depth=99, first=null;
+    state.ir.lanes.forEach(function(l){
+      var hit=target.lanes?target.lanes.indexOf(l.id)>=0:l.groupPath.join('/')===target.old;
+      if(!hit) return;
+      if(!first) first=l;
+      depth=Math.min(depth,l.groupPath.length);
+    });
+    return first?first.groupPath.slice(0,Math.max(0,depth-1)):[];
+  }
+  // 一段行的共同分组路径（最长公共前缀）；不共享任何一段就返回空串
+  function commonPath(paths){
+    if(!paths.length) return '';
+    var out=paths[0].slice();
+    paths.forEach(function(p){
+      var n=0; while(n<out.length&&n<p.length&&out[n]===p[n]) n++;
+      out=out.slice(0,n);
+    });
+    return out.join('/');
   }
 
   // 就地编辑的唯一入口：双击（桌面）/ 双敲 / 长按（触摸）都走这里
@@ -417,8 +462,10 @@ export function attachInteractions(ctx){
     if(!c){
       // 点到画布空白 = 清掉选中。四场景一致：桌面本来有 Esc，触摸端没有键盘 ——
       // 这条手势就是触摸端唯一的「取消选中」，让底部动作行（#tbpanel）成为唯一的上下文入口。
-      if(state.selCell||state.selLane||(state.sel!==null&&state.sel!==undefined)){
-        state.selCell=null; state.sel=null; state.selLane=null; ctx.redraw();
+      if(state.selCell||state.selLane||state.selRows||(state.sel!==null&&state.sel!==undefined)){
+        state.selCell=null; state.sel=null; state.selLane=null;
+        if(ctx.clearSpan) ctx.clearSpan();
+        ctx.redraw();
       }
       return;
     }
@@ -459,10 +506,19 @@ export function attachInteractions(ctx){
       // 仍停在「格级动作」上，因为 renderContext 的优先级是 格 > 列 > 行）。0.9.12 修行
       // 分支时漏了这一处，同一个 `if(TOUCH)` 的残留。
       state.selCell=null; state.selLane=null;
+      if(ctx.clearSpan) ctx.clearSpan();
       ctx.redraw(); ctx.status(); return;
     }
     if(c.nameLane||c.rowLane){
-      state.selLane=c.nameLane||c.rowLane;
+      // Shift + 点行名 = 从当前行（锚点）扩到这一行，得到一段连续行范围。
+      // 分组按「一段连续行」表达，这是桌面上表达范围的第二个入口（键盘是 Shift+↑/↓）。
+      var rowId=c.nameLane||c.rowLane;
+      if(e.shiftKey&&state.selLane&&state.selLane!==rowId&&ctx.setRowSpan){
+        ctx.setRowSpan(state.selLane,rowId,state.selLane);
+        state.selCell=null; state.sel=null; ctx.redraw(); return;
+      }
+      state.selLane=rowId;
+      if(ctx.clearSpan) ctx.clearSpan();
       // 行选中与格 / 列选中互斥 —— 四场景一致。桌面现在也靠上下文条改行列（行工具与
       // 列头按钮已撤），若不清掉 selCell，renderContext 会因「有格子选中」而把面板收起来，
       // 表现为「点了行但右侧面板不出现」。
@@ -774,11 +830,19 @@ export function attachInteractions(ctx){
     var k=e.key;
     // Esc 逐层退出：就地编辑框 → 选中（本节）→ 编辑态（embed-shell 那一层）。
     // 这一层必须 stopPropagation，否则一次 Esc 同时清选中又退出编辑，用户分不清发生了什么。
-    if(k==='Escape'&&(state.selCell||state.selLane||state.sel!==null&&state.sel!==undefined)){
+    if(k==='Escape'&&(state.selCell||state.selLane||state.selRows||state.sel!==null&&state.sel!==undefined)){
       prevent(e); e.stopPropagation();
       state.selCell=null; state.selLane=null; state.sel=null;
+      if(ctx.clearSpan) ctx.clearSpan();
       if(ctx.closeCharDock) ctx.closeCharDock();
       ctx.redraw(); return;
+    }
+    // Shift+↑/↓ = 把行范围向外推一行。必须放在 ensureSel 之前：ensureSel 在「没有选中格」
+    // 时会补一个格子并改写 selLane，放到后面就会拿被改写的行当锚点（实测从第 1 行开始扩）。
+    if(e.shiftKey&&(k==='ArrowUp'||k==='ArrowDown')&&ctx.extendSpan){
+      if(!state.selLane){ var f0=ensureSel(); if(f0) state.selLane=f0.lane; }
+      ctx.extendSpan(k==='ArrowUp'?-1:1);
+      return;
     }
     var sc=ensureSel(); if(!sc||!state.ir) return;
     var ctrl=e.ctrlKey||e.metaKey;
@@ -819,12 +883,14 @@ export function attachInteractions(ctx){
   ctx.openNodeEditor=openNodeEditor;
   ctx.openEdgeEditor=openEdgeEditor;
   ctx.openInlineFor=openInlineFor;
+  ctx.openGroupEditor=openGroupEditor;
   ctx.openEditorFor=openEditorFor;
   ctx.handleTool=handleTool;
   ctx.handleColAct=handleColAct;
   ctx.cancelModes=function(){
     state.connect=null; state.linkMode=false; state.linkCursor=null;
     state.selCell=null; state.sel=null; state.selLane=null;
+    if(ctx.clearSpan) ctx.clearSpan();
     ctx.painting=null; ctx.closeInline(false); ctx.redraw();
   };
 }
