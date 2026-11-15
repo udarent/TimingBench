@@ -165,6 +165,9 @@ export function attachInteractions(ctx){
     if(state.phaseEdit) closePhaseEdit(true);
     // pushed：本次会话推了几步撤销；redo0：打开时的重做栈快照（取消时要还原）
     state.phaseEdit={lane:laneId, orig:l.phase, pending:null, pushed:0, redo0:state.redo.slice()};
+    // 尺子开着时画布不许原生平移（理由见 styles.css 的 `.svgwrap.is-ruler`）：不加这一条，
+    // 触摸拖动会被浏览器的滚动仲裁判成平移，一次 pointercancel 就把手势截断。
+    if(wrap.classList) wrap.classList.add('is-ruler');
     state.selLane=laneId; state.selCell=null; state.sel=null;
     if(ctx.clearSpan) ctx.clearSpan();
     ctx.redraw();
@@ -185,6 +188,7 @@ export function attachInteractions(ctx){
   function closePhaseEdit(keep){
     var pe=state.phaseEdit; if(!pe) return;
     state.phaseEdit=null;
+    if(wrap.classList) wrap.classList.remove('is-ruler');
     var l=findLane(pe.lane);
     if(l&&l.phase!==pe.orig){
       if(keep) flushPhaseStep();
@@ -206,6 +210,11 @@ export function attachInteractions(ctx){
   // 按下即定位（滑块语义），之后按住拖动连续改；两者共用「指针 x → 相位」这一个换算
   function startPhaseDrag(e){
     var v=phaseValueAt(e.clientX); if(v===null) return false;
+    // 触摸 / 笔有「隐式指针捕获」：后续 pointermove 会认准按下时那个元素。而尺子每帧重绘会
+    // 把那个元素换掉（wrap.innerHTML 整块重建）—— 捕获目标一旦脱离文档，move / up 就既不投递
+    // 也不冒泡，表现为 **点一下跳过去、后面怎么拖都不动**（Android 实测，鼠标没有隐式捕获所以桌面正常）。
+    // 改成捕获在 wrap 上：它不参与重绘，整段手势的坐标都还能收到。
+    try{ if(e.pointerId!==undefined&&wrap.setPointerCapture) wrap.setPointerCapture(e.pointerId); }catch(err){}
     ctx.phaseDrag=true; applyPhase(v); return true;
   }
   function movePhaseDrag(e){
@@ -796,7 +805,11 @@ export function attachInteractions(ctx){
   }
   document.addEventListener('pointerup',endPointer);
   document.addEventListener('pointercancel',function(e){
-    if(e.pointerType!=='mouse'){ clearLong(); press=null; ctx.phaseDrag=false; }
+    if(e.pointerType==='mouse') return;
+    clearLong(); press=null;
+    // 手势被系统 / 浏览器收走（来电话、系统手势、仍有滚动仲裁漏网）：值保留、但必须把这一串
+    // 收成**一步撤销** —— 只是 `phaseDrag=false` 会让这次改动永远进不了撤销栈。
+    if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
   });
 
   // 没有 Pointer Events 的老浏览器：用 touch 事件回退，命中点交给 elementFromPoint

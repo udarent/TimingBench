@@ -558,6 +558,22 @@ export function createShapes(ctx){
         var pkn=T?Math.min(26,Math.max(12,Math.round(16/(state.fit||1)))):9;
         pgo.push('<rect class="phaseKnob" x="'+(pthx-pkn/2)+'" y="'+(pty+pth/2-pkn/2)+'" width="'+pkn+
           '" height="'+pkn+'" rx="2" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/>');
+        // 触摸端在尺子右端标出**当前值**：一行 4 个周期在小卡片上会被等比缩到 30 多 px，
+        // 0.1 与 0.2 只差 3~4 px，光看波形分不出来（实测用户反馈「0.1 和 0.2 没区别」）。
+        // 数字按「约 12 物理像素」反算字号，缩放后仍然读得清；桌面端行名旁本来就有 φ 值，
+        // 这里不再画第二份（那也保证了桌面渲染零变化）。
+        if(T){
+          var pfs=Math.min(22,Math.max(11,Math.round(12/(state.fit||1))));
+          var ptx0=String(+pcur.toFixed(2)), ptw2=Math.round(pfs*0.62*ptx0.length+11);
+          // 值放在尺子右端，并垫一块不透明底衬 —— 尺子下面就是波形（阴影 / 总线块 / 数据标签），
+          // 直接压字读不清（首版实测：φ0.1 落在斜线填充上）。
+          pgo.push('<rect x="'+(XS+ptw-6-ptw2)+'" y="'+(pty+pth/2-pfs*0.78)+'" width="'+ptw2+
+            '" height="'+(Math.round(pfs*1.56))+'" rx="3" fill="var(--panel)" stroke="var(--accent)"'+
+            ' stroke-opacity="0.35" stroke-width="0.6" pointer-events="none"/>');
+          pgo.push('<text class="phaseValue" x="'+(XS+ptw-6-ptw2/2)+'" y="'+(pty+pth/2)+'" text-anchor="middle"'+
+            ' dominant-baseline="central" font-size="'+pfs+'" fill="var(--accent)" pointer-events="none">φ'+
+            ptx0+'</text>');
+        }
         // 命中区最后画：它才是这次手势的目标（class 精确为 phaseTrack，交互层靠它认）
         pgo.push('<rect class="phaseTrack" data-lane="'+l.id+'" data-maxv="'+pmax+'" x="'+XS+'" y="'+pty+
           '" width="'+ptw+'" height="'+pth+'" fill="transparent" style="cursor:ew-resize"/>');
