@@ -328,7 +328,7 @@ export function attachInteractions(ctx){
       var names=wrap.querySelectorAll('.laneGroupName');
       for(var gi=0;gi<names.length;gi++){ if(names[gi].getAttribute('data-group')===groupPath){ el=names[gi]; break; } }
       if(!el) return;
-      var segs=String(groupPath).split('/').filter(function(x){ return x.length; });
+      var segs=String(groupPath).split('/');
       prefill=groupPath;
       // base = 这一层（`/名字` 挂在它下面）；bareBase = 父层（裸名字 = 就地改名）
       target={old:prefill, base:segs, bareBase:segs.slice(0,-1)};
@@ -362,14 +362,12 @@ export function attachInteractions(ctx){
   //              否则用户想「在 b 下加 c」，结果整组被搬出 a，还把父组劈成两段同名括号。
   function resolveGroupPath(raw,base,bareBase){
     var s=String(raw===undefined||raw===null?'':raw).trim();
-    function split(x){ return x.split('/').map(function(p){ return p.trim(); }).filter(function(p){ return p.length; }); }
-    if(!s) return base.slice(0,Math.max(0,base.length-1));
-    var parts=split(s);
-    if(!parts.length) return base.slice(0,Math.max(0,base.length-1));
-    if(s.charAt(0)==='/') return base.concat(parts);
-    if(parts.length===1) return bareBase.concat(parts);
-    if(base.length && parts[0]===base[base.length-1]) return base.concat(parts.slice(1));
-    return parts;
+    var parts=s.split('/').map(function(p){ return p.trim(); }).filter(function(p){ return p.length; });
+    if(!parts.length) return base.slice(0,-1);                       // 空（或只有 /）= 退出这一层
+    if(s.charAt(0)==='/') return base.concat(parts);                 // /c = 在本层下加一层
+    if(parts.length===1) return bareBase.concat(parts);              // 裸名字
+    if(base.length && parts[0]===base[base.length-1]) return base.concat(parts.slice(1));   // b/c → a/b/c
+    return parts;                                                   // 完整路径
   }
   // 一段行的最长公共分组前缀（数组）；不共享任何一段就是空数组
   function commonPath(paths){

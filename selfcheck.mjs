@@ -571,7 +571,7 @@ function check() {
   ok(/function resolveGroupPath\(raw,base,bareBase\)/.test(interSrc) &&
      /charAt\(0\)==='\/'/.test(interSrc) &&
      /parts\[0\]===base\[base\.length-1\]/.test(interSrc) &&
-     /base\.slice\(0,Math\.max\(0,base\.length-1\)\)/.test(interSrc) &&
+     /return base\.slice\(0,-1\);/.test(interSrc) &&
      !/parentPathOf|caretEnd/.test(interSrc) && /inp\.select\(\)/.test(interSrc),
     '组路径输入语义被改回去了（/名字加层 / 首段纠偏 / 清空退一层 / 输入框全选，四项缺一不可）');
 
