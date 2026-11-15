@@ -501,8 +501,10 @@ function check() {
   const gestureSrc = read('src/editor/interactions.js');
   ok(/function confirmTap\(/.test(gestureSrc) && /press=\{x:/.test(gestureSrc),
     '触摸端缺少 tap 确认模型（按下只记候选，抬手才执行）');
-  ok(/if\(press&&\(Math\.abs\(\(e\.clientX\|\|0\)-press\.x\)>12/.test(gestureSrc),
-    '触摸端滑动超过 12px 未作废候选 tap');
+  // 判据看**行为**不看字面量写法：两轴都要有 12px 容差，且越线时同时作废 tap 候选与长按计时。
+  ok(/Math\.abs\(cx-press\.x\)>12\|\|Math\.abs\(cy-press\.y\)>12/.test(gestureSrc) &&
+     /press=null; clearLong\(\);/.test(gestureSrc),
+    '触摸端滑动超过 12px 未作废候选 tap（或只判了一个轴）');
   ok(/if\(!x&&!y\)\{ x=p\.x; y=p\.y; \}/.test(gestureSrc),
     '抬手事件缺坐标时未回退到按下坐标（会把正常点按误判为滑动）');
   // 触摸后浏览器补发的兼容鼠标事件必须按「来源」判断，不能只靠时间窗：

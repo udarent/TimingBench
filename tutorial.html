@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.14.1">
+<meta name="version" content="0.14.2">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -198,7 +198,9 @@
     every character of that row and is edited as a number. The numbered ruler above still counts reference periods, so a
     <code>period: 2</code> row spans two ruler columns per character. On a phone the whole picture is scaled
     down, so drag the ruler and watch the <code>&phi;</code> badge on it (or pinch to zoom in first) — a tenth of a
-    period is only a few pixels wide.</p>
+    period is only a few pixels wide. On touch, where a drag lands is what decides: on the ruler it moves the
+    phase, anywhere else it pans the view, and a second finger always pans (undoing the phase nudge of that
+    same gesture).</p>
   </section>
 
   <section class="step">

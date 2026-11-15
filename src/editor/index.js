@@ -276,6 +276,7 @@ export function createEditor(dom){
     if(on){
       state.selCell=null; state.sel=null; state.selLane=null;
       state.linkMode=false; state.connect=null; state.linkCursor=null;
+      if(ctx.closePhaseEdit) ctx.closePhaseEdit(true);   // 尺子是编辑态的东西，不能留在只读卡片上
       if(ctx.inlineCtx) ctx.closeInline(true);
       if(ctx.closePanel) ctx.closePanel();
       if(ctx.hideToast) ctx.hideToast();

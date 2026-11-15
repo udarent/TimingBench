@@ -454,8 +454,16 @@ export function createShapes(ctx){
       }
       // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉。
       // 分组名不再挂在行名后面：它画在左侧括号旁（竖排，见下面的 groupRuns 渲染）。
-      var meta=can('laneMeta')?'<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
-        '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>':'';
+      // φ / T 徽标：桌面是「点一下就能改」的入口；触摸端只画不接事件 —— 那两个字形乘完缩放
+      // 只有 8~10px，手指点不准，却紧贴行名：点行名想选中，一偏就进了相位尺，紧接着的拖动
+      // 就变成改相位（与「移动视图」抢同一个手势）。触摸端改相位 / 周期走底部上下文条的大按钮。
+      var meta='';
+      if(can('laneMeta')){
+        var phAct=T?'':' data-act="phase" data-lane="'+l.id+'"';
+        var prAct=T?'':' data-act="period" data-lane="'+l.id+'"';
+        meta='<tspan class="laneMeta"'+phAct+' font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
+             '<tspan class="laneMeta"'+prAct+' font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
+      }
       // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+

@@ -93,7 +93,9 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('rowTool')) return {tool:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
-        if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
+        // 只有带 data-act 的徽标才是可点入口（触摸端不接线，见 shapes.js）：否则落到外层行名上，
+        // 一次「想选中这一行」的轻点不会顺手打开相位尺。
+        if(g.classList&&g.classList.contains('laneMeta')&&g.getAttribute('data-act')) return {meta:g.getAttribute('data-act'),lane:ln};
         if(g.classList&&g.classList.contains('phaseTrack')) return {phaseTrack:ln};
         // 组名 / 括号命中区只认「这一层的路径」—— 行 id 在这里没用（行的 groupPath 是它自己的最深层）
         if(g.classList&&(g.classList.contains('laneGroupName')||g.classList.contains('groupHit')))
@@ -215,6 +217,10 @@ export function attachInteractions(ctx){
     // 也不冒泡，表现为 **点一下跳过去、后面怎么拖都不动**（Android 实测，鼠标没有隐式捕获所以桌面正常）。
     // 改成捕获在 wrap 上：它不参与重绘，整段手势的坐标都还能收到。
     try{ if(e.pointerId!==undefined&&wrap.setPointerCapture) wrap.setPointerCapture(e.pointerId); }catch(err){}
+    // 记下这次手势**开始前**的值：手势被改判成「移动视图」时要能原地撤回，
+    // 否则两根手指一落下就把相位改了 —— 那正是要消灭的误操作。
+    var l0=findLane(state.phaseEdit&&state.phaseEdit.lane);
+    if(state.phaseEdit) state.phaseEdit.gest0=l0?l0.phase:0;
     ctx.phaseDrag=true; applyPhase(v); return true;
   }
   function movePhaseDrag(e){
@@ -480,6 +486,9 @@ export function attachInteractions(ctx){
   // 就地编辑的唯一入口：双击（桌面）/ 双敲 / 长按（触摸）都走这里
   function openEditorFor(c){
     if(!c) return;
+    // 长按是绕开 dispatchTarget 进来的，尺子不会被自动收下 —— 两种编辑态并存会让「拖哪儿改什么」
+    // 变得不可预测。就地编辑开始前先结算尺子（值保留）。
+    if(state.phaseEdit) closePhaseEdit(true);
     var snap={lane:c.lane,tick:c.tick,nameLane:c.nameLane,edgeIdx:c.edgeIdx,group:c.group};
     if(!(snap.nameLane||snap.edgeIdx!==undefined||snap.group!==undefined||(snap.lane!==undefined&&snap.tick!==undefined))) return;
     ctx.painting=null; state.connect=null;
@@ -753,21 +762,83 @@ export function attachInteractions(ctx){
     return { target:e.target, button:0, detail:0, clientX:e.clientX||0, clientY:e.clientY||0,
              preventDefault:function(){} };
   }
+
+  // ---- 触摸端：把「移动视图」与「改相位」彻底分开 -------------------------------
+  // 尺子开着时容器退出了原生平移（见 styles.css 的 `.is-ruler`），否则拖动会被浏览器的滚动仲裁
+  // 截断（0.14.1）。代价是这一段手势期间「一根手指拖别处」不再有原生滚动 —— 但用户拖别处的本意
+  // 就是移动视图，所以这里**手写平移**把它补回来。规则只有一条，起点定身份：
+  //   · 起点在尺子上        → 改相位（单指）；|dy| 明显大于 |dx| 时改判为移动视图
+  //   · 起点不在尺子上      → 移动视图（并把尺子收下，与点别处一致）
+  //   · 第二根手指落下      → 一律移动视图（相位手势就地收成一步撤销）
+  // 于是「平移」与「改相位」不再抢同一个手势，也不会有拖动无反应的死手势。
+  var tPts={}, tPan=null, tDown=null;   // tPts: pointerId → {x,y}；tPan: 平移锚点；tDown: 手势起点
+  function tCount(){ return Object.keys(tPts).length; }
+  function tCentroid(){
+    var ks=Object.keys(tPts); if(!ks.length) return null;
+    var sx=0, sy=0, i;
+    for(i=0;i<ks.length;i++){ sx+=tPts[ks[i]].x; sy+=tPts[ks[i]].y; }
+    return { x:sx/ks.length, y:sy/ks.length };
+  }
+  function tPanStart(){
+    var c=tCentroid(); if(!c) return;
+    tPan={ x:c.x, y:c.y, left:wrap.scrollLeft, top:wrap.scrollTop };
+  }
+  function tPanMove(){
+    if(!tPan) return false;
+    var c=tCentroid(); if(!c) return false;
+    wrap.scrollLeft=tPan.left-(c.x-tPan.x);
+    wrap.scrollTop =tPan.top -(c.y-tPan.y);
+    return true;
+  }
+  function tDropPoint(id){ delete tPts[id]; if(!tCount()){ tPan=null; tDown=null; } }
+  // 从「改相位」切到「移动视图」：把**本次手势**改出来的值撤回去（用户改主意了，这一步不算编辑），
+  // 然后以当前位置重新起锚。以前这里是「值留下、收成一步撤销」—— 两指平移一落下就把相位改了，
+  // 属于典型的误操作。
+  function tHandOffToPan(){
+    var pe=state.phaseEdit, l=pe&&findLane(pe.lane);
+    if(pe&&l&&pe.gest0!==undefined&&l.phase!==pe.gest0){
+      ctx.commit({t:'setPhase',lane:pe.lane,v:pe.gest0},'phase',true,true);
+      pe.pending=null;                       // 净变化为零，撤销栈里不留这一步
+    }
+    ctx.phaseDrag=false;
+    tPanStart();
+  }
+
   wrap.addEventListener('pointerdown',function(e){
     if(e.pointerType==='mouse') return;
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
     if(e.isTrusted) ignoreMouseUntil=Date.now()+800;
+    var id=e.pointerId||0, cx=e.clientX||0, cy=e.clientY||0;
+    tPts[id]={ x:cx, y:cy };
+    if(tCount()===1) tDown={ x:cx, y:cy };
+    // 第二根手指落下：不管理由都算「我要移动视图」——正在拖的尺子就地收下（值保留、一步撤销）
+    if(tCount()>=2){ tHandOffToPan(); return; }
     handleDown(pointerShim(e),true);
   });
   wrap.addEventListener('pointermove',function(e){
     if(e.pointerType==='mouse') return;
-    if(movePhaseDrag(e)) return;
+    var id=e.pointerId||0, cx=e.clientX||0, cy=e.clientY||0;
+    if(tPts[id]){ tPts[id].x=cx; tPts[id].y=cy; }
+    if(tPan){ tPanMove(); return; }
+    if(tCount()>=2){ tHandOffToPan(); return; }
+    // 正在拖尺子：竖向为主就等于「想上下看」，改判成移动视图，别把竖向手势卡成没反应
+    if(ctx.phaseDrag){
+      if(tDown&&Math.abs(cy-tDown.y)>14&&Math.abs(cy-tDown.y)>Math.abs(cx-tDown.x)*1.5){
+        tHandOffToPan(); tPanMove(); return;
+      }
+      movePhaseDrag(e);
+      return;
+    }
     // 手指移动超过 12px 就判定为「滑动看图」（pan）：作废候选 tap 与长按计时，
     // 本次手势不产生任何选中 / 弹出 / 编辑 —— 这是「移动 vs 编辑」的分界线。
-    if(press&&(Math.abs((e.clientX||0)-press.x)>12||Math.abs((e.clientY||0)-press.y)>12)){
+    if(press&&(Math.abs(cx-press.x)>12||Math.abs(cy-press.y)>12)){
       press=null; clearLong();
+      // 尺子开着时画布没有原生滚动可依赖（`.is-ruler` 把 touch-action 关掉了），
+      // 这次拖动由我们接手成平移，并顺手把尺子收下 —— 与「点别处」同一个结果。
+      // 注意：只有这一支才 return；其余情况要继续往下走，否则连线模式的跟手预览会断。
+      if(state.phaseEdit){ closePhaseEdit(true); tPanStart(); tPanMove(); return; }
     }
-    if(longPress&&(Math.abs((e.clientX||0)-longPress.x)>12||Math.abs((e.clientY||0)-longPress.y)>12)) clearLong();
+    if(longPress&&(Math.abs(cx-longPress.x)>12||Math.abs(cy-longPress.y)>12)) clearLong();
     // 触摸端也跟手画连线预览曲线：记录第一个端点后，曲线末端跟着手指走
     if(state.connect){
       var svg=svgRoot();
@@ -800,13 +871,14 @@ export function attachInteractions(ctx){
   }
   function endPointer(e){
     if(e.pointerType==='mouse') return;
+    tDropPoint(e.pointerId||0);
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
     confirmTap(e.clientX,e.clientY);
   }
   document.addEventListener('pointerup',endPointer);
   document.addEventListener('pointercancel',function(e){
     if(e.pointerType==='mouse') return;
-    clearLong(); press=null;
+    clearLong(); press=null; tDropPoint(e.pointerId||0);
     // 手势被系统 / 浏览器收走（来电话、系统手势、仍有滚动仲裁漏网）：值保留、但必须把这一串
     // 收成**一步撤销** —— 只是 `phaseDrag=false` 会让这次改动永远进不了撤销栈。
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
