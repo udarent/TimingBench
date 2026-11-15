@@ -50,6 +50,10 @@ var CHIP_W=G.CHIP_W;
   function waveGlyph(ch,prev,X,T,M,B,W,opt){
     var o=[], x1=X+W, o2=opt||{}, ax=o2.arrowX===undefined?X:o2.arrowX;
     var px=X+3, ex=X+Math.min(W*0.24,9);
+    // 认不出的字符按 `x`（未定义）画：源码里可能有我们没建模的写法（老版本 / 手改的笔误）。
+    // 以前它会落进最后一条分支、按 waveLevel 的兜底画成一条**中位实线** —— 看起来像一条
+    // 正常信号，等于把「这里有东西我没懂」伪装成了「这里是合法的零电平」。斜线填充才是诚实的。
+    if(!(Core.BUS.test(ch)||Core.CLOCK.test(ch)||/[01xzud]/.test(ch))) ch='x';
     if(Core.BUS.test(ch)){
       // 段的左右两侧要不要画斜边，由「相邻格是否延续」决定（`=` 与 `.` 都是延续符）：
       //   only  独立一段 → 左右都斜
@@ -73,11 +77,6 @@ var CHIP_W=G.CHIP_W;
       if(!lj) bd+=' M'+X+','+M+' L'+(X+3)+','+T+' M'+X+','+M+' L'+(X+3)+','+B;
       if(!rj) bd+=' M'+(x1-3)+','+T+' L'+x1+','+M+' L'+(x1-3)+','+B;
       o.push('<path class="waveBusInk" d="'+bd+'"/>');
-      var lb=o2.label;
-      if(lb!==null&&lb!==undefined&&lb!==''){
-        var txt=String(lb);
-        o.push('<text class="waveLabel" x="'+(X+W/2)+'" y="'+(M+1)+'" text-anchor="middle" dominant-baseline="central">'+esc(txt.length>5?txt.slice(0,4)+'…':txt)+'</text>');
-      }
     } else if(Core.CLOCK.test(ch)){
       // 时钟 / 半周期状态的**边沿要不要画**，取决于上一个字符收在哪条轨上（上游 xclude 的语义）：
       // 已经停在目标电平上就只画平段，否则才画那条起沿。少了这一步，`hp` / `pl` 这类连续
@@ -111,6 +110,24 @@ var CHIP_W=G.CHIP_W;
   // 段内所有格共用「段首字符」的 bus 配色：`.` 与 `=` 是延续符，自己没有颜色
   function busClassOf(ch){ return BUS_CLASS[ch]||'bus2'; }
 
+  // 数据标签按**可用宽度**截断。不调 getBBox：每加一个标签就强制一次布局，行数一多就卡。
+  // 字符级估算够用（CJK / 全角按 1em，其余按 0.56em —— 10px 字号下即 10 / 5.6px），
+  // 而标签只需要「不越过段的边界」，留 4px 余量就能兜住误差。
+  function charEm(ch){
+    return /[\u2e80-\u9fff\u3000-\u303f\uf900-\ufaff\uff00-\uff60\uffe0-\uffe6]/.test(ch)?1:0.56;
+  }
+  function fitLabel(text, room, size){
+    var s=String(text===null||text===undefined?'':text);
+    if(!s) return '';
+    var em=size||10, w=0, i=0, c;
+    for(;i<s.length;i++){ c=charEm(s[i])*em; if(w+c>room) break; w+=c; }
+    if(i>=s.length) return s;                 // 整串放得下
+    var budget=room-charEm('…')*em;           // 放不下：先给省略号留位
+    w=0;
+    for(i=0;i<s.length;i++){ c=charEm(s[i])*em; if(w+c>budget) break; w+=c; }
+    return (s.slice(0,i)||s.charAt(0))+'…';
+  }
+
   // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph
   function chipGlyph(v){ return waveGlyph(v,null,0,TOUCH?7:5,TOUCH?22:13,TOUCH?37:21,CHIP_W,{arrowX:3}); }
   // 字符说明只用于 aria-label（视觉上不再出现 tooltip）。英文是首选语言。
@@ -125,4 +142,4 @@ var CHIP_W=G.CHIP_W;
       'u':'pull-up (dashed high)','d':'pull-down (dashed low)'}[v]||'wave character';
   }
 
-export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf };
+export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, fitLabel };

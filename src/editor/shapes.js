@@ -1,15 +1,18 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G, lanePeriod, laneShift, laneChars, cellGeo, PHASE_MAX } from './geometry.js';
+import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import { EMBED } from './embed.js';
 import * as Cap from './cap.js';
-import { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf } from './waveform.js';
+import { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, fitLabel } from './waveform.js';
 
 var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元里的 T 是上沿 y 坐标，已移到 waveform.js）
-var CELL=G.CELL, NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
+// 基准格宽（桌面 38 / 触摸 48）。文档里的 config.hscale 会把它乘掉，所以 CELL 是
+// **每次 redraw 现算**的：BASE_CELL 是常量，CELL 是这一帧的值。
+var BASE_CELL=G.CELL, CELL=BASE_CELL;
+var NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
 var COL_Y=G.COL_Y, ACT_H=G.ACT_H;
 var CHIP_W=G.CHIP_W, CHIP_H=G.CHIP_H, CHIP_STEP=G.CHIP_STEP;
 var XS=G.XS, CHIPS_W=G.CHIPS_W;
@@ -130,7 +133,10 @@ export function createShapes(ctx){
   // 只读卡片不画：没有拖拽这回事，画出来只是个不能用的点心。
 
   // 一次解析 edge 字符串：<from><shape><to> [label]
-  // shape 取教程列出的字符：`~` 曲线、`-` 水平、`|` 垂直、`+` 直角；`<` / `>` 是两端的箭头。
+  // shape 是一段**字面 token**，不是「数一数几个竖线」：`-|` 与 `|-` 是两种不同的折线
+  // （先横后竖 / 先竖后横），`-~` 与 `~-` 是两种不同的渐变曲线。上游 arc-shape.js 就是一张
+  // switch 表；我们照同一套**语义**建自己的表（路径公式是自己的，只对齐「画哪种线、箭头指向
+  // 哪一端、标签贴在哪」）。`<` / `>` 只表示两端的箭头。
   function parseEdge(s) {
     var m = /^([A-Za-z0-9_]+)([<>~\-|+]*)([A-Za-z0-9_]+)(?:\s+([\s\S]*))?$/.exec(String(s).trim());
     if (!m) return null;
@@ -141,6 +147,16 @@ export function createShapes(ctx){
       shape: tok.replace(/[<>]/g, '')
     };
   }
+  // 形状表：key 是去掉箭头后的 token，值是折线种类。表里没有的写法回落 spline ——
+  // 仍然画得出来、不报错，源码也一个字不动（上游对未知形状画一条红线，那是在报错，
+  // 而这里的输入是用户手写的文本，画成看得懂的样子比画一条红线有用）。
+  var EDGE_SHAPES = {
+    '': 'spline', '~': 'spline',
+    '-': 'line',
+    '-|': 'hv', '|-': 'vh', '-|-': 'hvh',
+    '-~': 'swing1', '~-': 'swing2',
+    '+': 'tee'
+  };
   // 端点箭头：三角沿切线方向指到 tip（back/half 与旧实现一致，保证 a~>b 的 d 逐字节不变）
   function arrowTri(tip, from) {
     var ux = tip.x - from.x, uy = tip.y - from.y, ul = Math.sqrt(ux * ux + uy * uy) || 1;
@@ -150,25 +166,40 @@ export function createShapes(ctx){
     return 'M' + tip.x + ',' + tip.y + ' L' + (abx + apx * half) + ',' + (aby + apy * half) +
       ' L' + (abx - apx * half) + ',' + (aby - apy * half) + ' z';
   }
-  // 形状 → 路径。含 `~`（或空）走三次贝塞尔（控制点与旧实现一致）；其余（`-`/`|`/`+`）走正交折线：
-  // 无竖段=直线，一段横+竖=L 形，两段横=Z 形 —— 对应教程的 Splines / Sharp lines 两类。
+  // 形状 → 路径。endFrom / startFrom 是「箭头背后那一点」，给切线方向用。
   function edgePath(a, b, shape) {
-    if (shape.indexOf('~') >= 0 || shape === '') {
-      var c1x = a.x + 10, c1y = a.y - 26, c2x = b.x - 10, c2y = b.y - 26;
+    var kind = EDGE_SHAPES[shape] || 'spline';
+    var i, pts;
+    if (kind === 'spline' || kind === 'swing1' || kind === 'swing2') {
+      var dx = b.x - a.x, dy = b.y - a.y, c1, c2;
+      if (kind === 'spline') { c1 = { x: a.x + 10, y: a.y - 26 }; c2 = { x: b.x - 10, y: b.y - 26 }; }
+      // swing1（`-~`）：离开起点时贴水平，末尾俯冲到目标
+      else if (kind === 'swing1') { c1 = { x: a.x + 0.7 * dx, y: a.y }; c2 = { x: b.x - 0.05 * dx, y: b.y - 0.05 * dy }; }
+      // swing2（`~-`）：离开起点时直接下沉，末尾贴着目标水平收
+      else { c1 = { x: a.x + 0.05 * dx, y: a.y + 0.05 * dy }; c2 = { x: a.x + 0.3 * dx, y: b.y }; }
       return {
-        d: 'M' + a.x + ',' + a.y + ' C' + c1x + ',' + c1y + ' ' + c2x + ',' + c2y + ' ' + b.x + ',' + b.y,
-        endFrom: { x: c2x, y: c2y }, startFrom: { x: c1x, y: c1y }
+        d: 'M' + a.x + ',' + a.y + ' C' + c1.x + ',' + c1.y + ' ' + c2.x + ',' + c2.y + ' ' + b.x + ',' + b.y,
+        endFrom: c2, startFrom: c1, kind: kind
       };
     }
-    var vert = 0, horiz = 0, i;
-    for (i = 0; i < shape.length; i++) { if (shape[i] === '|') vert++; else horiz++; }
-    var pts = [{ x: a.x, y: a.y }];
-    if (vert === 0) pts.push({ x: b.x, y: b.y });
-    else if (horiz <= 1) { pts.push({ x: b.x, y: a.y }); pts.push({ x: b.x, y: b.y }); }
+    pts = [{ x: a.x, y: a.y }];
+    if (kind === 'line' || kind === 'tee') pts.push({ x: b.x, y: b.y });
+    else if (kind === 'hv') { pts.push({ x: b.x, y: a.y }); pts.push({ x: b.x, y: b.y }); }
+    else if (kind === 'vh') { pts.push({ x: a.x, y: b.y }); pts.push({ x: b.x, y: b.y }); }
     else { var mx = (a.x + b.x) / 2; pts.push({ x: mx, y: a.y }); pts.push({ x: mx, y: b.y }); pts.push({ x: b.x, y: b.y }); }
     var d = 'M' + pts[0].x + ',' + pts[0].y;
     for (i = 1; i < pts.length; i++) d += ' L' + pts[i].x + ',' + pts[i].y;
-    return { d: d, endFrom: pts[pts.length - 2], startFrom: pts[1] };
+    return { d: d, endFrom: pts[pts.length - 2], startFrom: pts[1], kind: kind };
+  }
+  // 标签锚点：贴着这条线的**留白处**，而不是一律「中点上方 22px」——
+  // L 形 / Z 形的中点落在竖线或拐角上，压在线上就看不清了。
+  function edgeLabelAt(a, b, kind) {
+    var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    if (kind === 'hv') return { x: b.x - 8, y: my, anchor: 'end' };
+    if (kind === 'vh') return { x: a.x + 8, y: my, anchor: 'start' };
+    if (kind === 'hvh') return { x: mx + 8, y: my, anchor: 'start' };
+    if (kind === 'line' || kind === 'tee') return { x: mx, y: my - 12, anchor: 'middle' };
+    return { x: mx, y: my - 22, anchor: 'middle' };
   }
   // 弧线：唯一「编辑 / 删除 edge」入口是双击弧线本体；清空字符串即删除
   function edgeArcs(ir) {
@@ -183,18 +214,28 @@ export function createShapes(ctx){
       var a = map[pe.from], b = map[pe.to];
       if (!a || !b) return;
       var g = edgePath(a, b, pe.shape), paths = [];
-      // 曲线本体 + 末端 / 首端箭头 + 命中带（顺序与旧实现一致：默认 a~>b 的 .edgeArc path 指纹不变）
+      // 曲线本体 + 箭头 + 命中带（顺序与旧实现一致：默认 a~>b 的 .edgeArc path 指纹不变）
       paths.push('<path d="' + g.d + '" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>');
-      var explicitArrow = pe.start || pe.end;
-      if (pe.end || !explicitArrow) paths.push('<path d="' + arrowTri(b, g.endFrom) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
+      // 箭头只按 `<` / `>` 画 —— 没有箭头就是「没有方向」，别替用户补一个：
+      // 上游 `a~b` 是一条无箭头的曲线，我们以前无条件补末端箭头，等于凭空宣布了因果方向。
+      if (pe.end) paths.push('<path d="' + arrowTri(b, g.endFrom) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
       if (pe.start) paths.push('<path d="' + arrowTri(a, g.startFrom) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
+      // `+` 是「两端各一个横杠」的接线端子（上游用 tee marker），不是箭头
+      if (g.kind === 'tee') {
+        var ux = b.x - a.x, uy = b.y - a.y, ul = Math.sqrt(ux * ux + uy * uy) || 1;
+        var nx = -uy / ul * 5, ny = ux / ul * 5;
+        paths.push('<path d="M' + (a.x - nx) + ',' + (a.y - ny) + ' L' + (a.x + nx) + ',' + (a.y + ny) +
+          ' M' + (b.x - nx) + ',' + (b.y - ny) + ' L' + (b.x + nx) + ',' + (b.y + ny) +
+          '" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>');
+      }
       // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
       paths.push('<path d="' + g.d + '" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="' + (T ? 20 : 8) + '" pointer-events="' + (state.linkMode ? 'none' : 'stroke') + '"/>');
       var inner = paths.join('');
       if (pe.label) {
-        var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 22, lw = Math.max(22, pe.label.length * 6 + 10);
-        inner += '<rect x="' + (mx - lw / 2) + '" y="' + (my - 9) + '" width="' + lw + '" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>' +
-          '<text x="' + mx + '" y="' + (my + 1) + '" text-anchor="middle" dominant-baseline="central" font-size="9" fill="var(--accent)" pointer-events="none">' + esc(cut(pe.label, 18)) + '</text>';
+        var la = edgeLabelAt(a, b, g.kind), lw = Math.max(22, pe.label.length * 6 + 10);
+        var lx = la.anchor === 'end' ? la.x - lw : la.anchor === 'start' ? la.x : la.x - lw / 2;
+        inner += '<rect x="' + lx + '" y="' + (la.y - 9) + '" width="' + lw + '" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>' +
+          '<text x="' + la.x + '" y="' + (la.y + 1) + '" text-anchor="' + la.anchor + '" dominant-baseline="central" font-size="9" fill="var(--accent)" pointer-events="none">' + esc(cut(pe.label, 18)) + '</text>';
       }
       o.push('<g class="edgeArc" data-eidx="' + i + '" role="button" aria-label="Edit edge ' + esc(String(e)) + '">' + inner + '</g>');
     });
@@ -227,6 +268,10 @@ export function createShapes(ctx){
     if(ctx.inlineCtx) ctx.closeInline(true);
     var ir=state.ir; if(!ir) return;
     SC=Cap.sceneOf(state);                       // 先定场景，后面的判据全靠它
+    // config.hscale：整条横轴按 hscale 放大（上游同款语义：字符占 period·hscale 个砖、
+    // 格线每 hscale 个砖一条）。只改格宽，行高 / 字号 / 行名区一律不动 —— 这就是
+    // 「把图拉宽」而不是「把图放大」。所有几何都从 CELL 派生，所以只在这里赋值一次。
+    CELL=G.CELL=BASE_CELL*hscaleOf(ir);
     // 只读态与编辑态共用同一套排版（格子、行高、字号、网格都不变）：只读卡片只是
     // 「少画编辑控件」，不是另一套版式。行名区宽度在这里按内容重算（两态同一算法），
     // 避免任何调用方改动过后残留旧值。
@@ -431,12 +476,11 @@ export function createShapes(ctx){
       if(clipId) o.push('<g clip-path="url(#'+clipId+')">');
       for(i=0;i<chars;i++){
         var s=i<l.slots.length?l.slots[i]:null, x0=cellGeo(l,i).x0, w=s?s.w:lastW;
-        var isPoint=s?(s.point&&!s.gap):false;
         // 上一格**实际画出来的字符**（含延续格归一化后的 w）：时钟字符要靠它判断边界处
         // 那条起沿是不是多余的。只传「最近一个显式状态点」会漏掉 `h...` / `l.` 这种
         // 延续同一电平的情况，于是每个延续格边界都多画一条竖线。
         var prevCh=i>0?wsAt(i-1):null;
-        var gopt={label:s&&isPoint?s.label:null};
+        var gopt={};
         if(Core.BUS.test(w)){
           var ljoin=i>0&&!ptAt(i)&&Core.BUS.test(wsAt(i-1));
           var rjoin=(i+1<chars)&&!ptAt(i+1)&&Core.BUS.test(wsAt(i+1));
@@ -451,6 +495,28 @@ export function createShapes(ctx){
         var rx=Math.max(x0+1,XS);
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
           ' x="'+rx+'" y="'+(y+3)+'" width="'+Math.max(1,x0+cw-1-rx)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
+      }
+      // ---- bus 段标签 ----------------------------------------------------
+      // 一个**连续段**只画一条标签，画在段中心。上游就是这么定位的：`findLaneMarkers` 在每个
+      // v-brick 连续段上取一个 marker，标签按 marker 顺序排。按格画会犯两个错：`=` 后接 `.`
+      // 的段，标签偏在段首（默认示例里 `data` 就偏了整整一格）；长标签又因为只按**一格**宽
+      // 估算而被无谓截断（明明整段有三四格的空位）。截断改为按段的实际像素宽算。
+      var run=0;
+      while(run<chars){
+        if(!Core.BUS.test(wsAt(run))){ run++; continue; }
+        var runEnd=run;
+        while(runEnd+1<chars && Core.BUS.test(wsAt(runEnd+1)) && !ptAt(runEnd+1)) runEnd++;
+        var lb=null;
+        for(var q=run;q<=runEnd;q++){
+          var sq=l.slots[q];
+          if(sq&&sq.point&&!sq.gap&&sq.label!==null&&sq.label!==undefined&&sq.label!==''){ lb=sq.label; break; }
+        }
+        if(lb!==null){
+          var lx0=cellGeo(l,run).x0, lx1=cellGeo(l,runEnd).x0+cellGeo(l,runEnd).w;
+          o.push('<text class="waveLabel" x="'+((lx0+lx1)/2).toFixed(1)+'" y="'+(yM+1)+'" text-anchor="middle" dominant-baseline="central">'+
+            esc(fitLabel(lb,Math.max(10,lx1-lx0-4),10))+'</text>');
+        }
+        run=runEnd+1;
       }
       o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
       o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(chars*P*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');

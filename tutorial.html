@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.13.0">
+<meta name="version" content="0.14.0">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -222,16 +222,21 @@
 }</pre>
     <div class="livecard" data-timingbench data-height="200"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: 'a b c' }, { name: 'Request', wave: '01..0' } ], head: { text: 'WaveDrom example', tick: 0, every: 2 }, foot: { text: 'Figure 100', tock: 9 } }"></div>
-    <p class="caveat">What you see above is the diagram itself: <code>config</code>, <code>head</code> and
-    <code>foot</code> stay in your source and survive every edit untouched, but their visual effects
-    (<code>hscale</code>, titles, ticks / tocks) are not drawn yet.</p>
+    <p class="caveat"><code>config.hscale</code> is applied for real: it widens the whole time axis
+    (cell width &times; hscale, capped at 8) while row height and font size stay put — try
+    <code>hscale: 3</code> in the editor. <code>head</code> and <code>foot</code> are the opposite case:
+    they stay in your source and survive every edit untouched, but their titles and tick / tock rulers
+    are not drawn.</p>
   </section>
 
   <section class="step">
     <h2>Step 8. Arrows</h2>
     <p>An <code>edge</code> connects two node markers. The body selects the shape —
     <code>~</code> curves, <code>-</code> / <code>|</code> / <code>+</code> are sharp —
-    and <code>&lt;</code> / <code>&gt;</code> put arrowheads at the start / end.</p>
+    and <code>&lt;</code> / <code>&gt;</code> put arrowheads at the start / end. The order of the sharp
+    characters is the order of the segments: <code>a-|&gt;b</code> runs horizontally first and then drops,
+    <code>a|-&gt;b</code> drops first and then runs. No arrowhead unless you ask for one: <code>a~b</code>
+    is a plain curve.</p>
 <pre>Splines:     ~   -~   ~-   &lt;~&gt;  &lt;-~&gt;  ~&gt;   -~&gt;  ~-&gt;
 Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|-&gt;  |-&gt;  +</pre>
 <pre>{ signal: [

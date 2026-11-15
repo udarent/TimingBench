@@ -7,6 +7,7 @@ import { Core } from './src/core/ir.js';
 import { EXAMPLE } from './src/core/example.js';
 import { encodePayload, decodePayload } from './src/editor/payload.js';
 import * as Cap from './src/editor/cap.js';
+import { hscaleOf, HSCALE_MAX } from './src/editor/geometry.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -568,11 +569,15 @@ function check() {
      /ROW_ACTS = Cap\.ACTS\.row/.test(touchSrc) && /COL_ACTS = Cap\.ACTS\.col/.test(touchSrc),
     '上下文动作集缺失或被改成文字面板');
 
-  // 箭头语法（教程 Step 8）：解析 <from><shape><to>，shape 含 < > ~ - | +；Splines / Sharp lines 两类。
+  // 箭头语法（教程 Step 8）：解析 <from><shape><to>，shape 含 < > ~ - | +。
+  // 判据看**机制**而不是某一行实现：形状必须是「显式表」（`-|` 与 `|-` 各登记一种，
+  // 不能靠数竖线猜），箭头只能由 `<`/`>` 触发（不许默认补一个末端箭头替用户宣布方向）。
   ok(/function parseEdge\(/.test(shapesSrc) && /function arrowTri\(/.test(shapesSrc) &&
-     /function edgePath\(/.test(shapesSrc) && /indexOf\('~'\)/.test(shapesSrc) &&
-     /parseEdge\(e\)/.test(shapesSrc),
-    'edge 箭头语法解析缺失（< > ~ - | + / 起止箭头）');
+     /function edgePath\(/.test(shapesSrc) && /EDGE_SHAPES/.test(shapesSrc) &&
+     /'-\|':\s*'hv'/.test(shapesSrc) && /'\|-':\s*'vh'/.test(shapesSrc) &&
+     /parseEdge\(e\)/.test(shapesSrc) &&
+     /if \(pe\.end\)/.test(shapesSrc) && !/!explicitArrow/.test(shapesSrc),
+    'edge 形状表缺失 / 形状靠猜 / 默认补了箭头');
   // 纯 node 行（无 wave）必须保留锚点：否则引用它的 edge 找不到端点（教程 Sharp lines 样例）。
   ok(/var nn = n > 0 \? n :/.test(read('src/core/ir.js')),
     '只有 node、没有 wave 的行会丢锚点，导致 edge 找不到端点');
@@ -621,6 +626,38 @@ function check() {
      !/bareBase|resolveGroupPath|charAt\(0\)==='\/'/.test(interSrc) &&
      !/pathSteps|inline-step/.test(interSrc) && !/\.inline-step\{/.test(cssSrc),
     '组路径重新变成「按写法推断层级」或又加了额外按钮（应只有一条：输入框文本 = 完整路径）');
+
+  // ---- 对标审计（0.14.0）：不建模的行级内容必须原样留住 ----
+  // 全量重生成（分组改名 / 增删行）会把整篇源码重排一遍。根级的 head / foot / config / gaps
+  // 早就按原文保住了，**行级的 over / under 与 piece-wise wave 却会被吞掉** —— 这是同一类
+  // 「我们不认识的字段就当它不存在」的 bug，只是发生在第二层。
+  const PRESERVE = "{ signal: [\n  { name: 'a', wave: '01.0', over: '..2.' },\n  { name: 'p', wave: ['pw', { d: 'M 0 0 L 1 1' }] }\n], config: { hscale: 2 } }";
+  const pv = Core.buildIR(PRESERVE);
+  ok(pv.lanes[0].extras.length === 1 && pv.lanes[0].extras[0].key === 'over',
+    '行级未建模属性（over / under）没被收集，全量重生成会把它删掉');
+  ok(typeof pv.lanes[1].waveRaw === 'string' && pv.lanes[1].waveRaw.indexOf("'pw'") >= 0,
+    'piece-wise 的数组 wave 没保留原文');
+  const pvOut = Core.emitIR(pv);
+  ok(/over:\s*'\.\.2\.'/.test(pvOut) && pvOut.indexOf("['pw'") >= 0,
+    '全量重生成丢掉了行级原文：' + pvOut.replace(/\s+/g, ' ').slice(0, 120));
+  ok(Core.canon(Core.buildIR(pvOut)) === Core.canon(pv),
+    'I1 不成立（行级 extras / waveRaw 没进 canon）');
+  // 反过来：用户真的按字符改了那一行，就该如实写回字符序列，而不是继续写旧路径
+  ok(Core.emitIR(Core.applyOp(pv, { t: 'setSlot', lanes: [pv.lanes[1].id], tick: 2, v: '1' })).indexOf("['pw'") < 0,
+    'piece-wise 行改过字符后仍写回旧路径（改动看起来没生效）');
+  ok(pv.config && pv.config.hscale === 2, 'config 没有解析出来（hscale 无法影响渲染）');
+  // hscale 只在渲染层生效：clamp 到 1..8，非数字 / 0 / 负数 → 1
+  ok(hscaleOf({ config: { hscale: 3 } }) === 3 && hscaleOf({ config: { hscale: 99 } }) === HSCALE_MAX &&
+     hscaleOf({ config: { hscale: 0 } }) === 1 && hscaleOf(null) === 1 && hscaleOf({ config: {} }) === 1,
+    'config.hscale 的取值口径不对（应 clamp 1..' + HSCALE_MAX + '）');
+  // 数字组名（`[1, {…}]`）是合法 WaveJSON，不能被读成「没有名字的组」
+  ok(Core.buildIR("{ signal: [[1, { name:'a', wave:'01' }]] }").lanes[0].groupPath[0] === '1',
+    '数字组名被丢弃');
+  // 报错要指向下一步：reg 是另一种图，不是「坏掉的时序图」
+  try { Core.buildIR('{ reg: [{ bits: 3 }] }'); ok(false, 'reg 图没有报错'); }
+  catch (e) { ok(/register diagram/.test(e.message), 'reg 图的报错口径不清：' + e.message); }
+  try { Core.buildIR('{ signal: {} }'); ok(false, 'signal 不是数组却没报错'); }
+  catch (e) { ok(/signal must be an array/.test(e.message), 'signal 类型报错口径不清：' + e.message); }
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',

@@ -107,8 +107,19 @@ export const Core = (function () {
     }
   }
 
+  // 行上**我们不建模**的属性（WaveJSON 里有 `over` / `under` 这类时间线标注，将来还可能有别的）
+  // 必须原样留住。全量重生成（分组改名、增删行）会把整篇源码重排一遍 —— 不带走就等于删掉
+  // 用户写的东西。做法与根级 `extras` 一致：存「key + 原文片段」，emit 时照样写回。
+  var LANE_KEYS = { name:1, wave:1, data:1, node:1, phase:1, period:1 };
   function makeLane(item, groupPath, id, src) {
     var w=strOf(item,'wave',''), d=dataOf(item), nd=strOf(item,'node',null);
+    // `wave: ['pw', { d: 'M…' }]` 是 WaveDrom 的 piece-wise 路径（不是字符序列）。
+    // 我们没法把它拆成格子，但可以整段留住原文；用户真去改这一格的字符时再清掉
+    // （那时语义已变成字符序列，保留原文只会让改动「看起来没生效」）。
+    var waveNode=prop(item,'wave');
+    var waveRaw=(waveNode && waveNode.val.k!=='str') ? src.slice(waveNode.val.s,waveNode.val.e) : null;
+    var extras=[];
+    item.props.forEach(function(p){ if(!LANE_KEYS[p.key]) extras.push({ key:p.key, text:src.slice(p.s,p.e) }); });
     var pw=parseWave(w, d?d.list:[]);
     var slots=pw.slots, n=slots.length;
     var node=[];
@@ -120,7 +131,7 @@ export const Core = (function () {
     var lane = {
       id:id, kind:'signal', name:strOf(item,'name','sig'), phase:numOf(item,'phase',0), period:numOf(item,'period',1),
       groupPath:groupPath.slice(), slots:slots, subs:pw.subs, node:node,
-      dataForm:d?d.form:null, range:[item.s,item.e],
+      dataForm:d?d.form:null, range:[item.s,item.e], extras:extras, waveRaw:waveRaw,
       orig:{ wave:w, name:strOf(item,'name','sig'), data:d?d.list.slice():null, node:nd, phase:numOf(item,'phase',0), period:numOf(item,'period',1) }
     };
     ['wave','name','data','node','phase','period'].forEach(function(k){ var p=prop(item,k);
@@ -148,7 +159,10 @@ export const Core = (function () {
         }
         out.push(makeLane(item, groupPath, 'l'+out.length, src));
       } else if (item.k==='arr') {
-        var g = (item.items[0] && item.items[0].k==='str') ? item.items[0].v : '';
+        // 组名可以是字符串也可以是数字（上游 rec() 认 `typeof tmp[0] === 'number'`）：
+        // `[1, {…}]` 是合法 WaveJSON，别把它读成「没有名字的组」。
+        var h=item.items[0];
+        var g = (h && (h.k==='str'||h.k==='num')) ? String(h.v) : '';
         collect(item.items.slice(1), groupPath.concat([g]), out, src);
       }
     });
@@ -159,21 +173,31 @@ export const Core = (function () {
     var wrapped=false;
     if (p.s[p.i]==='(') { p.i++; wrapped=true; }
     var root=p.value();
-    if (root.k!=='obj') throw new Error('根节点必须是对象');
+    if (root.k!=='obj') throw new Error('root must be an object');
     p.ws();
-    if (wrapped) { if (p.s[p.i]!==')') throw new Error('缺少右括号'); p.i++; p.ws(); }
-    if (p.i < p.s.length) throw new Error('根对象后存在多余内容 @'+p.i);
-    var sig=prop(root,'signal'); if(!sig||sig.val.k!=='arr') throw new Error('缺少 signal 数组');
+    if (wrapped) { if (p.s[p.i]!==')') throw new Error('missing closing parenthesis'); p.i++; p.ws(); }
+    if (p.i < p.s.length) throw new Error('unexpected content after the root object @'+p.i);
+    var sig=prop(root,'signal');
+    // 报错要指向**用户下一步该做什么**：「缺少 signal 数组」对着一份 `{reg: …}` 文档等于没说。
+    // reg 是 WaveJSON 的另一种图（寄存器位域），不是时序图的坏写法 —— 直接说清楚。
+    if(!sig){
+      if(prop(root,'reg')) throw new Error('this is a register diagram (reg), TimingBench edits timing diagrams (signal)');
+      throw new Error('missing signal array');
+    }
+    if(sig.val.k!=='arr') throw new Error('signal must be an array');
     var lanes=[];
     collect(sig.val.items, [], lanes, src);
     var N=0; lanes.forEach(function(l){ if(l.kind==='signal'){ N=Math.max(N,l.slots.length); normalizeSlots(l); } });
-    var edges=[], extras=[];
+    var edges=[], extras=[], config=null;
     root.props.forEach(function(pr){
       if(pr.key==='signal') return;
       if(pr.key==='edge' && pr.val.k==='arr'){ edges=pr.val.items.map(function(x){return String(x.v);}); return; }
+      // config 既要能读（hscale 要影响渲染），又要能原样写回（不归我们管的键一个都不能丢）：
+      // 原文进 extras，解释后的值另存一份只读副本。
+      if(pr.key==='config' && pr.val.k==='obj') config=materialize(pr.val);
       extras.push({ key:pr.key, text:src.slice(pr.s,pr.e), range:[pr.s,pr.e] });
     });
-    return { ticks:N, lanes:lanes, edges:edges, extras:extras, raw:src, rootRange:[root.s,root.e], rev:0 };
+    return { ticks:N, lanes:lanes, edges:edges, extras:extras, config:config, raw:src, rootRange:[root.s,root.e], rev:0 };
   }
 
   function quote(s,q){ q=q||"'"; return q+String(s).replace(/\\/g,'\\\\').replace(new RegExp(q,'g'),'\\'+q)
@@ -199,11 +223,14 @@ export const Core = (function () {
     if(l.kind==='spacer') return spacerSrc(l);
     var labels=laneLabels(l), parts=[];
     parts.push('name: '+quote(l.name));
-    parts.push('wave: '+quote(laneWave(l)));
+    // piece-wise 路径（数组 wave）整段原样写回，别用 slots 重建 —— 那一行本来就没有 slots
+    parts.push('wave: '+(l.waveRaw||quote(laneWave(l))));
     if(needData(l)) parts.push('data: '+(l.dataForm==='str'&&labels.every(function(x){return x&&!/\s/.test(x);}) ? quote(labels.join(' ')) : '['+qmap(labels)+']'));
     if(l.node.some(function(x){return x!=='.';})) parts.push('node: '+quote(l.node.join('')));
     if(l.phase) parts.push('phase: '+l.phase);
     if(l.period!==1) parts.push('period: '+l.period);
+    // 未建模属性（over / under / …）照原文追加在末尾
+    (l.extras||[]).forEach(function(x){ parts.push(x.text); });
     return '{ '+parts.join(', ')+' }';
   }
   function emitGroup(items,depth){
@@ -233,21 +260,23 @@ export const Core = (function () {
     ir.lanes.forEach(function(l){
       if(l.kind==='spacer'){ parts.push(enc('~'+enc(l.groupPath.join('/'))+enc(spacerSrc(l)))); return; }
       var ss=l.slots.map(function(s){ return enc(s.w)+enc(s.point?'P':'r')+enc(s.gap?'G':'-')+enc(s.label===null?'':s.label); }).join('');
-      parts.push(enc(enc(l.name)+enc(String(l.phase))+enc(String(l.period))+enc(l.groupPath.join('/'))+enc(l.node.join(''))+enc(laneWave(l))+enc(ss)));
+      // extras / waveRaw 参与签名：它们也是「这一行的语义」，只在源码里存在而在 canon 外，
+      // 会让「改了 over 但源码相等」这类偏差悄悄通过 I2 检查。
+      parts.push(enc(enc(l.name)+enc(String(l.phase))+enc(String(l.period))+enc(l.groupPath.join('/'))+enc(l.node.join(''))+enc(l.waveRaw||laneWave(l))+enc(ss)+enc((l.extras||[]).map(function(x){return x.text;}).join(''))));
     });
     parts.push(enc('E'+ir.edges.map(enc).join('')));
     return parts.join('');
   }
 
   function clone(ir){
-    return { ticks:ir.ticks, rev:ir.rev, raw:ir.raw, rootRange:ir.rootRange.slice(),
+    return { ticks:ir.ticks, rev:ir.rev, raw:ir.raw, rootRange:ir.rootRange.slice(), config:ir.config?JSON.parse(JSON.stringify(ir.config)):null,
       edges:ir.edges.slice(), extras:ir.extras.map(function(x){return {key:x.key,text:x.text,range:x.range.slice()};}),
       lanes:ir.lanes.map(function(l){
         return { id:l.id, kind:l.kind, name:l.name, phase:l.phase, period:l.period, groupPath:l.groupPath.slice(),
           slots:l.slots.map(function(s){ var o={w:s.w,point:s.point,gap:s.gap,label:s.label};
             if(s.saved) o.saved={w:s.saved.w,label:s.saved.label}; return o; }),
           subs:l.subs.map(function(s){return {at:s.at,s:s.s};}), node:l.node.slice(), dataForm:l.dataForm,
-          range:l.range.slice(), raw:l.raw,
+          range:l.range.slice(), raw:l.raw, extras:(l.extras||[]).map(function(x){return {key:x.key,text:x.text};}), waveRaw:l.waveRaw||null,
           waveRange:l.waveRange?l.waveRange.slice():null, nameRange:l.nameRange?l.nameRange.slice():null,
           dataRange:l.dataRange?l.dataRange.slice():null, nodeRange:l.nodeRange?l.nodeRange.slice():null,
           phaseRange:l.phaseRange?l.phaseRange.slice():null, periodRange:l.periodRange?l.periodRange.slice():null,
@@ -280,12 +309,16 @@ export const Core = (function () {
     return true;
   }
 
+  // 一旦按字符改了这一行，piece-wise 路径就作废了：继续保留 waveRaw 会让 emit 写回旧路径，
+  // 用户的改动「看起来没生效」。反之只要没人碰字符，原文就一直留着。
+  function unraw(l){ if(l&&l.waveRaw) l.waveRaw=null; }
   function applyOp(ir,op){
     var n=clone(ir), changed=true;
     switch(op.t){
       case 'setSlot': {
         var ext=false;
         n.lanes.forEach(function(l){ if(l.kind!=='signal'||(op.lanes&&op.lanes.indexOf(l.id)<0)) return;
+          unraw(l);
           if(ensureTail(l,op.tick)) ext=true;
           var v=op.v; if(v==='auto'){ var cur=l.slots[op.tick].w; v=ALL[(ALL.indexOf(cur)+1+ALL.length)%ALL.length]||'1'; }
           l.slots[op.tick]={ w:v, point:true, gap:false, label:BUS.test(v)?'':null }; normalizeSlots(l); });
@@ -304,6 +337,7 @@ export const Core = (function () {
       case 'setWave':
         n.lanes.forEach(function(l){
           if(l.id!==op.lane||l.kind!=='signal') return;
+          unraw(l);
           var pw=parseWave(String(op.v||''), laneLabels(l)), oldNode=l.node.slice();
           l.slots=pw.slots; l.subs=pw.subs; l.node=[];
           for(var wi=0;wi<l.slots.length;wi++) l.node.push(wi<oldNode.length?oldNode[wi]:'.');
@@ -357,6 +391,7 @@ export const Core = (function () {
         break;
       case 'insertTick':
         n.lanes.forEach(function(l){ if(l.kind!=='signal') return;
+          unraw(l);
           var at=Math.min(op.tick,l.slots.length), prev=at>0?l.slots[at-1].w:'x';
           l.slots.splice(at,0,{w:prev,point:false,gap:false,label:null}); l.node.splice(at,0,'.');
           l.subs.forEach(function(s){ if(s.at>=at) s.at++; }); normalizeSlots(l); });
@@ -365,6 +400,7 @@ export const Core = (function () {
       case 'deleteTick':
         if(n.ticks<=1){ changed=false; break; }
         n.lanes.forEach(function(l){ if(l.kind!=='signal'||op.tick>=l.slots.length) return;
+          unraw(l);
           l.slots.splice(op.tick,1); l.node.splice(op.tick,1);
           l.subs.forEach(function(s){ if(s.at>op.tick) s.at--; }); normalizeSlots(l); });
         n.ticks--;
@@ -375,10 +411,10 @@ export const Core = (function () {
         var fresh;
         if(op.kind==='spacer'){
           fresh={ id:aid, kind:'spacer', name:'', phase:0, period:1, groupPath:[], slots:[], subs:[], node:[], dataForm:null,
-            range:[0,0], raw:'', orig:{}, fresh:true };
+            range:[0,0], raw:'', extras:[], waveRaw:null, orig:{}, fresh:true };
         } else {
           fresh={ id:aid, kind:'signal', name:op.name||'new', phase:0, period:1, groupPath:[], slots:[], subs:[], node:[], dataForm:null,
-            range:[0,0], waveRange:null, nameRange:null, dataRange:null, nodeRange:null, phaseRange:null, periodRange:null,
+            range:[0,0], extras:[], waveRaw:null, waveRange:null, nameRange:null, dataRange:null, nodeRange:null, phaseRange:null, periodRange:null,
             wavePropRange:null, namePropRange:null, dataPropRange:null, nodePropRange:null, phasePropRange:null, periodPropRange:null,
             orig:{wave:'',name:op.name||'new',data:null,node:null,phase:0,period:1}, fresh:true };
           for(var ai=0;ai<n.ticks;ai++){ fresh.slots.push({w:'x',point:ai===0,gap:false,label:null}); fresh.node.push('.'); }

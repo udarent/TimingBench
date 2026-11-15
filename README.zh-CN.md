@@ -4,7 +4,7 @@
 
 **直接改波形就能改源码的时序图编辑器。** 点一下波形格，WaveJSON 源码就同步改写；改一下源码，波形立刻重画。两边都不是「附属品」。
 
-`0.13.0` · [MIT](LICENSE) · 完全跑在浏览器里 · 不上传任何内容 · [打开编辑器](https://udarent.github.io/TimingBench/editor.html)
+`0.14.0` · [MIT](LICENSE) · 完全跑在浏览器里 · 不上传任何内容 · [打开编辑器](https://udarent.github.io/TimingBench/editor.html)
 
 源码不会被悄悄重排：图形编辑以**最小补丁**写回源码（注释、缩进、键序、引号原样保留），任何无法无损往返的结果都会回滚。
 
@@ -124,11 +124,11 @@ el.addEventListener('timingbench:change', e => console.log(e.detail.wavejson));
 ## 常见问题
 
 - **我的图会被上传吗？** 不会，全部在浏览器里算完。
-- **支持 WaveDrom 全部语法吗？** 支持常用子集：`wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer`，以及 repeater 补画。`period` 把每格拉宽 N 倍、`phase` 把整行左移若干分之一周期。不是完整实现，也不含上游代码。
+- **支持 WaveDrom 全部语法吗？** 支持常用子集：`wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer`，以及 repeater 补画。`period` 把每格拉宽 N 倍、`phase` 把整行连续左移若干周期、`config.hscale` 把整条时间轴加宽（上限 8）。edge 形状按字面解释 —— `a-|>b` 先横后竖、`a|->b` 先竖后横 —— 只有写了 `<` / `>` 才画箭头。不是完整实现，也不含上游代码。
 - **支持哪些浏览器？** 现代 Chrome、Edge、Firefox、Safari；缺 Pointer Events 的老浏览器回退触摸事件。
 - **触屏笔记本没切到触摸版式？** 版式跟随主指针；地址后加 `?touch=1` 强制切换。
 - **节点小圆圈去哪了？** 有意去掉，波形更接近 WaveDrom 原始渲染 —— 格子本身就是连线端点。
-- **已知限制** —— iOS 软键盘配合 `foreignObject` 输入框尚未真机验证；触摸端不做按住拖过连写与拖动重排（避免抢原生滚动）；`config` / `head` / `foot` 会被保留并原样往返，但暂未绘制。
+- **已知限制** —— iOS 软键盘配合 `foreignObject` 输入框尚未真机验证；触摸端不做按住拖过连写与拖动重排（避免抢原生滚动）；`head` / `foot` / `gaps` 与行级 `over` / `under` 标注会被保留并逐字节原样往返，但暂未绘制；sub-cycle（`<` `>`）保留在源码里、按整格宽度画。
 
 ## 致谢、许可与反馈
 

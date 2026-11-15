@@ -7,7 +7,8 @@ import { G, cellGeo, PHASE_STEP } from './geometry.js';
 import { TOUCH } from './mode.js';
 import { esc, cut } from '../core/util.js';
 
-var CELL=G.CELL, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD;
+// 格宽受 config.hscale 影响，是每帧重算的运行时值 —— 这里一律现读 G.CELL，不缓存。
+var ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD;
 // 行名区宽度按内容自适应 → 波形起点 XS 是运行时值，必须每次现读 G.XS，
 // 不能像以前那样在模块加载时缓存一份（名字变长变短后它会过期）。
 
@@ -127,6 +128,7 @@ export function attachInteractions(ctx){
   function openRowEditor(laneId,act){
     var l=findLane(laneId); if(!l) return;
     if(l.kind==='spacer'){ ctx.notify('Spacer rows have no editable field',true,laneRowEl(laneId)); return; }
+    if(act==='wave'&&!rawWaveGuard(l)) return;
     var spec=rowSpec(l,act); if(!spec) return;
     var anchor=spec.wide
       ? wrap.querySelector('rect.waveZone[data-lane="'+laneId+'"]')
@@ -213,6 +215,13 @@ export function attachInteractions(ctx){
     return true;
   }
 
+  // piece-wise 路径（`wave: ['pw', {d: …}]`）不是字符序列，改字符等于把路径换成字符串。
+  // 能改，但要先说清楚 —— 悄悄丢掉用户写的路径是最坏的一种「帮倒忙」。
+  function rawWaveGuard(l,el){
+    if(!l||!l.waveRaw) return true;
+    ctx.notify('This row is a piece-wise path (wave: [\'pw\', …]) — editing a cell replaces it with characters',true,el||laneRowEl(l.id));
+    return false;
+  }
   function handleTool(act,laneId){
     if(act==='wave'||act==='data'||act==='node'){ openRowEditor(laneId,act); return; }
     if(act==='del'){ state.selLane=null; ctx.commit({t:'deleteLane',lane:laneId},'delete row'); return; }
@@ -246,6 +255,7 @@ export function attachInteractions(ctx){
   function writeChar(v,dir){
     var sc=state.selCell;
     if(!sc||!state.ir){ ctx.notify('Select a cell first (Tab / F6 focuses the canvas)',true); return; }
+    if(!rawWaveGuard(findLane(sc.lane))) return;
     var N=state.ir.ticks;
     state.ch=v;
     var nt=dir==='left'?Math.max(0,sc.tick-1):Math.min(sc.tick+1,N-1);
@@ -352,6 +362,7 @@ export function attachInteractions(ctx){
   function openCellCharEditor(laneId,tick){
     var l=findLane(laneId); if(!l||l.kind==='spacer') return;
     var target=cellTarget(laneId,tick); if(!target) return;
+    if(!rawWaveGuard(l,target)) return;
     var sl=l.slots[tick], cur=sl?sl.w:(l.slots.length?l.slots[l.slots.length-1].w:'x');
     openInline(target,cur,function(v){
       var t=String(v).trim();
@@ -653,7 +664,9 @@ export function attachInteractions(ctx){
       return;
     }
     state.selCell={lane:c.lane,tick:c.tick}; state.selLane=c.lane;
-    ctx.painting={ lane:c.lane, ticks:[], v:state.ch, base:{ir:state.ir,src:code.value,sel:state.sel}, moved:false };
+    // 漫刷不碰 piece-wise 行：那里没有字符格可刷，刷了就是把路径换成字符串（选中仍然允许）
+    var pl=findLane(c.lane);
+    ctx.painting=(pl&&pl.waveRaw)?null:{ lane:c.lane, ticks:[], v:state.ch, base:{ir:state.ir,src:code.value,sel:state.sel}, moved:false };
     // 先建立选中再聚焦：focus 事件的 ensureSelCell 看到已有选中格就不会多绘一次
     ctx.focusCanvas();
     ctx.redraw();
@@ -673,7 +686,7 @@ export function attachInteractions(ctx){
     var p=svg.querySelector('path.connectPreview');
     if(!p){ p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('class','connectPreview'); svg.appendChild(p); }
     var a=state.connect, ln=findLane(a.lane);
-    var ax=ln?cellGeo(ln,a.tick).cx:G.XS+a.tick*CELL+CELL/2, ay=TOP+a.li*ROW_H+7;
+    var ax=ln?cellGeo(ln,a.tick).cx:G.XS+a.tick*G.CELL+G.CELL/2, ay=TOP+a.li*ROW_H+7;
     p.setAttribute('d','M'+ax+','+ay+' C'+(ax+10)+','+(ay-26)+' '+(mx-10)+','+(my-26)+' '+mx+','+my);
   }
 

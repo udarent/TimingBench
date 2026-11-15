@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **Timing diagrams you edit directly.** Click a waveform cell and the WaveJSON source is rewritten; change the source and the diagram redraws. Neither side is ever treated as the "real" one.
 
-`0.13.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
+`0.14.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
 
 Your source is not reformatted behind your back: diagram edits are written back as a minimal patch — comments, indentation, key order and quotes survive — and any result that would not round-trip is rolled back.
 
@@ -125,11 +125,11 @@ In link mode the arrow keys move a separate endpoint cursor; `Enter` or `Space` 
 ## FAQ
 
 - **Are my diagrams uploaded anywhere?** No. Everything is computed in the browser.
-- **Does it support all of WaveDrom?** The common subset: `wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer`, plus repeater fill-in. `period` scales each character's width, `phase` shifts a lane by a fraction of a period. It is not a full WaveDrom implementation and contains none of its code.
+- **Does it support all of WaveDrom?** The common subset: `wave` / `data` / `node` / `edge` / `phase` / `period` / `group` / `spacer`, plus repeater fill-in. `period` scales each character's width, `phase` shifts a lane by a whole or fractional number of periods continuously, `config.hscale` widens the time axis (capped at 8). Edge shapes are taken literally — `a-|>b` runs horizontally first, `a|->b` drops first — and an arrowhead appears only when the shape says `<` or `>`. It is not a full WaveDrom implementation and contains none of its code.
 - **Which browsers?** Current Chrome, Edge, Firefox and Safari. Older ones without Pointer Events fall back to touch events.
 - **My touchscreen laptop stayed in the desktop layout** — the layout follows the primary pointer; append `?touch=1` to force the touch one.
 - **Where do the little node circles go?** They are gone on purpose, so the waveform looks like WaveDrom's own rendering — the cells themselves are the connection targets.
-- **Known limitations** — the `foreignObject` input with the iOS soft keyboard has not been verified on a real device; touch mode drops drag-paint and drag-to-reorder to keep native scrolling; `config` / `head` / `foot` are preserved and round-tripped but not drawn yet.
+- **Known limitations** — the `foreignObject` input with the iOS soft keyboard has not been verified on a real device; touch mode drops drag-paint and drag-to-reorder to keep native scrolling; `head` / `foot` / `gaps` and the row-level `over` / `under` annotations are preserved and round-tripped byte for byte but not drawn; sub-cycle packs (`<` `>`) are kept in the source yet drawn at full width.
 
 ## Credits, license and feedback
 

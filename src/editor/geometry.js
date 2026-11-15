@@ -69,8 +69,22 @@ export function laneShift(l){
 export const PHASE_STEP = 0.05;
 export const PHASE_MAX = 4;
 
-// 这一行要画多少个字符格：自身字符数与「补齐到全图参考宽度」取大。
-// period=1 时恒等于 ticks（与改造前完全一致）；period=2 时补一半。
+// ---- config.hscale ---------------------------------------------------------
+// WaveJSON 的 `config.hscale` 是**全局横向倍率**：上游把它塞进 `extra = period*hscale - 1`，
+// 于是每个字符占 `period·hscale` 个砖、格线每 `hscale` 个砖一条 —— 净效果就是把整个横轴
+// 放大 hscale 倍，行高与字号不动。我们照这个「结果」做：格宽 = 基准格宽 × hscale，
+// 其余一切（列宽、相位尺、命中区、edge 端点）都从格宽派生，所以只改这一处即可。
+// 上限取 8 而不是上游的 100：hscale 是给「打印 / 贴图」用的，100 倍在这里等于一格 3800px，
+// 画布只剩横向滚动，编辑器没法用了。超出上限按上限画（源码里的值不动）。
+// 非整数按上游口径四舍五入（`Math.round`），0 / 负数 / 非数字 → 1。
+export const HSCALE_MAX = 8;
+export function hscaleOf(ir){
+  var n = ir && ir.config ? Number(ir.config.hscale) : 1;
+  if(!isFinite(n) || n <= 0) return 1;
+  return Math.max(1, Math.min(HSCALE_MAX, Math.round(n)));
+}
+
+// 这一行要画多少个字符格：自身字符数与「补齐到全图参考宽度」取大。// period=1 时恒等于 ticks（与改造前完全一致）；period=2 时补一半。
 export function laneChars(l,ticks){
   var p=lanePeriod(l), own=l.slots?l.slots.length:0;
   return Math.max(own, Math.ceil(ticks/p));
