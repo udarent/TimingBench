@@ -156,7 +156,10 @@ export function attachInteractions(ctx){
     var el=phaseTrackEl(); if(!el) return null;
     var x0=+el.getAttribute('x'), maxV=parseFloat(el.getAttribute('data-maxv'));
     if(!isFinite(x0)||!isFinite(maxV)) return null;
-    var q=svgXY(clientX||0,0), v=(q.x-x0)/G.CELL;
+    // 方向：尺子**右端是 phase 0（波形原位）**，往左才是相位变大。所以指针越靠右，
+    // 值越小 —— 这样「手指往右拖」与「波形往右移」同向（0.14.4 之前是反的，每次都要
+    // 在脑子里翻一次）。尺子宽度与左端属性由绘制层给，这里只做一次换算。
+    var q=svgXY(clientX||0,0), v=maxV-(q.x-x0)/G.CELL;
     if(!isFinite(v)) return null;
     v=Math.round(v/PHASE_STEP)*PHASE_STEP;              // 吸附到 0.05；更精确的值仍可点徽标走文本输入
     return +Math.max(0,Math.min(maxV,v)).toFixed(2);
@@ -1096,7 +1099,8 @@ export function attachInteractions(ctx){
       if(pk==='ArrowLeft'||pk==='ArrowRight'){
         prevent(e);
         var pl=findLane(state.phaseEdit.lane);
-        var step=(pk==='ArrowLeft'?-1:1)*(e.shiftKey?0.5:PHASE_STEP);
+        // 方向与拖动一致：← 波形左移（phase 变大）、→ 波形右移（phase 变小）
+        var step=(pk==='ArrowLeft'?1:-1)*(e.shiftKey?0.5:PHASE_STEP);
         if(pl) applyPhase(+Math.max(0,pl.phase+step).toFixed(2));
         return;
       }

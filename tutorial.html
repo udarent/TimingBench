@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.14.3">
+<meta name="version" content="0.14.4">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -192,7 +192,9 @@
     <p class="hint">Both fields are applied to the drawing and can be edited in place. Click <code>&phi;</code> next
     to a row name and that row turns into a <strong>phase ruler</strong> &mdash; press anywhere to jump there, then drag:
     one cell is one period, the arrow keys nudge by 0.05, <code>0</code> resets, <code>Esc</code> cancels and
-    <code>Enter</code> accepts. On touch the same action lives in the context bar (select the row, tap the phase
+    <code>Enter</code> accepts. The ruler reads right to left to match what you see: its right end is
+    phase&nbsp;0, and the knob sitting further left means the wave has been pushed further left &mdash; so
+    dragging right always moves the wave right. On touch the same action lives in the context bar (select the row, tap the phase
     icon): the <code>&phi;</code> / <code>T</code> glyphs beside a row name are drawn but not tappable there &mdash;
     after the whole picture is scaled down they are a few pixels wide, and reaching for a row name would open the
     ruler by accident. Phase shifts the lane left by exactly that many periods &mdash; it is continuous, so

@@ -388,12 +388,22 @@ function check() {
      /class="phaseTrack" data-lane="'\+l\.id\+'" data-maxv="'\+pmax/.test(shapesSrc) &&
      /rect\.phaseTrack/.test(interSrc) && /data-maxv/.test(interSrc),
     '相位尺要么消失了、要么变成常驻图元了（应只在 state.phaseEdit 指向的行上画）');
+  // 方向（0.14.4，用户实测反馈）：滑块位置 = **波形起点**。phase 的语义是「整行左移 phase 个
+  // 周期」，所以「值越大」在画面上是往左跑；第一版把滑块画成「值越大越靠右」，于是手指往右拖、
+  // 波形往左跑，方向正好相反。现在尺子**右端是 phase 0（波形原位）**，指针越靠右值越小。
+  // 这条锁只看两端的换算表达式：交互层必须是 `maxV - (x-x0)/CELL`，绘制层必须把滑块画在
+  // `(pmax-pcur)` 处 —— 两处方向必须一致，改回任何一边都会重新变成「方向相反」。
+  ok(/v=maxV-\(q\.x-x0\)\/G\.CELL/.test(interSrc) && /var pthx=XS\+\(pmax-pcur\)\*CELL/.test(shapesSrc),
+    '相位尺的方向约定被改回去了（拖动方向会与波形移动方向相反）');
   // 拖动期间的提交必须是 skipUndo（一次手势最后合并成一步）；步长要读 PHASE_STEP，
   // 不能就地写死 0.5 —— 之前 phase 的量化教训就是「散落的魔法数」。
   ok(/ctx\.commit\(\{t:'setPhase',lane:pe\.lane,v:v\},'phase → '\+v,true,true\)/.test(interSrc) &&
      /function flushPhaseStep\(\)/.test(interSrc) &&
      /PHASE_STEP/.test(interSrc) && !/phaseStep\s*=\s*0\.5/.test(interSrc),
     '相位尺的撤销粒度被改坏（拖动中的提交必须 skipUndo、收尾合并成一步）');
+  // 键盘方向跟着拖动走：← 让波形左移（phase 变大），→ 让波形右移（phase 变小）。
+  ok(/var step=\(pk==='ArrowLeft'\?1:-1\)/.test(interSrc),
+    '键盘 ←/→ 的方向与拖动不一致（会变成「一个键左移、另一个也左移」的混乱）');
 
   // 第七个参数是「这一格有多宽」：period≠1 的行按 period×CELL 传（渲染层自己的标尺），
   // 仍不得掺入 viewW / scrollLeft 这类操作层变量。
