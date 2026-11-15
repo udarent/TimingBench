@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.14.4">
+<meta name="version" content="0.14.5">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -190,22 +190,20 @@
     <div class="livecard" data-timingbench data-height="240"
          data-wavejson="{ signal: [ { name: 'CK', wave: 'P.......', period: 2 }, { name: 'CMD', wave: 'x.3x=x4x=x=x=x=x', data: 'RAS NOP CAS NOP NOP NOP NOP', phase: 0.5 }, { name: 'ADDR', wave: 'x.=x..=x........', data: 'ROW COL', phase: 0.5 }, { name: 'DQS', wave: 'z.......0.1010z.' }, { name: 'DQ', wave: 'z.........5555z.', data: 'D0 D1 D2 D3' } ] }"></div>
     <p class="hint">Both fields are applied to the drawing and can be edited in place. Click <code>&phi;</code> next
-    to a row name and that row turns into a <strong>phase ruler</strong> &mdash; press anywhere to jump there, then drag:
-    one cell is one period, the arrow keys nudge by 0.05, <code>0</code> resets, <code>Esc</code> cancels and
-    <code>Enter</code> accepts. The ruler reads right to left to match what you see: its right end is
-    phase&nbsp;0, and the knob sitting further left means the wave has been pushed further left &mdash; so
-    dragging right always moves the wave right. On touch the same action lives in the context bar (select the row, tap the phase
-    icon): the <code>&phi;</code> / <code>T</code> glyphs beside a row name are drawn but not tappable there &mdash;
-    after the whole picture is scaled down they are a few pixels wide, and reaching for a row name would open the
-    ruler by accident. Phase shifts the lane left by exactly that many periods &mdash; it is continuous, so
-    <code>0.1</code> and <code>0.2</code> differ by a tenth of a cell (WaveDrom shifts it the same way but throws away
-    the leading half&nbsp;bricks; we keep them and clip at the wave origin). <code>T</code> is the period: it stretches
-    every character of that row and is edited as a number. The numbered ruler above still counts reference periods, so a
-    <code>period: 2</code> row spans two ruler columns per character. On a phone the whole picture is scaled
-    down, so drag the ruler and watch the <code>&phi;</code> badge on it (or pinch to zoom in first) — a tenth of a
-    period is only a few pixels wide. On touch, where a drag lands is what decides: on the ruler it moves the
-    phase, anywhere else it pans the view, and a second finger always pans (undoing the phase nudge of that
-    same gesture).</p>
+    to a row name to start editing that row's phase &mdash; then simply <strong>drag the wave itself</strong>
+    sideways: it follows your finger, one cell is one period. There is no slider to find. The arrow keys nudge by
+    0.05, <code>0</code> resets, <code>Esc</code> cancels and <code>Enter</code> accepts; a plain tap selects the cell
+    and leaves the mode. Dragging right always moves the wave right. Phase shifts the lane left by exactly that many
+    periods &mdash; it is continuous, so <code>0.1</code> and <code>0.2</code> differ by a tenth of a cell (WaveDrom
+    shifts it the same way but throws away the leading half&nbsp;bricks; we keep them and clip at the wave origin).
+    <code>T</code> is the period: it stretches every character of that row and is edited as a number. The numbered
+    ruler above still counts reference periods, so a <code>period: 2</code> row spans two ruler columns per character.
+    On touch the same action lives in the context bar (select the row, tap the phase icon): the <code>&phi;</code> /
+    <code>T</code> glyphs beside a row name are drawn but not tappable there &mdash; after the whole picture is scaled
+    down they are a few pixels wide, and reaching for a row name would start phase mode by accident. A phone also
+    scales the row down, so watch the <code>&phi;</code> badge at the end of the row while you drag (or pinch to zoom
+    first) &mdash; a tenth of a period is only a few pixels wide. A second finger always pans the view (and undoes the
+    phase nudge of that same gesture).</p>
   </section>
 
   <section class="step">

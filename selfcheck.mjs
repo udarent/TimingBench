@@ -381,20 +381,28 @@ function check() {
      /COLS=Math\.max\(COLS, laneChars\(l,N\)\*lanePeriod\(l\)\)/.test(shapesSrc),
     'period/phase 未接入绘制（格宽 / 起点 / 画布宽度 / phase 裁剪）');
 
-  // 相位尺（0.13.0，图形化改 phase）：必须是「按需出现」的 —— 只有 state.phaseEdit 指向的那一行
-  // 才画尺子，默认文档里一个额外图元都不能有（否则会把每次 redraw 的指纹与 DOM 断言全搅乱）。
-  // 尺子的换算参数由绘制层写在命中区的 data-maxv 上，交互层只读它 —— 两处各算一份布局必然走偏。
+  // 相位模式（0.13.0 起，0.14.5 改成「直接抓波形」）：必须是「按需出现」的 —— 只有
+  // state.phaseEdit 指向的那一行才画标记，默认文档里一个额外图元都不能有（否则会把每次
+  // redraw 的指纹与 DOM 断言全搅乱）。0.14.5 之后这块只是**淡底 + 刻度 + 读数**，
+  // 命中一律穿透（pointer-events:none），拖动由「按下的行」判定 —— 所以也不再需要
+  // data-maxv 那种「尺子几何」。
   ok(/if\(state\.phaseEdit&&state\.phaseEdit\.lane===l\.id\)\{/.test(shapesSrc) &&
-     /class="phaseTrack" data-lane="'\+l\.id\+'" data-maxv="'\+pmax/.test(shapesSrc) &&
-     /rect\.phaseTrack/.test(interSrc) && /data-maxv/.test(interSrc),
-    '相位尺要么消失了、要么变成常驻图元了（应只在 state.phaseEdit 指向的行上画）');
+     /class="phaseTrack" data-lane="'\+l\.id\+'"/.test(shapesSrc) &&
+     /class="phaseTrack" data-lane="'\+l\.id\+'" x="'\+XS\+'"/.test(shapesSrc) &&
+     /pointer-events="none"/.test(shapesSrc),
+    '相位模式的标记要么消失了、要么变成常驻图元了（应只在 state.phaseEdit 指向的行上画）');
+  // 0.14.5：**波形本身就是抓手** —— 不许再有滑块 / 轨道 / 原位线那些控件图元，
+  // 也不许回到「按下即定位」的绝对值换算（那样手指一按波形就先跳一下）。
+  ok(!/phaseKnob|phaseOrigin|phaseFill/.test(shapesSrc) && !/phaseValueAt/.test(interSrc) &&
+     /var v=pe\.gest0-dx\/G\.CELL/.test(interSrc) && /PHASE_DEAD/.test(interSrc),
+    '相位拖动退回了「滑块 + 按下即定位」（应该是抓着波形本身做相对位移）');
   // 方向（0.14.4，用户实测反馈）：滑块位置 = **波形起点**。phase 的语义是「整行左移 phase 个
   // 周期」，所以「值越大」在画面上是往左跑；第一版把滑块画成「值越大越靠右」，于是手指往右拖、
   // 波形往左跑，方向正好相反。现在尺子**右端是 phase 0（波形原位）**，指针越靠右值越小。
   // 这条锁只看两端的换算表达式：交互层必须是 `maxV - (x-x0)/CELL`，绘制层必须把滑块画在
   // `(pmax-pcur)` 处 —— 两处方向必须一致，改回任何一边都会重新变成「方向相反」。
-  ok(/v=maxV-\(q\.x-x0\)\/G\.CELL/.test(interSrc) && /var pthx=XS\+\(pmax-pcur\)\*CELL/.test(shapesSrc),
-    '相位尺的方向约定被改回去了（拖动方向会与波形移动方向相反）');
+  ok(/var v=pe\.gest0-dx\/G\.CELL/.test(interSrc),
+    '相位拖动的方向约定被改回去了（手指往右拖，波形应该往右移 = 相位变小）');
   // 拖动期间的提交必须是 skipUndo（一次手势最后合并成一步）；步长要读 PHASE_STEP，
   // 不能就地写死 0.5 —— 之前 phase 的量化教训就是「散落的魔法数」。
   ok(/ctx\.commit\(\{t:'setPhase',lane:pe\.lane,v:v\},'phase → '\+v,true,true\)/.test(interSrc) &&

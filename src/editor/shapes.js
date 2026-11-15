@@ -498,8 +498,10 @@ export function createShapes(ctx){
         // 命中区裁到波形起点：phase 行的首格有一半落在行名区，不能让它压住行名抢点击。
         // period=1 / phase=0 时 rx=x0+1、宽=CELL-2，与改造前逐字节相同。
         var rx=Math.max(x0+1,XS);
+        // 相位模式下这一行的格子光标改成左右箭头：用户不用试也知道「这里能横着拖」。
+        var ccur=(state.phaseEdit&&state.phaseEdit.lane===l.id)?'ew-resize':'crosshair';
         o.push('<rect class="cell'+(s?'':' tailCell')+'" data-lane="'+l.id+'" data-tick="'+i+'"'+(s?'':' data-tail="1"')+
-          ' x="'+rx+'" y="'+(y+3)+'" width="'+Math.max(1,x0+cw-1-rx)+'" height="'+cellH+'" fill="transparent" style="cursor:crosshair"/>');
+          ' x="'+rx+'" y="'+(y+3)+'" width="'+Math.max(1,x0+cw-1-rx)+'" height="'+cellH+'" fill="transparent" style="cursor:'+ccur+'"/>');
       }
       // ---- bus 段标签 ----------------------------------------------------
       // 一个**连续段**只画一条标签，画在段中心。上游就是这么定位的：`findLaneMarkers` 在每个
@@ -535,73 +537,38 @@ export function createShapes(ctx){
         o.push('<text class="waveNode" x="'+(cellGeo(l,i).cx+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
       }
       if(clipId) o.push('</g>');
-      // 相位尺：这一行正处于「图形化改 phase」状态时，整条波形区变成一条可拖的尺子。
-      // 画在最后（盖住格子），拖动由交互层按指针坐标换算；尺子的 `data-maxv` 是它**左端**
-      // 代表的最大相位（右端是 0 = 波形原位），交互层只读这个属性、不重复算布局。
-      // **方向约定**：尺子右端 = phase 0（波形原位）；滑块往左 = 波形左移（phase 变大）、
-      // 往右 = 波形右移（phase 变小）。手指方向与画面方向一致，见下面 pthx。
+      // 相位模式（0.14.5）：**波形本身就是抓手**，不再画一条尺子 + 滑块。
+      // 打开相位模式后，在这一行的波形上横向拖动就直接改 phase —— 手指往右拖，波形往右移。
+      // 画面上只留两样东西（都不是控件）：
+      //   · 这一行的淡底 —— 说明「现在拖这一行就是改相位」；
+      //   · 顶部半周期刻度 —— 帮助判断「这一下拖了一格还是半格」。
+      // 命中一律**穿透**（pointer-events:none）：拖动由交互层按「按下在哪一行」判定，
+      // 这样点一下仍然能选中格子（否则整行都被这块遮住，点哪儿都选不中）。
       if(state.phaseEdit&&state.phaseEdit.lane===l.id){
-        // 尺子只画「有意义的那一段」：0..PHASE_MAX 个周期，宽度不够时按可用宽度收窄
-        // （maxv 跟着变，所以指针→相位的换算仍然是一格 = 一个周期）。
-        var ptw=Math.min(PHASE_MAX*CELL, Math.max(2*CELL, ACT_X-8-XS));
-        var pmax=Math.min(PHASE_MAX, +(ptw/CELL).toFixed(2));
-        var pty=y+4, pth=ROW_H-8, pcur=Math.min(Math.max(0,l.phase), pmax);
-        // 尺带用**不透明底衬**：波形在下面，太淡的 0.07 会被波形压掉，用户根本看不出「这里是一条尺子」。
-        // 压到 0.62 仍然透出波形（滑块与波形起点的关系还要看得见），但尺子成了这一行的主角。
+        var prow=ACT_X-8-XS;
         var pgo=['<g class="phaseTrackG">',
-          '<rect class="phaseTrackBg" x="'+XS+'" y="'+pty+'" width="'+ptw+'" height="'+pth+
-            '" rx="4" fill="var(--panel)" fill-opacity="0.62" stroke="var(--accent)" stroke-opacity="0.28" stroke-width="1"/>'];
-        // 刻度每半个周期一条：相位一旦量化到 0.5 就没法解释 0.1，但没有刻度也看不出「拖了多远」。
-        for(var pk=0; pk*0.5<=pmax+1e-9; pk++){
+          '<rect class="phaseTrack" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+2)+'" width="'+prow+
+            '" height="'+(ROW_H-4)+'" rx="4" fill="var(--accent)" fill-opacity="0.1" pointer-events="none"/>'];
+        for(var pk=0; pk*0.5<=PHASE_MAX+1e-9; pk++){
           var ptx=XS+pk*0.5*CELL;
-          if(ptx>XS+ptw-2) break;
-          pgo.push('<line x1="'+ptx+'" x2="'+ptx+'" y1="'+(pty+3)+'" y2="'+(pty+pth-3)+
-            '" stroke="var(--accent)" stroke-opacity="'+(pk%2?0.22:0.45)+'" stroke-width="1"/>');
+          if(ptx>XS+prow-2) break;
+          pgo.push('<line x1="'+ptx+'" x2="'+ptx+'" y1="'+(y+3)+'" y2="'+(y+7)+
+            '" stroke="var(--accent)" stroke-opacity="'+(pk%2?0.25:0.5)+'" stroke-width="1" pointer-events="none"/>');
         }
-        // ---- 方向：滑块与波形同向 ----------------------------------------------
-        // phase 的语义是「整行左移 phase 个周期」，所以「相位变大」在画面上是往**左**跑。
-        // 第一版把滑块画成「值越大越靠右」，于是手指往右拖、波形往左跑 —— 方向正好相反，
-        // 每次都要在脑子里翻一次（用户实测反馈）。现在反过来：**尺子右端 = phase 0**，
-        // 滑块越往左 = 相位越大 = 波形越往左。手指往右拖 ⇒ 滑块回右端 ⇒ 波形跟着回右端。
-        // 注意：滑块的绝对位置**不等于**波形起点的屏幕位置（那个点在 XS 处，相位一变大就
-        // 移出可绘制区、被裁掉）。它是一条「位移量尺」，不是绝对坐标尺 —— 靠方向一致就够用。
-        var pthx=XS+(pmax-pcur)*CELL;
-        // 已用掉的那段浅色填充画在滑块与右端之间（它代表「波形被左移了多少」）
-        if(pcur>0) pgo.push('<rect class="phaseFill" x="'+pthx+'" y="'+pty+'" width="'+(pcur*CELL)+
-          '" height="'+pth+'" rx="2" fill="var(--accent)" fill-opacity="0.2" pointer-events="none"/>');
-        // 右端这道实线是「原位」（phase = 0）：波形起点该在的地方，滑块离开它就是被移走了
-        pgo.push('<line class="phaseOrigin" x1="'+(XS+ptw-1)+'" x2="'+(XS+ptw-1)+'" y1="'+(pty+2)+
-          '" y2="'+(pty+pth-2)+'" stroke="var(--accent)" stroke-opacity="0.75" stroke-width="2" pointer-events="none"/>');
-        pgo.push('<line class="phaseThumb" x1="'+pthx+'" x2="'+pthx+'" y1="'+pty+'" y2="'+(pty+pth)+
-          '" stroke="var(--accent)" stroke-width="2"/>');
-        // 滑块画成圆角方块：绘制层禁用圆形是历史教训（曾经的节点锚点小圆圈让人误以为可以拖）。
-        // 方块一眼就是「尺子上的把手」，不会被当成锚点。
-        // 触摸端画布整体等比缩小，滑块按「≈16 物理像素」反算用户单位（同 openInline 的做法）
-        var pkn=T?Math.min(34,Math.max(20,Math.round(26/(state.fit||1)))):10;
-        pgo.push('<rect class="phaseKnob" x="'+(pthx-pkn/2)+'" y="'+(pty+pth/2-pkn/2)+'" width="'+pkn+
-          '" height="'+pkn+'" rx="2" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/>');
-        // 触摸端在尺子右端标出**当前值**：一行 4 个周期在小卡片上会被等比缩到 30 多 px，
-        // 0.1 与 0.2 只差 3~4 px，光看波形分不出来（实测用户反馈「0.1 和 0.2 没区别」）。
-        // 数字按「约 12 物理像素」反算字号，缩放后仍然读得清；桌面端行名旁本来就有 φ 值，
-        // 这里不再画第二份（那也保证了桌面渲染零变化）。
+        // 触摸端的当前值徽标（这是**读数**，不是控件）：小卡片里整张图被等比缩小，
+        // 0.1 个周期只有 3~4px，光看波形分不出 0.1 与 0.2 —— 给数字才是可靠反馈。
         if(T){
           var pfs=Math.min(22,Math.max(11,Math.round(12/(state.fit||1))));
-          var ptx0=String(+pcur.toFixed(2)), ptw2=Math.round(pfs*0.62*ptx0.length+11);
-          // 值徽标放在尺子**右端外侧**的空白里：左端是波形的起点（滑块也在那儿），压上去会
-          // 遮住用户最想看的那个关系。右侧放不下（尺子已经顶到动作区）才退回左端。
-          var plbX=XS+ptw+6;
-          if(plbX+ptw2>ACT_X-4) plbX=XS+4;
-          pgo.push('<rect x="'+plbX+'" y="'+(pty+pth/2-pfs*0.78)+'" width="'+ptw2+
+          var ptx0=String(+(Math.min(Math.max(0,l.phase),PHASE_MAX)).toFixed(2));
+          var ptw2=Math.round(pfs*0.62*(ptx0.length+1)+11);
+          var plbX=XS+prow-ptw2-4;
+          pgo.push('<rect x="'+plbX+'" y="'+(y+ROW_H/2-pfs*0.78)+'" width="'+ptw2+
             '" height="'+(Math.round(pfs*1.56))+'" rx="3" fill="var(--panel)" stroke="var(--accent)"'+
             ' stroke-opacity="0.35" stroke-width="0.6" pointer-events="none"/>');
-          pgo.push('<text class="phaseValue" x="'+(plbX+ptw2/2)+'" y="'+(pty+pth/2)+'" text-anchor="middle"'+
+          pgo.push('<text class="phaseValue" x="'+(plbX+ptw2/2)+'" y="'+(y+ROW_H/2)+'" text-anchor="middle"'+
             ' dominant-baseline="central" font-size="'+pfs+'" fill="var(--accent)" pointer-events="none">φ'+
             ptx0+'</text>');
         }
-        // 命中区最后画：它才是这次手势的目标（class 精确为 phaseTrack，交互层靠它认）
-        pgo.push('<rect class="phaseTrack" data-lane="'+l.id+'" data-maxv="'+pmax+'" x="'+XS+'" y="'+pty+
-          '" width="'+ptw+'" height="'+pth+'" fill="transparent" style="cursor:ew-resize"/>');
-        pgo.push('</g>');
         o.push(pgo.join(''));
       }
       o.push('</g>');

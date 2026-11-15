@@ -3,7 +3,7 @@
 // 键盘另有独立的 linkCursor 端点光标，保证不用鼠标也能完成全部编辑。
 // 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
-import { G, cellGeo, PHASE_STEP } from './geometry.js';
+import { G, cellGeo, PHASE_STEP, PHASE_MAX } from './geometry.js';
 import { TOUCH } from './mode.js';
 
 // 格宽受 config.hscale 影响，是每帧重算的运行时值 —— 这里一律现读 G.CELL，不缓存。
@@ -96,7 +96,6 @@ export function attachInteractions(ctx){
         // 只有带 data-act 的徽标才是可点入口（触摸端不接线，见 shapes.js）：否则落到外层行名上，
         // 一次「想选中这一行」的轻点不会顺手打开相位尺。
         if(g.classList&&g.classList.contains('laneMeta')&&g.getAttribute('data-act')) return {meta:g.getAttribute('data-act'),lane:ln};
-        if(g.classList&&g.classList.contains('phaseTrack')) return {phaseTrack:ln};
         // 组名 / 括号命中区只认「这一层的路径」—— 行 id 在这里没用（行的 groupPath 是它自己的最深层）
         if(g.classList&&(g.classList.contains('laneGroupName')||g.classList.contains('groupHit')))
           return {group:g.getAttribute('data-group')};
@@ -149,30 +148,23 @@ export function attachInteractions(ctx){
   //   按下即定位（滑块语义）、按住拖动连续改、每一帧都真重绘（不是假预览）。
   // 撤销的粒度按「手势」算：一次拖动 / 一串方向键 = 一步。做法与漫刷同一套 —— 拖动期间
   // 用 skipUndo 提交（源码即时同步、IR 即时生效），手势结束时把「这一串开始前的快照」压栈。
-  // 尺子几何完全由绘制层给（命中区上的 `data-maxv`），这里只做「指针 x → 相位」，
-  // 不重复算布局 —— 两处各算一份，迟早走偏。
+  // **0.14.5：波形本身就是抓手。** 不再有尺子 / 滑块 —— 打开相位模式后，在这一行的波形上
+  // 横向拖，波形跟着手走。所以换算也从「指针 x → 绝对相位」变成「手指位移 → 相位增量」：
+  // 每次 move 都从**手势起点**重算（`gest0 - dx/CELL`），不做增量叠加，免得多帧累积误差；
+  // 方向是「手指往右 ⇒ 波形往右 ⇒ 相位变小」（phase 是左移量）。
+  // 为什么不用「按下即定位」：那是控件的语义。抓着波形按下去就先跳一下值，用户只想按住
+  // 看一眼也会误改 —— 所以按下不改值，超过 PHASE_DEAD 才动。
+  var PHASE_DEAD=4;                       // 手指位移小于 4px 不动值（按住看一眼不该跳值）
   function phaseTrackEl(){ return wrap.querySelector('rect.phaseTrack'); }
-  function phaseValueAt(clientX){
-    var el=phaseTrackEl(); if(!el) return null;
-    var x0=+el.getAttribute('x'), maxV=parseFloat(el.getAttribute('data-maxv'));
-    if(!isFinite(x0)||!isFinite(maxV)) return null;
-    // 方向：尺子**右端是 phase 0（波形原位）**，往左才是相位变大。所以指针越靠右，
-    // 值越小 —— 这样「手指往右拖」与「波形往右移」同向（0.14.4 之前是反的，每次都要
-    // 在脑子里翻一次）。尺子宽度与左端属性由绘制层给，这里只做一次换算。
-    var q=svgXY(clientX||0,0), v=maxV-(q.x-x0)/G.CELL;
-    if(!isFinite(v)) return null;
-    v=Math.round(v/PHASE_STEP)*PHASE_STEP;              // 吸附到 0.05；更精确的值仍可点徽标走文本输入
-    return +Math.max(0,Math.min(maxV,v)).toFixed(2);
-  }
   function openPhaseEdit(laneId){
     var l=findLane(laneId); if(!l||l.kind!=='signal'||!state.ir) return;
     if(state.phaseEdit&&state.phaseEdit.lane===laneId){ closePhaseEdit(true); return; }  // 再点一次收起
     if(state.phaseEdit) closePhaseEdit(true);
     // pushed：本次会话推了几步撤销；redo0：打开时的重做栈快照（取消时要还原）
     state.phaseEdit={lane:laneId, orig:l.phase, pending:null, pushed:0, redo0:state.redo.slice()};
-    // 尺子开着时画布不许原生平移（理由见 styles.css 的 `.svgwrap.is-ruler`）：不加这一条，
+    // 尺子开着时画布不许原生平移（理由见 styles.css 的 `.svgwrap.is-phase`）：不加这一条，
     // 触摸拖动会被浏览器的滚动仲裁判成平移，一次 pointercancel 就把手势截断。
-    if(wrap.classList) wrap.classList.add('is-ruler');
+    if(wrap.classList) wrap.classList.add('is-phase');
     state.selLane=laneId; state.selCell=null; state.sel=null;
     if(ctx.clearSpan) ctx.clearSpan();
     ctx.redraw();
@@ -193,7 +185,7 @@ export function attachInteractions(ctx){
   function closePhaseEdit(keep){
     var pe=state.phaseEdit; if(!pe) return;
     state.phaseEdit=null;
-    if(wrap.classList) wrap.classList.remove('is-ruler');
+    if(wrap.classList) wrap.classList.remove('is-phase');
     var l=findLane(pe.lane);
     if(l&&l.phase!==pe.orig){
       if(keep) flushPhaseStep();
@@ -211,24 +203,43 @@ export function attachInteractions(ctx){
     }
     ctx.redraw();
   }
-  function isPhaseTrack(t){ return !!(t&&t.classList&&t.classList.contains('phaseTrack')); }
-  // 按下即定位（滑块语义），之后按住拖动连续改；两者共用「指针 x → 相位」这一个换算
+  // 抓住波形：先**待命**（armed）—— 不动就不改值、也不算拖动；超过死区才真的开始。
+  // 这样「按一下」仍然是选中格子（见 endPhaseTap），「按住横拖」才是改相位。
   function startPhaseDrag(e){
-    var v=phaseValueAt(e.clientX); if(v===null) return false;
-    // 触摸 / 笔有「隐式指针捕获」：后续 pointermove 会认准按下时那个元素。而尺子每帧重绘会
-    // 把那个元素换掉（wrap.innerHTML 整块重建）—— 捕获目标一旦脱离文档，move / up 就既不投递
-    // 也不冒泡，表现为 **点一下跳过去、后面怎么拖都不动**（Android 实测，鼠标没有隐式捕获所以桌面正常）。
+    var pe=state.phaseEdit, l0=pe&&findLane(pe.lane);
+    if(!pe||!l0) return false;
+    // 触摸 / 笔有「隐式指针捕获」：后续 pointermove 会认准按下时那个元素。而这一行每帧重绘
+    // 都会把元素换掉 —— 捕获目标一旦脱离文档，move / up 就既不投递也不冒泡（Android 实测）。
     // 改成捕获在 wrap 上：它不参与重绘，整段手势的坐标都还能收到。
     try{ if(e.pointerId!==undefined&&wrap.setPointerCapture) wrap.setPointerCapture(e.pointerId); }catch(err){}
-    // 记下这次手势**开始前**的值：手势被改判成「移动视图」时要能原地撤回，
-    // 否则两根手指一落下就把相位改了 —— 那正是要消灭的误操作。
-    var pe=state.phaseEdit, l0=pe&&findLane(pe.lane);
-    if(pe) pe.gest0=l0?l0.phase:0;
-    ctx.phaseDrag=true; applyPhase(v); return true;
+    // gest0 = 这次手势开始前的值：既用来重算「手指位移 → 相位」，也用于手势被改判成
+    // 「移动视图」时原地撤回（否则两指一落下就把相位改了 —— 那正是要消灭的误操作）。
+    pe.gest0=l0.phase;
+    pe.dragX=e.clientX||0;
+    pe.armed=true;
+    pe.downC=cellAt(e);
+    return true;
+  }
+  // 抬手时若一次都没拖动：按普通 tap 处理（选中这一格，并顺手退出相位模式）
+  function endPhaseTap(isTouch){
+    var pe=state.phaseEdit;
+    if(!pe||!pe.armed) return false;
+    var c=pe.downC; pe.armed=false;
+    closePhaseEdit(true);
+    if(c) dispatchTarget(c, {clientX:0,clientY:0,detail:0,preventDefault:function(){}}, isTouch);
+    return true;
   }
   function movePhaseDrag(e){
-    if(!ctx.phaseDrag) return false;
-    var v=phaseValueAt(e.clientX); if(v!==null) applyPhase(v);
+    var pe=state.phaseEdit; if(!pe) return false;
+    if(!ctx.phaseDrag&&!pe.armed) return false;
+    var dx=(e.clientX||0)-pe.dragX;
+    if(!ctx.phaseDrag){
+      if(Math.abs(dx)<PHASE_DEAD) return true;            // 死区：按住看一眼不该跳值
+      ctx.phaseDrag=true; pe.armed=false;                 // 过了死区才算「开始拖」
+    }
+    var v=pe.gest0-dx/G.CELL;
+    v=Math.round(v/PHASE_STEP)*PHASE_STEP;                // 吸附 0.05（与键盘、文本输入同一口径）
+    applyPhase(+Math.max(0,Math.min(PHASE_MAX,v)).toFixed(2));
     return true;
   }
 
@@ -557,10 +568,16 @@ export function attachInteractions(ctx){
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
     // 相位尺自带手势：按下即定位、拖动连续改。必须在 touch 的「候选 tap」之前返回，
     // 否则一次拖动会被后面的 tap 判定再派发一次。
-    if(state.phaseEdit&&isPhaseTrack(e.target)){
-      e.preventDefault&&e.preventDefault();
-      startPhaseDrag(e);
-      return;
+    // 相位模式：在**这一行**的波形上按下就是「抓波形」（0.14.5）。不再有滑块命中区 ——
+    // 整行的淡底与刻度都是 pointer-events:none，命中落在 rect.cell 上，所以一次轻点
+    // 仍然能选中格子，并顺手退出相位模式。
+    if(state.phaseEdit){
+      var pc=cellAt(e);
+      if(pc&&pc.lane===state.phaseEdit.lane&&pc.tick!==undefined){
+        e.preventDefault&&e.preventDefault();
+        startPhaseDrag(e);
+        return;
+      }
     }
 
     if(isTouch){
@@ -588,7 +605,7 @@ export function attachInteractions(ctx){
     // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
     var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
-    if(state.phaseEdit&&!(c&&c.phaseTrack!==undefined)) closePhaseEdit(true);
+    if(state.phaseEdit) closePhaseEdit(true);
     if(!c){
       // 点到画布空白 = 清掉选中。四场景一致：桌面本来有 Esc，触摸端没有键盘 ——
       // 这条手势就是触摸端唯一的「取消选中」，让底部动作行（#tbpanel）成为唯一的上下文入口。
@@ -634,7 +651,6 @@ export function attachInteractions(ctx){
       if(c.meta==='phase') openPhaseEdit(c.lane); else openRowEditor(c.lane,c.meta);
       return;
     }
-    if(c.phaseTrack!==undefined){ if(dbl>1) return; e.preventDefault(); return; }   // 尺子自己带手势
     if(c.group!==undefined){ if(dbl>1) return; e.preventDefault(); openGroupEditor(c.group); return; }
     if(c.col!==undefined){
       if(dbl>1) return;
@@ -753,6 +769,7 @@ export function attachInteractions(ctx){
   document.addEventListener('mouseup',function(e){
     if(e&&syntheticMouse(e)) return;
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
+    if(endPhaseTap(false)) return;
     if(!ctx.painting) return;
     var p=ctx.painting; ctx.painting=null;
     if(p.moved){
@@ -844,9 +861,12 @@ export function attachInteractions(ctx){
     if(tPts[id]){ tPts[id].x=cx; tPts[id].y=cy; tPts[id].t=Date.now(); tLast=tPts[id].t; }
     else if(!(tPan||ctx.phaseDrag)) return;   // 不认识的指针、也没有进行中的手势
     if(tPan){ tPanMove(); return; }
-    if(ctx.phaseDrag){
-      // 尺子上竖向拖 = 想上下看：改判为移动视图，别把竖向手势卡成「没有反应」
+    // 相位模式：**按下时是「待命」，过了死区才算拖动** —— 所以这两态都要交给 movePhaseDrag。
+    // （0.14.5 第一版漏了「待命」这一支，结果触摸端按下后怎么拖都不动，只有桌面能动。）
+    if(ctx.phaseDrag||(state.phaseEdit&&state.phaseEdit.armed)){
+      // 竖向为主 = 想上下看：改判为移动视图，别把竖向手势卡成「没有反应」
       if(tDown&&Math.abs(cy-tDown.y)>14&&Math.abs(cy-tDown.y)>Math.abs(cx-tDown.x)*1.5){
+        if(state.phaseEdit) state.phaseEdit.armed=false;
         tHandOffToPan(); tPanMove(); return;
       }
       movePhaseDrag(e);
@@ -856,7 +876,7 @@ export function attachInteractions(ctx){
     // 本次手势不产生任何选中 / 弹出 / 编辑 —— 这是「移动 vs 编辑」的分界线。
     if(press&&(Math.abs(cx-press.x)>12||Math.abs(cy-press.y)>12)){
       press=null; clearLong();
-      // 尺子开着时画布没有原生滚动可依赖（`.is-ruler` 把 touch-action 关掉了），
+      // 尺子开着时画布没有原生滚动可依赖（`.is-phase` 把 touch-action 关掉了），
       // 这次拖动由我们接手成平移，并顺手把尺子收下 —— 与「点别处」同一个结果。
       // 注意：只有这一支才 return；其余情况要继续往下走，否则连线模式的跟手预览会断。
       if(state.phaseEdit){ closePhaseEdit(true); tPanStart(); tPanMove(); return; }
@@ -899,6 +919,7 @@ export function attachInteractions(ctx){
     if(!tActive) return;
     tDropPoint(tid(e));
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
+    if(endPhaseTap(true)) return;
     confirmTap(e.clientX||0,e.clientY||0);
   }
   document.addEventListener('pointerup',endPointer,true);
