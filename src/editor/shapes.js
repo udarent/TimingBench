@@ -1,7 +1,7 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G, lanePeriod, laneShift, laneChars, cellGeo } from './geometry.js';
+import { G, lanePeriod, laneShift, laneLeadTrim, laneChars, cellGeo } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import { EMBED } from './embed.js';
@@ -373,13 +373,16 @@ export function createShapes(ctx){
       o.push('</g>');
     }
     if(isEmpty) o.push(emptyRow(W));
-    // phase 行要裁掉被移出波形起点的那半个周期（上游是直接丢掉半个 brick，我们裁掉，视觉等价）。
+    // phase 行：位移是**连续**的（见 geometry.js 里对上游两步机制的说明），但行首那截上游是
+    // 整块丢掉的，不是压缩显示 —— 所以裁剪区左边界要再往右让 `laneLeadTrim` 个周期：
+    //   phase 0.1 → 波形从 0.4 个周期处开始（上游实测首砖 x=16px、砖宽 20px、一格 40px）。
     // 只给 phase>0 的行建 clipPath —— 默认文档不产生任何额外 DOM。
     var clips=[];
     ir.lanes.forEach(function(l,li){
       if(l.kind!=='signal'||laneShift(l)<=0) return;
       var w=laneChars(l,N)*lanePeriod(l)*CELL;
-      clips.push('<clipPath id="lclip-'+l.id+'"><rect x="'+XS+'" y="'+(TOP+li*ROW_H)+'" width="'+w+'" height="'+ROW_H+'"/></clipPath>');
+      var cx0=XS+laneLeadTrim(l)*CELL;
+      clips.push('<clipPath id="lclip-'+l.id+'"><rect x="'+cx0+'" y="'+(TOP+li*ROW_H)+'" width="'+(w-(cx0-XS))+'" height="'+ROW_H+'"/></clipPath>');
     });
     if(clips.length) o.push('<defs>'+clips.join('')+'</defs>');
     // 行范围（分组用）：范围内的行一起高亮，看上去是「一段」而不是单选一行

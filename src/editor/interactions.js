@@ -110,7 +110,7 @@ export function attachInteractions(ctx){
   // 每个行内工具 / 图元徽标对应的就地编辑规格
   function rowSpec(l,act){
     switch(act){
-      case 'phase': return { val:String(l.phase), title:'phase — rendered in steps of 0.5 period (WaveDrom quantization)', label:'phase', meta:true, width:96,
+      case 'phase': return { val:String(l.phase), title:'phase — shifts the lane left by that many periods (fractional is fine)', label:'phase', meta:true, width:96,
         makeOp:function(v){ var n=Number(v); return v!==''&&isFinite(n)?{t:'setPhase',lane:l.id,v:n}:null; } };
       case 'period': return { val:String(l.period), title:'period (>=1)', label:'period', meta:true, width:96,
         makeOp:function(v){ var n=Number(v); return v!==''&&isFinite(n)&&n>=1?{t:'setPeriod',lane:l.id,v:n}:null; } };

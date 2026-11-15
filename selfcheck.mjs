@@ -343,16 +343,25 @@ function check() {
   ok(!/from ['"]\.\/(shapes|interactions|touch|index)\.js['"]/.test(waveSrc),
     'waveform.js 反向依赖了 UI 模块（渲染内核必须保持底层）');
   // 行级时间标尺（教程 Step 6）：period/phase 必须真的参与绘制，不能只当元信息。
-  // 口径对齐上游 parse-wave-lanes：period 把字符拆成 2·period 个 half-brick（每格宽 period 倍）；
-  // phase 以 half-brick 计 —— 上游是 `for (i=0;i<phase*2;i++) R.shift()`，只移**整数**个半格，
-  // 即 `floor(phase*2)/2` 个周期（0.1 / 0.4 与 0 相同，0.5 才移半格）。
-  // 这条锁以前把 ceil 写成了标准答案：0.1 被抬到 0.5，于是「0.1 和 0.5 看不出区别」。
+  // period 把字符拆成 2·period 个 half-brick（每格宽 period 倍）。
+  // phase **是连续位移，不能量化**：上游 wavedrom 走的是「整块丢掉 ceil(2p) 个半砖（parse-wave-lane
+  // 里的 `for (i=0;i<phase*2;i++) R.shift()`）＋ 再把整组右移 (ceil(2p)−2p) 个半砖补偿
+  // （render-wave-lane 的 `tt(xoffset*lane.xs,…)`）」，净位移 = p 个周期。实测 wavedrom@3.5.0：
+  // 0.1 → translate(16)、0.2 → 12、0.3 → 8（砖宽 20、一格 40），即每 0.1 相位移 4px = 0.1 格。
+  // 我们先后误读过两次：ceil 时 0.1 被抬成 0.5（与 0.5 重合）、floor 时 0.1 变成 0（与 0 重合），
+  // 两种都让「0.1 和 0.2 看不出区别」。行首那截上游是**整块丢掉**的，所以还要 laneLeadTrim
+  // 把裁剪区左边界右让，否则会把上游丢掉的半个砖压着画出来（比上游多一截）。
   const geoSrc = read('src/editor/geometry.js');
   ok(/export function lanePeriod/.test(geoSrc) && /export function laneShift/.test(geoSrc) &&
      /export function laneChars/.test(geoSrc) && /export function cellGeo/.test(geoSrc) &&
-     /Math\.floor\(p\*2\)\/2/.test(geoSrc) && !/Math\.ceil\(p\*2\)/.test(geoSrc),
-    '行级时间标尺缺失（period/phase 又退回「只存不画」）');
+     /return \(isFinite\(p\)&&p>0\) \? p : 0;/.test(geoSrc) &&
+     !/Math\.(floor|round)\(p\s*\*\s*2\)/.test(geoSrc) &&
+     !/Math\.ceil\(p\s*\*\s*2\)\s*\/\s*2/.test(geoSrc) &&
+     /export function laneLeadTrim/.test(geoSrc) &&
+     /Math\.ceil\(p\*2\)-p\*2/.test(geoSrc),
+    '行级时间标尺被改坏（period/phase 只存不画，或 phase 又被量化——0.1 会和 0 / 0.5 重合）');
   ok(/var P=lanePeriod\(l\), sh=laneShift\(l\), cw=P\*CELL, chars=laneChars\(l,N\)/.test(shapesSrc) &&
+     /var cx0=XS\+laneLeadTrim\(l\)\*CELL/.test(shapesSrc) &&
      /cellGeo\(l,i\)/.test(shapesSrc) && /lclip-/.test(shapesSrc) &&
      /COLS=Math\.max\(COLS, laneChars\(l,N\)\*lanePeriod\(l\)\)/.test(shapesSrc),
     'period/phase 未接入绘制（格宽 / 起点 / 画布宽度 / phase 裁剪）');
