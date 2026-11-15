@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.12.3">
+<meta name="version" content="0.13.0">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -189,12 +189,14 @@
 ] }</pre>
     <div class="livecard" data-timingbench data-height="240"
          data-wavejson="{ signal: [ { name: 'CK', wave: 'P.......', period: 2 }, { name: 'CMD', wave: 'x.3x=x4x=x=x=x=x', data: 'RAS NOP CAS NOP NOP NOP NOP', phase: 0.5 }, { name: 'ADDR', wave: 'x.=x..=x........', data: 'ROW COL', phase: 0.5 }, { name: 'DQS', wave: 'z.......0.1010z.' }, { name: 'DQ', wave: 'z.........5555z.', data: 'D0 D1 D2 D3' } ] }"></div>
-    <p class="hint">Both fields are applied to the drawing and are editable in place: click the
-    <code>&phi;</code> / <code>T</code> next to a row name. Phase shifts the lane left by exactly that many
-    periods &mdash; it is continuous, so <code>0.1</code> and <code>0.2</code> differ by a tenth of a cell (WaveDrom
-    shifts it the same way but throws away the leading half&nbsp;bricks; we keep them and clip at the wave origin). The numbered
-    ruler above still counts reference periods, so a <code>period: 2</code> row spans two ruler columns per
-    character.</p>
+    <p class="hint">Both fields are applied to the drawing and can be edited in place. Click <code>&phi;</code> next
+    to a row name and that row turns into a <strong>phase ruler</strong> &mdash; press anywhere to jump there, then drag:
+    one cell is one period, the arrow keys nudge by 0.05, <code>0</code> resets, <code>Esc</code> cancels and
+    <code>Enter</code> accepts. Phase shifts the lane left by exactly that many periods &mdash; it is continuous, so
+    <code>0.1</code> and <code>0.2</code> differ by a tenth of a cell (WaveDrom shifts it the same way but throws away
+    the leading half&nbsp;bricks; we keep them and clip at the wave origin). <code>T</code> is the period: it stretches
+    every character of that row and is edited as a number. The numbered ruler above still counts reference periods, so a
+    <code>period: 2</code> row spans two ruler columns per character.</p>
   </section>
 
   <section class="step">

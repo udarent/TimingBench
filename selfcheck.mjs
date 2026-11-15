@@ -367,6 +367,20 @@ function check() {
      /COLS=Math\.max\(COLS, laneChars\(l,N\)\*lanePeriod\(l\)\)/.test(shapesSrc),
     'period/phase 未接入绘制（格宽 / 起点 / 画布宽度 / phase 裁剪）');
 
+  // 相位尺（0.13.0，图形化改 phase）：必须是「按需出现」的 —— 只有 state.phaseEdit 指向的那一行
+  // 才画尺子，默认文档里一个额外图元都不能有（否则会把每次 redraw 的指纹与 DOM 断言全搅乱）。
+  // 尺子的换算参数由绘制层写在命中区的 data-maxv 上，交互层只读它 —— 两处各算一份布局必然走偏。
+  ok(/if\(state\.phaseEdit&&state\.phaseEdit\.lane===l\.id\)\{/.test(shapesSrc) &&
+     /class="phaseTrack" data-lane="'\+l\.id\+'" data-maxv="'\+pmax/.test(shapesSrc) &&
+     /rect\.phaseTrack/.test(interSrc) && /data-maxv/.test(interSrc),
+    '相位尺要么消失了、要么变成常驻图元了（应只在 state.phaseEdit 指向的行上画）');
+  // 拖动期间的提交必须是 skipUndo（一次手势最后合并成一步）；步长要读 PHASE_STEP，
+  // 不能就地写死 0.5 —— 之前 phase 的量化教训就是「散落的魔法数」。
+  ok(/ctx\.commit\(\{t:'setPhase',lane:pe\.lane,v:v\},'phase → '\+v,true,true\)/.test(interSrc) &&
+     /function flushPhaseStep\(\)/.test(interSrc) &&
+     /PHASE_STEP/.test(interSrc) && !/phaseStep\s*=\s*0\.5/.test(interSrc),
+    '相位尺的撤销粒度被改坏（拖动中的提交必须 skipUndo、收尾合并成一步）');
+
   // 第七个参数是「这一格有多宽」：period≠1 的行按 period×CELL 传（渲染层自己的标尺），
   // 仍不得掺入 viewW / scrollLeft 这类操作层变量。
   ok(/waveGlyph\(w,prevCh,x0,yT,yM,yB,cw,/.test(shapesSrc) && /var P=lanePeriod\(l\), sh=laneShift\(l\), cw=P\*CELL/.test(shapesSrc),

@@ -62,6 +62,13 @@ export function laneShift(l){
   var p=Number(l&&l.phase);
   return (isFinite(p)&&p>0) ? p : 0;
 }
+// 相位尺（图形化改 phase）的两个参数：
+//   PHASE_STEP 拖动 / 方向键的吸附步长。取 0.05 —— 一格 38px 时 = 1.9px，够细且不会让
+//     指针稍微一抖就跳 0.1；要更细的精确值仍可点 ψ 徽标走文本输入。
+//   PHASE_MAX  尺子右端代表的周期数上限。相位超过 4 个周期没有实际用途（波形整体移出画布）。
+export const PHASE_STEP = 0.05;
+export const PHASE_MAX = 4;
+
 // 这一行要画多少个字符格：自身字符数与「补齐到全图参考宽度」取大。
 // period=1 时恒等于 ticks（与改造前完全一致）；period=2 时补一半。
 export function laneChars(l,ticks){

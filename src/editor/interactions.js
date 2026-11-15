@@ -3,7 +3,7 @@
 // 键盘另有独立的 linkCursor 端点光标，保证不用鼠标也能完成全部编辑。
 // 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
-import { G, cellGeo } from './geometry.js';
+import { G, cellGeo, PHASE_STEP } from './geometry.js';
 import { TOUCH } from './mode.js';
 import { esc, cut } from '../core/util.js';
 
@@ -94,6 +94,7 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
+        if(g.classList&&g.classList.contains('phaseTrack')) return {phaseTrack:ln};
         // 组名 / 括号命中区只认「这一层的路径」—— 行 id 在这里没用（行的 groupPath 是它自己的最深层）
         if(g.classList&&(g.classList.contains('laneGroupName')||g.classList.contains('groupHit')))
           return {group:g.getAttribute('data-group')};
@@ -139,6 +140,79 @@ export function attachInteractions(ctx){
       ctx.commit(op,spec.label+' → '+v);
     },{ title:spec.title+' · Enter to confirm / Esc to cancel', placeholder:spec.title, width:spec.width });
   }
+  // ---- 相位尺：图形化改 phase -----------------------------------------------
+  // 为什么不做成「输入框旁边再加两个按钮」：相位是**连续量**，用户真正要的是「拖着看波形
+  // 怎么挪过去」，而不是「先想一个数、再敲进去」。所以点 φ 徽标把**整条波形区**变成一把尺子：
+  //   按下即定位（滑块语义）、按住拖动连续改、每一帧都真重绘（不是假预览）。
+  // 撤销的粒度按「手势」算：一次拖动 / 一串方向键 = 一步。做法与漫刷同一套 —— 拖动期间
+  // 用 skipUndo 提交（源码即时同步、IR 即时生效），手势结束时把「这一串开始前的快照」压栈。
+  // 尺子几何完全由绘制层给（命中区上的 `data-maxv`），这里只做「指针 x → 相位」，
+  // 不重复算布局 —— 两处各算一份，迟早走偏。
+  function phaseTrackEl(){ return wrap.querySelector('rect.phaseTrack'); }
+  function phaseValueAt(clientX){
+    var el=phaseTrackEl(); if(!el) return null;
+    var x0=+el.getAttribute('x'), maxV=parseFloat(el.getAttribute('data-maxv'));
+    if(!isFinite(x0)||!isFinite(maxV)) return null;
+    var q=svgXY(clientX||0,0), v=(q.x-x0)/G.CELL;
+    if(!isFinite(v)) return null;
+    v=Math.round(v/PHASE_STEP)*PHASE_STEP;              // 吸附到 0.05；更精确的值仍可点徽标走文本输入
+    return +Math.max(0,Math.min(maxV,v)).toFixed(2);
+  }
+  function openPhaseEdit(laneId){
+    var l=findLane(laneId); if(!l||l.kind!=='signal'||!state.ir) return;
+    if(state.phaseEdit&&state.phaseEdit.lane===laneId){ closePhaseEdit(true); return; }  // 再点一次收起
+    if(state.phaseEdit) closePhaseEdit(true);
+    // pushed：本次会话推了几步撤销；redo0：打开时的重做栈快照（取消时要还原）
+    state.phaseEdit={lane:laneId, orig:l.phase, pending:null, pushed:0, redo0:state.redo.slice()};
+    state.selLane=laneId; state.selCell=null; state.sel=null;
+    if(ctx.clearSpan) ctx.clearSpan();
+    ctx.redraw();
+  }
+  // 一次手势 = 一步撤销：把「这一串改动开始前的快照」压栈，并清掉 pending
+  function flushPhaseStep(){
+    var pe=state.phaseEdit; if(!pe||!pe.pending) return;
+    state.undo.push(pe.pending); if(state.undo.length>60) state.undo.shift();
+    state.redo.length=0; pe.pending=null; pe.pushed+=1;
+  }
+  // 只改 IR + 重绘：不进撤销栈（收尾时压一步），但源码与波形都是即时生效的
+  function applyPhase(v){
+    var pe=state.phaseEdit; if(!pe) return;
+    var l=findLane(pe.lane); if(!l||l.phase===v) return;
+    if(!pe.pending) pe.pending={ir:state.ir, src:ctx.code.value, sel:state.sel};   // 快照必须在 commit 之前取
+    ctx.commit({t:'setPhase',lane:pe.lane,v:v},'phase → '+v,true,true);
+  }
+  function closePhaseEdit(keep){
+    var pe=state.phaseEdit; if(!pe) return;
+    state.phaseEdit=null;
+    var l=findLane(pe.lane);
+    if(l&&l.phase!==pe.orig){
+      if(keep) flushPhaseStep();
+      else{
+        // 取消：值还原成打开时的样子，并把这次会话推入的撤销步一起摘掉（不留「空的一步」），
+        // 顺手还原重做栈 —— 用户感觉就像这段编辑没发生过。
+        ctx.commit({t:'setPhase',lane:pe.lane,v:pe.orig},'phase',true,true);
+        if(pe.pushed) state.undo.splice(Math.max(0,state.undo.length-pe.pushed), pe.pushed);
+        state.redo=pe.redo0;
+      }
+    } else if(!keep&&pe.pushed){
+      // 值已经被拖回原值：撤销步同样要摘掉
+      state.undo.splice(Math.max(0,state.undo.length-pe.pushed), pe.pushed);
+      state.redo=pe.redo0;
+    }
+    ctx.redraw();
+  }
+  function isPhaseTrack(t){ return !!(t&&t.getAttribute&&t.getAttribute('class')==='phaseTrack'); }
+  // 按下即定位（滑块语义），之后按住拖动连续改；两者共用「指针 x → 相位」这一个换算
+  function startPhaseDrag(e){
+    var v=phaseValueAt(e.clientX); if(v===null) return false;
+    ctx.phaseDrag=true; applyPhase(v); return true;
+  }
+  function movePhaseDrag(e){
+    if(!ctx.phaseDrag) return false;
+    var v=phaseValueAt(e.clientX); if(v!==null) applyPhase(v);
+    return true;
+  }
+
   function handleTool(act,laneId){
     if(act==='wave'||act==='data'||act==='node'){ openRowEditor(laneId,act); return; }
     if(act==='del'){ state.selLane=null; ctx.commit({t:'deleteLane',lane:laneId},'delete row'); return; }
@@ -450,6 +524,13 @@ export function attachInteractions(ctx){
     if(e.button!==undefined&&e.button!==0) return;
     // 就地输入框也在 SVG 里，点它自己不能触发结算
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
+    // 相位尺自带手势：按下即定位、拖动连续改。必须在 touch 的「候选 tap」之前返回，
+    // 否则一次拖动会被后面的 tap 判定再派发一次。
+    if(state.phaseEdit&&isPhaseTrack(e.target)){
+      e.preventDefault&&e.preventDefault();
+      startPhaseDrag(e);
+      return;
+    }
 
     if(isTouch){
       // 只记候选，什么都不改：滑动（pan）与点按（tap）在抬手时才分得清
@@ -476,6 +557,7 @@ export function attachInteractions(ctx){
     // 先解析命中目标，避免提交编辑后的重绘让 e.target 变成游离节点
     var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
+    if(state.phaseEdit&&!(c&&c.phaseTrack!==undefined)) closePhaseEdit(true);
     if(!c){
       // 点到画布空白 = 清掉选中。四场景一致：桌面本来有 Esc，触摸端没有键盘 ——
       // 这条手势就是触摸端唯一的「取消选中」，让底部动作行（#tbpanel）成为唯一的上下文入口。
@@ -514,7 +596,14 @@ export function attachInteractions(ctx){
     if(c.ch!==undefined){ if(dbl>1) return; e.preventDefault(); writeChar(c.ch); return; }
     if(c.tool){ if(dbl>1) return; e.preventDefault(); handleTool(c.tool,c.lane); return; }
     if(c.cact){ if(dbl>1) return; e.preventDefault(); state.sel=c.col; handleColAct(c.cact,c.col); return; }
-    if(c.meta){ if(dbl>1) return; e.preventDefault(); openRowEditor(c.lane,c.meta); return; }
+    if(c.meta){
+      if(dbl>1) return;
+      e.preventDefault();
+      // 相位是连续量 → 图形化（相位尺）；周期是 1..N 的整数 → 保留文本输入（改一次就到位）
+      if(c.meta==='phase') openPhaseEdit(c.lane); else openRowEditor(c.lane,c.meta);
+      return;
+    }
+    if(c.phaseTrack!==undefined){ if(dbl>1) return; e.preventDefault(); return; }   // 尺子自己带手势
     if(c.group!==undefined){ if(dbl>1) return; e.preventDefault(); openGroupEditor(c.group); return; }
     if(c.col!==undefined){
       if(dbl>1) return;
@@ -601,6 +690,7 @@ export function attachInteractions(ctx){
     handleDown(e,false);
   });
   wrap.addEventListener('mousemove',function(e){
+    if(movePhaseDrag(e)) return;
     var svg=svgRoot();
     if(state.connect&&svg){
       var q=svgXY(e.clientX,e.clientY); showConnectPreview(q.x,q.y);
@@ -613,8 +703,23 @@ export function attachInteractions(ctx){
     state.ch=ctx.painting.v; state.selCell={lane:c.lane,tick:c.tick};
     ctx.commit({t:'setSlot',lanes:[c.lane],tick:c.tick,v:ctx.painting.v},'paint @ t'+c.tick,true,true);
   });
+  // 点到画布之外（源码框 / 顶栏 / 分享面板 / 页面空白）也要结算相位编辑，
+  // 否则会留一把悬空的尺子挂在图上。用 capture：先把手势收成一步，再让目标控件自己的处理跑。
+  document.addEventListener('mousedown',function(e){
+    if(!state.phaseEdit) return;
+    var t=e.target;
+    if(t&&wrap.contains&&wrap.contains(t)) return;
+    closePhaseEdit(true);
+  },true);
+  document.addEventListener('pointerdown',function(e){
+    if(!state.phaseEdit||e.pointerType==='mouse') return;
+    var t=e.target;
+    if(t&&wrap.contains&&wrap.contains(t)) return;
+    closePhaseEdit(true);
+  },true);
   document.addEventListener('mouseup',function(e){
     if(e&&syntheticMouse(e)) return;
+    if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
     if(!ctx.painting) return;
     var p=ctx.painting; ctx.painting=null;
     if(p.moved){
@@ -635,6 +740,7 @@ export function attachInteractions(ctx){
   });
   wrap.addEventListener('pointermove',function(e){
     if(e.pointerType==='mouse') return;
+    if(movePhaseDrag(e)) return;
     // 手指移动超过 12px 就判定为「滑动看图」（pan）：作废候选 tap 与长按计时，
     // 本次手势不产生任何选中 / 弹出 / 编辑 —— 这是「移动 vs 编辑」的分界线。
     if(press&&(Math.abs((e.clientX||0)-press.x)>12||Math.abs((e.clientY||0)-press.y)>12)){
@@ -673,11 +779,12 @@ export function attachInteractions(ctx){
   }
   function endPointer(e){
     if(e.pointerType==='mouse') return;
+    if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
     confirmTap(e.clientX,e.clientY);
   }
   document.addEventListener('pointerup',endPointer);
   document.addEventListener('pointercancel',function(e){
-    if(e.pointerType!=='mouse'){ clearLong(); press=null; }
+    if(e.pointerType!=='mouse'){ clearLong(); press=null; ctx.phaseDrag=false; }
   });
 
   // 没有 Pointer Events 的老浏览器：用 touch 事件回退，命中点交给 elementFromPoint
@@ -838,7 +945,26 @@ export function attachInteractions(ctx){
     }
     if(e.key==='Escape'&&state.linkMode){ ctx.setLinkMode(false); return; }
     if((e.ctrlKey||e.metaKey)&&/^(z|y)$/i.test(e.key)&&!typing){
-      prevent(e); ctx.doCmd((e.shiftKey||/^y$/i.test(e.key))?'redo':'undo'); return;
+      prevent(e);
+      if(state.phaseEdit) closePhaseEdit(true);   // 先把相位编辑收成一步，再执行撤销
+      ctx.doCmd((e.shiftKey||/^y$/i.test(e.key))?'redo':'undo'); return;
+    }
+    // 相位尺打开时接管键盘：Esc = 取消（值还原）、Enter = 收下、←→ 微调、0 = 归零。
+    // 位置很关键 —— 必须排在 otherControl() **之前**：尺子是从上下文条 / φ 徽标点开的，
+    // 焦点还留在那个按钮上，otherControl() 会直接 return，Esc 与方向键就都失灵了。
+    // 也必须排在下面的「Esc 逐层退出」之前，否则一次 Esc 会连选中一起清掉。
+    if(state.phaseEdit&&!typing){
+      var pk=e.key;
+      if(pk==='Escape'){ prevent(e); e.stopPropagation(); closePhaseEdit(false); return; }
+      if(pk==='Enter'||pk===' '||pk==='Spacebar'){ prevent(e); closePhaseEdit(true); return; }
+      if(pk==='ArrowLeft'||pk==='ArrowRight'){
+        prevent(e);
+        var pl=findLane(state.phaseEdit.lane);
+        var step=(pk==='ArrowLeft'?-1:1)*(e.shiftKey?0.5:PHASE_STEP);
+        if(pl) applyPhase(+Math.max(0,pl.phase+step).toFixed(2));
+        return;
+      }
+      if(pk==='0'){ prevent(e); applyPhase(0); return; }
     }
     if(typing||otherControl()) return;
     // 只读态不响应任何编辑键；Esc 由卡片外层负责退出编辑态。
@@ -901,6 +1027,7 @@ export function attachInteractions(ctx){
   ctx.openEdgeEditor=openEdgeEditor;
   ctx.openInlineFor=openInlineFor;
   ctx.openGroupEditor=openGroupEditor;
+  ctx.openPhaseEdit=openPhaseEdit; ctx.closePhaseEdit=closePhaseEdit;
   ctx.openEditorFor=openEditorFor;
   ctx.handleTool=handleTool;
   ctx.handleColAct=handleColAct;

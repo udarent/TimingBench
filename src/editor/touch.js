@@ -158,9 +158,14 @@ export function attachTouchUI(ctx, dom) {
       case 'node':   c = needCell(); if (c) ctx.openNodeEditor(c.lane, c.tick, ''); return;
       case 'link':   ctx.doCmd('link'); return;
       case 'name':   l = needLane(); if (l) ctx.openInlineFor({ nameLane: l }); return;
-      case 'wave': case 'data': case 'nodeStr': case 'phase': case 'period':
+      // phase 走图形化的相位尺（连续量，拖动比敲数字快得多）；其余仍是文本输入
+      case 'phase':
         l = needLane();
-        if (l) ctx.openRowEditor(l, { wave: 'wave', data: 'data', nodeStr: 'node', phase: 'phase', period: 'period' }[k]);
+        if (l && ctx.openPhaseEdit) ctx.openPhaseEdit(l);
+        return;
+      case 'wave': case 'data': case 'nodeStr': case 'period':
+        l = needLane();
+        if (l) ctx.openRowEditor(l, { wave: 'wave', data: 'data', nodeStr: 'node', period: 'period' }[k]);
         return;
       case 'up': case 'down':
         l = needLane();

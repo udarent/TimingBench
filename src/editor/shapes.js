@@ -1,7 +1,7 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G, lanePeriod, laneShift, laneChars, cellGeo } from './geometry.js';
+import { G, lanePeriod, laneShift, laneChars, cellGeo, PHASE_MAX } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import { EMBED } from './embed.js';
@@ -231,8 +231,15 @@ export function createShapes(ctx){
     // 「少画编辑控件」，不是另一套版式。行名区宽度在这里按内容重算（两态同一算法），
     // 避免任何调用方改动过后残留旧值。
     // 行名左界：桌面被行首拖拽把手顶到 PAD+18，触摸端不画把手、左界只有 PAD。
+    // 行名区宽度按内容重算（getBBox 会强制布局，所以内容没变就不量）。测量键里**故意**
+    // 用「拖动中的那一行的相位占位符」代替真实值：相位尺是连续拖动的，每 0.05 就可能让
+    // `φ0.35` 多一位数字 → 行名区宽度跨过 8px 量化边界 → 波形原点跟着跳 → 指针→相位的
+    // 换算被自己的位移污染（实测拖到 1.0 落在 0.8）。冻结这一行的相位后，拖动全过程
+    // 版式纹丝不动，松手（phaseEdit 清空）时才按新值量一次。
     var nameKey=SC+'|'+ir.lanes.map(function(l){
-      return l.kind==='spacer'?'':(l.name+'/'+l.phase+'/'+l.period+'/'+(l.groupPath||[]).join('>'));
+      if(l.kind==='spacer') return '';
+      var ph=(state.phaseEdit&&state.phaseEdit.lane===l.id)?'~':l.phase;
+      return l.name+'/'+ph+'/'+l.period+'/'+(l.groupPath||[]).join('>');
     }).join(';');
     if(nameKey!==measKey){                       // 内容没变就不重复测量（getBBox 会强制布局）
       measKey=nameKey; measW=nameBlockWidth(ir);
@@ -457,6 +464,43 @@ export function createShapes(ctx){
         o.push('<text class="waveNode" x="'+(cellGeo(l,i).cx+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
       }
       if(clipId) o.push('</g>');
+      // 相位尺：这一行正处于「图形化改 phase」状态时，整条波形区变成一条可拖的尺子。
+      // 画在最后（盖住格子），拖动由交互层按指针坐标换算；尺子的 `data-maxv` 是它右端
+      // 代表的周期数，交互层只读这个属性、不重复算布局（两处各算一份必然走偏）。
+      if(state.phaseEdit&&state.phaseEdit.lane===l.id){
+        // 尺子只画「有意义的那一段」：0..PHASE_MAX 个周期，宽度不够时按可用宽度收窄
+        // （maxv 跟着变，所以指针→相位的换算仍然是一格 = 一个周期）。
+        var ptw=Math.min(PHASE_MAX*CELL, Math.max(2*CELL, ACT_X-8-XS));
+        var pmax=Math.min(PHASE_MAX, +(ptw/CELL).toFixed(2));
+        var pty=y+4, pth=ROW_H-8, pcur=Math.min(Math.max(0,l.phase), pmax);
+        var pgo=['<g class="phaseTrackG">',
+          '<rect class="phaseTrackBg" x="'+XS+'" y="'+pty+'" width="'+ptw+'" height="'+pth+
+            '" rx="4" fill="var(--accent)" fill-opacity="0.07"/>'];
+        // 刻度每半个周期一条：相位一旦量化到 0.5 就没法解释 0.1，但没有刻度也看不出「拖了多远」。
+        for(var pk=0; pk*0.5<=pmax+1e-9; pk++){
+          var ptx=XS+pk*0.5*CELL;
+          if(ptx>XS+ptw-2) break;
+          pgo.push('<line x1="'+ptx+'" x2="'+ptx+'" y1="'+(pty+3)+'" y2="'+(pty+pth-3)+
+            '" stroke="var(--accent)" stroke-opacity="'+(pk%2?0.14:0.3)+'" stroke-width="1"/>');
+        }
+        var pthx=XS+pcur*CELL;
+        // 0 → 当前值 填一段浅色：一眼看出「现在是多少」，不用去读数字。
+        if(pcur>0) pgo.push('<rect class="phaseFill" x="'+XS+'" y="'+pty+'" width="'+(pcur*CELL)+
+          '" height="'+pth+'" rx="4" fill="var(--accent)" fill-opacity="0.12" pointer-events="none"/>');
+        pgo.push('<line class="phaseThumb" x1="'+pthx+'" x2="'+pthx+'" y1="'+pty+'" y2="'+(pty+pth)+
+          '" stroke="var(--accent)" stroke-width="2"/>');
+        // 滑块画成圆角方块：绘制层禁用圆形是历史教训（曾经的节点锚点小圆圈让人误以为可以拖）。
+        // 方块一眼就是「尺子上的把手」，不会被当成锚点。
+        // 触摸端画布整体等比缩小，滑块按「≈16 物理像素」反算用户单位（同 openInline 的做法）
+        var pkn=T?Math.min(26,Math.max(12,Math.round(16/(state.fit||1)))):9;
+        pgo.push('<rect class="phaseKnob" x="'+(pthx-pkn/2)+'" y="'+(pty+pth/2-pkn/2)+'" width="'+pkn+
+          '" height="'+pkn+'" rx="2" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/>');
+        // 命中区最后画：它才是这次手势的目标（class 精确为 phaseTrack，交互层靠它认）
+        pgo.push('<rect class="phaseTrack" data-lane="'+l.id+'" data-maxv="'+pmax+'" x="'+XS+'" y="'+pty+
+          '" width="'+ptw+'" height="'+pth+'" fill="transparent" style="cursor:ew-resize"/>');
+        pgo.push('</g>');
+        o.push(pgo.join(''));
+      }
       o.push('</g>');
     });
     // 分组括号（对照上游 render-groups 的画法）：一条花括号从该组首行跨到末行，组名

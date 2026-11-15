@@ -12,7 +12,7 @@ export function createEditor(dom){
     code:dom.code, wrap:dom.wrap, gutter:dom.gutter, errdot:dom.errdot,
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, selRows:null, ratio:1, parseOK:false,
-            ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0,
+            ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0, phaseEdit:null,
             W:0, H:0, drag:null, rev:0, readonly:false },
     inlineCtx:null, painting:null
   };
@@ -253,6 +253,8 @@ export function createEditor(dom){
     if(act==='embed'){ if(ctx.openEmbedCode) ctx.openEmbedCode(); return; }
     if(act==='layout'){ toggleLayout(); return; }
     if(act!=='undo'&&act!=='redo') return;
+    // 相位尺开着时先收成一步，否则撤销会拿「被拖改过的 IR」当基准
+    if(state.phaseEdit&&ctx.closePhaseEdit) ctx.closePhaseEdit(true);
     var stack=act==='undo'?state.undo:state.redo, back=act==='undo'?state.redo:state.undo;
     if(!stack.length) return;
     var p=stack.pop();
