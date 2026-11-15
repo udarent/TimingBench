@@ -46,16 +46,55 @@ export function attachInteractions(ctx){
     try{ bb=el.getBBox(); }catch(e){ return; }
     var w=Math.max(34,Math.min(opts.width||bb.width,320)), h=22;
     var x=Math.max(0,Math.min(bb.x,state.W-w-2)), y=Math.max(0,Math.min(bb.y-2,state.H-h-2));
+    // 路径类输入（组路径）在右侧多两个显式按钮：`+` 加一层、`−` 减一层。
+    // 为什么不是「靠输入的写法去猜」：单段既可能是在建一级组、也可能是在退到一级组，
+    // 猜哪边都会错一半 —— 增删层级改成看得见的动作，文本只表达结果。
+    var steps=!!opts.pathSteps;
+    // 触摸端整张画布是等比缩小的（state.fit），按 1:1 定的尺寸会被一起压小 ——
+    // 这两个按钮是给手指点的，按「至少 ~40 物理像素」反算用户单位（有上下限，别撑爆卡片）。
+    var fit=state.fit||1;
+    var stepW=steps?(TOUCH?Math.min(64,Math.max(30,Math.round(40/fit))):22):0;
+    var foW=w+(steps?stepW*2+4:0), foH=steps?(TOUCH?Math.min(44,Math.max(32,Math.round(36/fit))):24):h;
     var fo=document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
     fo.setAttribute('class','inline-fo');
-    fo.setAttribute('x',x); fo.setAttribute('y',y); fo.setAttribute('width',w); fo.setAttribute('height',h);
+    fo.setAttribute('x',x); fo.setAttribute('y',y); fo.setAttribute('width',foW); fo.setAttribute('height',foH);
     var inp=document.createElementNS('http://www.w3.org/1999/xhtml','input');
     inp.setAttribute('class','inline-edit');
     inp.setAttribute('spellcheck','false'); inp.setAttribute('autocomplete','off');
     inp.value=(value===undefined||value===null)?'':String(value);
     inp.title=opts.title||'Enter to confirm · Esc to cancel';
     inp.placeholder=opts.placeholder||'';
-    fo.appendChild(inp); svg.appendChild(fo);
+    if(!steps){ fo.appendChild(inp); }
+    else {
+      var row=document.createElementNS('http://www.w3.org/1999/xhtml','div');
+      row.setAttribute('class','inline-row');
+      row.appendChild(inp);
+      [['+',1,'add a level (append a segment)'],['\u2212',-1,'remove a level (drop the last segment)']]
+        .forEach(function(sp){
+          var btn=document.createElementNS('http://www.w3.org/1999/xhtml','button');
+          btn.setAttribute('type','button'); btn.setAttribute('class','inline-step');
+          btn.textContent=sp[0]; btn.title=sp[2]; btn.setAttribute('aria-label',sp[2]);
+          if(steps) btn.style.width=stepW+'px';   // 宽度按上面的反算值定（CSS 只负责配色）
+          // mousedown 要拦住：否则焦点交给按钮 → 输入框 blur → 提前结算
+          btn.addEventListener('mousedown',function(e){ e.preventDefault(); e.stopPropagation(); });
+          btn.addEventListener('click',function(e){
+            e.preventDefault(); e.stopPropagation();
+            var v=inp.value;
+            if(sp[1]>0){
+              // 末尾追加一段空名（光标落在最后，接着打名字即可）；已有尾斜杠就不重复加
+              inp.value=(/\/$/.test(v)?v:v.replace(/\/+$/,'')+'/');
+            } else if(/\/$/.test(v)){
+              inp.value=v.replace(/\/+$/,'');            // 先撤掉刚加的尾斜杠（+ 的逆操作）
+            } else {
+              inp.value=v.replace(/\/+$/,'').split('/').slice(0,-1).join('/');
+            }
+            try{ inp.focus(); var n=inp.value.length; inp.setSelectionRange(n,n); }catch(err){}
+          });
+          row.appendChild(btn);
+        });
+      fo.appendChild(row);
+    }
+    svg.appendChild(fo);
     ctx.inlineCtx={apply:apply,input:inp,fo:fo,initial:inp.value};
     inp.addEventListener('keydown',function(e){
       if(e.key==='Enter'){ e.preventDefault(); closeInline(true,true); }
@@ -313,17 +352,15 @@ export function attachInteractions(ctx){
     openCellCharEditor(s.lane,s.tick);
   }
   // 分组编辑的唯一入口，两种定址、同一个 EditOp：
-  //   · 点左侧括号旁的竖排组名（传这一层的完整路径）—— 改**整组**：该路径及其子树一起改
-  //     （`regroup` 的 `old` 是前缀匹配，所以改外层时子树跟着走、改子层不动兄弟与外层）。
-  //     括号只显示本层名字（与上游一致），但改的是整条路径。
-  //   · 行上下文条的「组」动作（不传参数）—— 改**当前行范围**：把这一段设成同一个路径，
-  //     这就是「从 0 建组」与「扩 / 缩组」的唯一入口（范围是 1 行时就是单行归组）。
+  //   · 点左侧括号旁的竖排组名 —— 作用在**这棵子树**上（`regroup` 的 `old` 是前缀匹配，
+  //     所以改外层时整棵子树跟着走、改子层不动兄弟与外层）。
+  //   · 行上下文条的「组」动作 —— 作用在**选中的这些行**上（`regroup` 的 `lanes`）。
+  // 两者语义完全一样：**把这些行的 groupPath 设成输入框里的路径**。
   //
-  // 输入语义（两个入口共用一套规则，只有「基准」不同 —— 见 resolveGroupPath）：
-  //   `名字`    括号入口 = 本层就地改名；行入口 = 在选中的行所在组下加一层
-  //   `/名字`   在本层（选中的行所在组）下加一层 —— 两个入口完全一致
-  //   `a/b/c`   完整路径（换父层 / 一次写多层）
-  //   空        退出这一层（子组自动上提一级）
+  // 输入框里就是**完整路径**，`/` 只是分隔符，一级一段：
+  //   `bus` = 一级组；`a/b` = 二级；空 = 不属于任何组（顶层）。
+  // 不做任何推断 —— 加一层 / 减一层用输入框右侧的 `+` / `−` 按钮改文本，
+  // 因为「单段」既可能是在建一级组、也可能是在退到一级组（用户两种意图都有）。
   function openGroupEditor(groupPath){
     var el, prefill, target;
     if(groupPath!==undefined && groupPath!==null){
@@ -332,30 +369,26 @@ export function attachInteractions(ctx){
       var names=wrap.querySelectorAll('.laneGroupName');
       for(var gi=0;gi<names.length;gi++){ if(names[gi].getAttribute('data-group')===groupPath){ el=names[gi]; break; } }
       if(!el) return;
-      var segs=String(groupPath).split('/');
       prefill=groupPath;
-      // base = 这一层（`/名字` 挂在它下面）；bareBase = 父层（裸名字 = 就地改名）
-      target={old:prefill, base:segs, bareBase:segs.slice(0,-1)};
+      target={old:prefill};
     } else {
       var span=ctx.spanLanes?ctx.spanLanes():[];
       if(!span.length||!state.ir) return;
       // 输入框贴在被选范围的首行行名上（没有行名时贴画布左上）
       el=wrap.querySelector('text.laneName[data-lane="'+span[0].id+'"]')||wrap.querySelector('svg');
       // 预填：整段共同路径（都在同一组里就是该组名，混选则留空）
-      var shared=commonPath(span.map(function(l){ return l.groupPath; }));
-      prefill=shared.join('/');
-      // base = 这一段行所在的组（`/名字` 与裸名字都挂在它下面）
-      target={lanes:span.map(function(l){ return l.id; }), base:shared, bareBase:shared};
+      prefill=commonPath(span.map(function(l){ return l.groupPath; })).join('/');
+      target={lanes:span.map(function(l){ return l.id; })};
     }
     openInline(el,prefill,function(v){
-      var path=resolveGroupPath(v,target.base,target.bareBase);
+      var path=groupPathOf(v);
       if(!groupPathChanged(path,target)) return;      // 解析结果与现状相同 ⇒ 什么都没发生，不提交
       var op=target.old!==undefined?{t:'regroup',old:target.old,path:path}:{t:'regroup',lanes:target.lanes,path:path};
       var label=(target.old!==undefined?'regroup ['+target.old+']':'group '+target.lanes.length+' row(s)')+
         ' -> '+(path.join('/')||'(none)');
       ctx.commit(op,label);
-    },{ title:'group path — name renames this level, /name nests under it, a/b is a full path, empty moves out one level',
-        placeholder:'group', width:180 });
+    },{ title:'group path — one segment per level (a/b), empty = no group; + adds a level, \u2212 removes one',
+        placeholder:'group', width:180, pathSteps:true });
   }
   // 解析出来的路径是否真的改变了目标 —— 用来挡掉「提交了但什么都没变」的空编辑
   // （空编辑会整篇重排一次源码，还会在撤销栈里留一步）。
@@ -368,22 +401,11 @@ export function attachInteractions(ctx){
     });
     return changed;
   }
-  // 把输入框里的一个字符串解析成**目标路径数组**。两个入口共用，只有 base 不同：
-  //   括号入口 base = 本层（a/b），bareBase = 父层（a）→ 裸名字是就地改名；
-  //   行入口   base = bareBase = 选中行所在的组 → 裸名字是在它下面加一层。
-  //   `名字`   → bareBase + 名字
-  //   `/…`     → base + …（在本层下加一层：`/c` 在 a/b 上得 a/b/c）
-  //   空       → base 砍掉最后一段（退出这一层，子组自动上提）
-  //   `x/y`    → 完整路径；但**首段正好是本层名**时按相对本层解释（`b/c` 在 a/b 上得 a/b/c）——
-  //              否则用户想「在 b 下加 c」，结果整组被搬出 a，还把父组劈成两段同名括号。
-  function resolveGroupPath(raw,base,bareBase){
-    var s=String(raw===undefined||raw===null?'':raw).trim();
-    var parts=s.split('/').map(function(p){ return p.trim(); }).filter(function(p){ return p.length; });
-    if(!parts.length) return base.slice(0,-1);                       // 空（或只有 /）= 退出这一层
-    if(s.charAt(0)==='/') return base.concat(parts);                 // /c = 在本层下加一层
-    if(parts.length===1) return bareBase.concat(parts);              // 裸名字
-    if(base.length && parts[0]===base[base.length-1]) return base.concat(parts.slice(1));   // b/c → a/b/c
-    return parts;                                                   // 完整路径
+  // 输入 → 路径数组。**只切分，不解释**：`/` 是分隔符，空段丢弃（`a//b` 与 `a/b` 等价，
+  // 前导 `/` 与尾随 `/` 都不带语义），空串 = 空数组 = 不属于任何组。
+  function groupPathOf(raw){
+    return String(raw===undefined||raw===null?'':raw)
+      .split('/').map(function(p){ return p.trim(); }).filter(function(p){ return p.length; });
   }
   // 一段行的最长公共分组前缀（数组）；不共享任何一段就是空数组
   function commonPath(paths){

@@ -574,12 +574,16 @@ function check() {
   ok(/v!==ed\.initial/.test(interSrc) && /function groupPathChanged\(path,target\)/.test(interSrc) &&
      /if\(!groupPathChanged\(path,target\)\) return;/.test(interSrc),
     '就地输入又会在「没改内容」时提交（点开 group rows 再取消会凭空多一层）');
-  ok(/function resolveGroupPath\(raw,base,bareBase\)/.test(interSrc) &&
-     /charAt\(0\)==='\/'/.test(interSrc) &&
-     /parts\[0\]===base\[base\.length-1\]/.test(interSrc) &&
-     /return base\.slice\(0,-1\);/.test(interSrc) &&
-     !/parentPathOf|caretEnd/.test(interSrc) && /inp\.select\(\)/.test(interSrc),
-    '组路径输入语义被改回去了（/名字加层 / 首段纠偏 / 清空退一层 / 输入框全选，四项缺一不可）');
+  // 组路径的输入模型（0.12.0 定稿）：**输入框里就是完整路径**，一级一段，空 = 无组。
+  // 绝不允许再给「单段」加语义 —— 单段既可能是在建一级组、也可能是在退到一级组，
+  // 猜哪边都会错一半（0.11.x 就先后踩过「裸名字=加层」「/名字=加层」「首段纠偏」三种推断）。
+  // 加层 / 减层是输入框右侧的显式按钮（pathSteps → `+` / `−`），文本只表达结果。
+  ok(/function groupPathOf\(raw\)/.test(interSrc) &&
+     !/bareBase|resolveGroupPath|charAt\(0\)==='\/'/.test(interSrc) &&
+     /pathSteps:true/.test(interSrc) &&
+     /add a level|remove a level/.test(interSrc) &&
+     /\.inline-step\{/.test(cssSrc),
+    '组路径又开始「按写法推断层级」了（应改为：文本=完整路径、加/减层用 +/− 按钮）');
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',
