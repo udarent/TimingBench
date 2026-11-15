@@ -87,8 +87,9 @@ export function attachInteractions(ctx){
         if(g.classList&&g.classList.contains('colActBtn')) return {cact:g.getAttribute('data-cact'),col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('edgeArc')) return {edgeIdx:+g.getAttribute('data-eidx')};
         if(g.classList&&g.classList.contains('laneMeta')) return {meta:g.getAttribute('data-act'),lane:ln};
-        if(g.classList&&g.classList.contains('laneGroupName')) return {group:g.getAttribute('data-group'),lane:ln};
-        if(g.classList&&g.classList.contains('groupHit')) return {group:g.getAttribute('data-group'),lane:ln};
+        // 组名 / 括号命中区只认「这一层的路径」—— 行 id 在这里没用（行的 groupPath 是它自己的最深层）
+        if(g.classList&&(g.classList.contains('laneGroupName')||g.classList.contains('groupHit')))
+          return {group:g.getAttribute('data-group')};
         if(g.classList&&g.classList.contains('colhead')) return {col:+g.getAttribute('data-c')};
         if(g.classList&&g.classList.contains('laneName')) return {nameLane:ln};
         if(g.classList&&g.classList.contains('cell')) return {lane:ln,tick:+g.getAttribute('data-tick')};
@@ -309,23 +310,18 @@ export function attachInteractions(ctx){
     if(s.lane===undefined||s.tick===undefined) return;
     openCellCharEditor(s.lane,s.tick);
   }
-  // 分组改名 / 重分组：点左侧括号旁的竖排组名打开输入框；`/` 表示嵌套，清空即取消分组。
-  // 提交的 regroup 会作用于所有 groupPath 等于旧路径的行（含 spacer），整组一起改名。
-  // 括号只显示「本层」的组名（与上游一致），但编辑的是**整条路径**：`regroup` 的 `old`
-  // 要按完整路径精确匹配，否则嵌套组的改名 / 取消会落空（点外层 `Outer` 却改不动
-  // `Outer/Inner` 的那几行）。
-  // 组名的两种入口，同一个 EditOp：
-  //   · 点左侧括号旁的竖排组名（传 laneId）—— 改**整组**：所有 groupPath 等于该完整路径的行
-  //     一起改（含 spacer）。括号只显示本层名字，但编辑的是整条路径，嵌套组的改名 / 取消才落得准。
+  // 分组编辑的唯一入口，两种定址、同一个 EditOp：
+  //   · 点左侧括号旁的竖排组名（传这一层的完整路径）—— 改**整组**：该路径及其子树一起改
+  //     （`regroup` 的 `old` 是前缀匹配，所以改外层时子树跟着走、改子层不动兄弟与外层）。
+  //     括号只显示本层名字（与上游一致），但改的是整条路径。
   //   · 行上下文条的「组」动作（不传参数）—— 改**当前行范围**：把这一段设成同一个路径，
   //     这就是「从 0 建组」与「扩 / 缩组」的唯一入口（范围是 1 行时就是单行归组）。
-  // 输入框里可用 `/` 直接写嵌套；清空 = 退出到父路径（嵌套组退一级；顶层则完全解散）。
+  // 输入语义：裸名字 = 在当前层下再挂一层，带 `/` = 完整路径，清空 = 退出这一层。
   function openGroupEditor(groupPath){
     var el, prefill, target;
     if(groupPath!==undefined && groupPath!==null){
       // 传进来的是**这一层括号的完整路径**（外层 `out`、内层 `out/in` 各是各的）——
       // 不能拿行 id 反查：行的 groupPath 是它自己的最深层，点外层括号会改错层。
-      el=null;
       var names=wrap.querySelectorAll('.laneGroupName');
       for(var gi=0;gi<names.length;gi++){ if(names[gi].getAttribute('data-group')===groupPath){ el=names[gi]; break; } }
       if(!el) return;
@@ -339,13 +335,11 @@ export function attachInteractions(ctx){
       if(!span.length||!state.ir) return;
       // 输入框贴在被选范围的首行行名上（没有行名时贴画布左上）
       el=wrap.querySelector('text.laneName[data-lane="'+span[0].id+'"]')||wrap.querySelector('svg');
-      // 预填：整段共同路径（都在同一组里就是该组名，混选则留空）
-      prefill=commonPath(span.map(function(l){ return l.groupPath; }));
-      // base = 这一段当前所在的层。输入框里**不带 / 的名字**会被当成「在 base 下再挂一层」
-      // （最常见的需求：在 a/b 里划出 c2 → 输 c2 就是 a/b/c2）；带 / 的输入按完整路径解释
-      // （要改名 / 挂到别处 / 一次写多层时用它）。没有 base 时就是顶层组。
-      target={lanes:span.map(function(l){ return l.id; }),
-              base:prefill?prefill.split('/'):[]};
+      // 预填：整段共同路径（都在同一组里就是该组名，混选则留空）。
+      // base 就是它 —— 输入裸名字时挂在它下面，没有 base 时就是顶层组。
+      var shared=commonPath(span.map(function(l){ return l.groupPath; }));
+      prefill=shared.join('/');
+      target={lanes:span.map(function(l){ return l.id; }), base:shared};
     }
     openInline(el,prefill,function(v){
       var raw=String(v), parts=raw.split('/').map(function(x){return x.trim();}).filter(function(x){return x.length;});
@@ -362,9 +356,9 @@ export function attachInteractions(ctx){
     },{ title:'group path — a bare name nests under the current group, "a/b" is the full path, empty moves out one level',
         placeholder:'group', width:180, caretEnd:true });
   }
-  // 目标行的「父路径」：取其中最短的路径砍掉最后一段（混选里有未归组的行 → 直接空）
+  // 目标的「父路径」（清空输入 = 退到这一层）：按括号路径直接砍掉这一层；按行集合取
+  // 其中最浅的路径砍掉最后一段（混选里有未归组的行 → 直接空）。
   function parentPathOf(target){
-    // 按行集合：取最浅的那条路径砍掉最后一段；按括号路径：直接砍掉这一层
     if(target.old!==undefined) return target.old.split('/').slice(0,-1).filter(function(x){return x;});
     var depth=99, first=null;
     state.ir.lanes.forEach(function(l){
@@ -374,15 +368,15 @@ export function attachInteractions(ctx){
     });
     return first?first.groupPath.slice(0,Math.max(0,depth-1)):[];
   }
-  // 一段行的共同分组路径（最长公共前缀）；不共享任何一段就返回空串
+  // 一段行的最长公共分组前缀（数组）；不共享任何一段就是空数组
   function commonPath(paths){
-    if(!paths.length) return '';
+    if(!paths.length) return [];
     var out=paths[0].slice();
     paths.forEach(function(p){
       var n=0; while(n<out.length&&n<p.length&&out[n]===p[n]) n++;
       out=out.slice(0,n);
     });
-    return out.join('/');
+    return out;
   }
 
   // 就地编辑的唯一入口：双击（桌面）/ 双敲 / 长按（触摸）都走这里

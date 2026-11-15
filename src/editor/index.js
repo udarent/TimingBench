@@ -161,7 +161,6 @@ export function createEditor(dom){
     if(!ids||!ids.length) return state.selLane?state.ir.lanes.filter(function(l){ return l.id===state.selLane; }):[];
     return state.ir.lanes.filter(function(l){ return ids.indexOf(l.id)>=0; });
   }
-  function spanIds(){ return spanLanes().map(function(l){ return l.id; }); }
   // 把 a..b（含两端）之间的所有行（含 spacer）设成范围；anchorId 决定面板停在谁身上
   function setRowSpan(aId,bId,anchorId){
     if(!state.ir) return;
@@ -185,7 +184,7 @@ export function createEditor(dom){
     else { if(bi>=state.ir.lanes.length-1) return; setRowSpan(top.id, state.ir.lanes[bi+1].id, state.selLane); }
     ctx.redraw();
   }
-  // 结构变化（加 / 删 / 移行）之后把范围裁回去：仍连续就保留，断了就退回单选
+  // 结构变化（加 / 删 / 移行）之后把范围裁回去：仍连续、且锚点还在范围内就保留，否则退回单选
   function clampSpan(){
     if(!state.selRows||!state.ir) return;
     var idxs=[], anchor=-1;
@@ -194,8 +193,7 @@ export function createEditor(dom){
       if(l.id===state.selLane) anchor=i;
     });
     var contiguous = idxs.length>=2 && idxs[idxs.length-1]-idxs[0]+1===idxs.length;
-    var anchorInside = anchor>=0 && idxs.length>0 && anchor>=idxs[0] && anchor<=idxs[idxs.length-1];
-    if(!contiguous || !anchorInside) state.selRows=null;
+    if(!contiguous || anchor<idxs[0] || anchor>idxs[idxs.length-1]) state.selRows=null;
   }
   function signalLanes(){
     var out=[];
@@ -294,7 +292,7 @@ export function createEditor(dom){
   ctx.syncCode=syncCode; ctx.commit=commit; ctx.fromCode=fromCode;
   ctx.doCmd=doCmd; ctx.setLinkMode=setLinkMode; ctx.focusCanvas=focusCanvas; ctx.quotePos=quotePos;
   ctx.focusPane=focusPane; ctx.ensureSelCell=ensureSelCell; ctx.clampSel=clampSel;
-  ctx.spanLanes=spanLanes; ctx.spanIds=spanIds; ctx.setRowSpan=setRowSpan;
+  ctx.spanLanes=spanLanes; ctx.setRowSpan=setRowSpan;
   ctx.extendSpan=extendSpan; ctx.clearSpan=function(){ state.selRows=null; };
 
   try{ var saved=localStorage.getItem('tb-layout'); if(saved==='rows'||saved==='cols') state.layout=saved; }catch(e){}

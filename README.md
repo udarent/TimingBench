@@ -71,7 +71,9 @@ Don't want to hand-write any of this? Draw the diagram in the editor and click `
 - **Edit either side.** Diagram → source through a minimal patch; source → diagram redraws shortly after you stop typing, and keeps the last good picture while you type something invalid (a red dot shows the error).
 - **Write waveforms fast.** Select a cell and type a character, click it in the character bar, or drag across cells to paint. Each chip in the bar shows the shape it will write.
 - **Edit in place.** Double-click a cell, a signal name, a data label, an arc, or a whole `wave` / `data` / `node` row. `phase` and `period` are editable the same way, and both are applied to the drawing.
-- **Restructure without the source.** Add or remove rows and cycles, toggle a phase line, reorder rows, append a trailing cycle, add spacers and name groups.
+- **Restructure without the source.** Add or remove rows and cycles, toggle a phase line, reorder rows,
+  append a trailing cycle, add spacers — and build groups right on the canvas: select a range of rows,
+  give it a name, nest it as deep as you like. No group in the source? It gets created for you.
 - **Connect with arcs.** Turn on link mode, click two cells; unused letters are assigned for you. Double-click an arc to change its shape or label, clear it to delete.
 - **Undo everything.** A paint drag, a row move and an arc each count as one step.
 - **No mouse needed.** Every edit has a shortcut; the canvas takes focus with `Tab` or `F6`.

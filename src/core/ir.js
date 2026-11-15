@@ -413,7 +413,7 @@ export const Core = (function () {
     var above=i>0?lanes[i-1]:null, below=i+1<lanes.length?lanes[i+1]:null;
     function key(l){ return l?l.groupPath.join('/'):null; }
     if(path.length && (key(above)===key(self) || key(below)===key(self))) return;
-    if(above && below && (above.groupPath||[]).length &&
+    if(above && below && above.groupPath.length &&
        key(above)===key(below) && above.kind===self.kind){
       self.groupPath=above.groupPath.slice(); return;
     }

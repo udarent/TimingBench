@@ -92,8 +92,6 @@ export function createShapes(ctx){
     return out;
   }
 
-
-
   // 列头 + / − / |：悬停才显现；第 N 个「幽灵列头」只承担末尾追加周期。
   // 竖直位置压在 COL_Y+16 … COL_Y+30 这一条：上边留给列号，下边正好抵到 TOP，
   // 不与第一行 laneRow 重叠 —— 否则按钮下沿会被行矩形盖住、点上去命中的是行。
@@ -476,13 +474,13 @@ export function createShapes(ctx){
       // 触摸端 10×14px，手指根本点不中，等于「组只能靠源码改」）。它画在括号之前、
       // 只做命中，不改任何视觉。
       // 点它要改的是**这一层**（第 depth 层），不是该行最内层的路径 —— 所以带的是
-      // 「前 depth+1 段」的完整路径。此前只带 data-lane，点外层括号会去改最内层那一段。
+      // 「前 depth+1 段」的完整路径（此前只带行 id，点外层括号会去改最内层那一段）。
       var gpath=ir.lanes[g.from].groupPath.slice(0,g.depth+1).join('/');
-      var hit=gEdit?'<rect class="groupHit" data-group="'+esc(gpath)+'" data-lane="'+ir.lanes[g.from].id+
-        '" x="'+(bx-GSLOT)+'" y="'+y0+'" width="'+GSLOT+'" height="'+h+'" fill="transparent" style="cursor:text"/>':'';
+      var hit=gEdit?'<rect class="groupHit" data-group="'+esc(gpath)+'" x="'+(bx-GSLOT)+'" y="'+y0+
+        '" width="'+GSLOT+'" height="'+h+'" fill="transparent" style="cursor:text"/>':'';
       o.push('<g class="groupBrace">'+
         '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>'+hit+
-        '<text class="laneGroupName"'+(gEdit?' data-act="group" data-group="'+esc(gpath)+'" data-lane="'+ir.lanes[g.from].id+'"':'')+
+        '<text class="laneGroupName"'+(gEdit?' data-act="group" data-group="'+esc(gpath)+'"':'')+
         ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle"'+
         ' font-size="12" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
         '</g>');
