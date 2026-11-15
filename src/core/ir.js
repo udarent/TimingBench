@@ -132,7 +132,20 @@ export const Core = (function () {
   function collect(items, groupPath, out, src, warnings) {
     items.forEach(function(item) {
       if (item.k==='obj') {
-        if (!item.props.length) { out.push({ id:'l'+out.length, kind:'spacer', name:'', groupPath:groupPath.slice(), slots:[], subs:[], node:[], range:[item.s,item.e], orig:{} }); return; }
+        // WaveJSON 的空行就是**空对象 `{}`**（官方教程 Step 4「Spacers and Gaps」、Step 5 的组间
+        // 间距都用它；没有 `{spacer: N}` 这种写法 —— wavedrom 3.5.0 的 lib 里根本没有 "spacer"
+        // 这个字段）。上游 rec() 对**任何**对象都只算一行，parse 时只读 name/wave/data/node/
+        // phase/period，其余属性一概不解释。所以判定口径跟着上游走：**没有 name、也没有 wave
+        // 的对象就是一条空行**（`{spacer: 20}` 里那个 20 上游同样忽略，它也只占一行）。
+        // 原文必须留住：改分组会整篇重生成源码，不能把用户写的 `{ spacer: 20 }` 悄悄改成 `{}`。
+        // node / data 也要排除：`{ node: '...g..h' }` 这种「只有锚点没有 wave」的行是
+        // 本项目明确支持的（教程 Sharp lines 用 edge 引用它的端点），不能当成空行吃掉。
+        if (!prop(item,'name') && !prop(item,'wave') && !prop(item,'node') && !prop(item,'data')) {
+          out.push({ id:'l'+out.length, kind:'spacer', name:'', groupPath:groupPath.slice(),
+                     slots:[], subs:[], node:[], range:[item.s,item.e],
+                     raw:src.slice(item.s,item.e), orig:{} });
+          return;
+        }
         out.push(makeLane(item, groupPath, 'l'+out.length, src));
       } else if (item.k==='arr') {
         var g = (item.items[0] && item.items[0].k==='str') ? item.items[0].v : '';
@@ -181,7 +194,7 @@ export const Core = (function () {
   function needData(l){ var a=laneLabels(l); return a.length>0 && (l.dataForm!==null || a.some(function(x){return x!=='';})); }
 
   function emitLane(l){
-    if(l.kind==='spacer') return '{}';
+    if(l.kind==='spacer') return l.raw||'{}';
     var labels=laneLabels(l), parts=[];
     parts.push('name: '+quote(l.name));
     parts.push('wave: '+quote(laneWave(l)));
@@ -195,7 +208,7 @@ export const Core = (function () {
     var out=[], i=0;
     while(i<items.length){
       var l=items[i];
-      if(l.kind==='spacer'){ out.push('{}'); i++; continue; }
+      if(l.kind==='spacer'){ out.push(l.raw||'{}'); i++; continue; }
       if(l.groupPath.length>depth){
         var g=l.groupPath[depth], sub=[];
         while(i<items.length && items[i].groupPath.length>depth && items[i].groupPath[depth]===g){ sub.push(items[i]); i++; }
@@ -216,7 +229,7 @@ export const Core = (function () {
   function canon(ir){
     var parts=[];
     ir.lanes.forEach(function(l){
-      if(l.kind==='spacer'){ parts.push(enc('~'+enc(l.groupPath.join('/')))); return; }
+      if(l.kind==='spacer'){ parts.push(enc('~'+enc(l.groupPath.join('/'))+enc(l.raw||'{}'))); return; }
       var ss=l.slots.map(function(s){ return enc(s.w)+enc(s.point?'P':'r')+enc(s.gap?'G':'-')+enc(s.label===null?'':s.label); }).join('');
       parts.push(enc(enc(l.name)+enc(String(l.phase))+enc(String(l.period))+enc(l.groupPath.join('/'))+enc(l.node.join(''))+enc(laneWave(l))+enc(ss)));
     });
@@ -232,7 +245,7 @@ export const Core = (function () {
           slots:l.slots.map(function(s){ var o={w:s.w,point:s.point,gap:s.gap,label:s.label};
             if(s.saved) o.saved={w:s.saved.w,label:s.saved.label}; return o; }),
           subs:l.subs.map(function(s){return {at:s.at,s:s.s};}), node:l.node.slice(), dataForm:l.dataForm,
-          range:l.range.slice(),
+          range:l.range.slice(), raw:l.raw,
           waveRange:l.waveRange?l.waveRange.slice():null, nameRange:l.nameRange?l.nameRange.slice():null,
           dataRange:l.dataRange?l.dataRange.slice():null, nodeRange:l.nodeRange?l.nodeRange.slice():null,
           phaseRange:l.phaseRange?l.phaseRange.slice():null, periodRange:l.periodRange?l.periodRange.slice():null,
@@ -360,7 +373,7 @@ export const Core = (function () {
         var fresh;
         if(op.kind==='spacer'){
           fresh={ id:aid, kind:'spacer', name:'', phase:0, period:1, groupPath:[], slots:[], subs:[], node:[], dataForm:null,
-            range:[0,0], orig:{}, fresh:true };
+            range:[0,0], raw:'', orig:{}, fresh:true };
         } else {
           fresh={ id:aid, kind:'signal', name:op.name||'new', phase:0, period:1, groupPath:[], slots:[], subs:[], node:[], dataForm:null,
             range:[0,0], waveRange:null, nameRange:null, dataRange:null, nodeRange:null, phaseRange:null, periodRange:null,

@@ -550,6 +550,15 @@ function check() {
   // 纯 node 行（无 wave）必须保留锚点：否则引用它的 edge 找不到端点（教程 Sharp lines 样例）。
   ok(/var nn = n > 0 \? n :/.test(read('src/core/ir.js')),
     '只有 node、没有 wave 的行会丢锚点，导致 edge 找不到端点');
+  // 空行（spacer）的口径来自官方教程 Step 4「Spacers and Gaps」：**就是空对象 `{}`**，
+  // 没有 `{spacer: N}` 这种写法（wavedrom 3.5.0 的 lib 里没有这个字段，rec() 对任何对象都只算一行）。
+  // 三条必须同时成立：① 判定为「没有 name/wave/node/data」——与上游的「一行什么都不画」一致，
+  // 且不会把 `{ node: ... }` 这种只有锚点的行吃掉；② emit 时写回原文（`l.raw`），
+  // 否则改组名触发全量重生成会把用户写的 `{ spacer: 20 }` 悄悄改成 `{}`；③ canon 带上原文。
+  const irSrc2 = read('src/core/ir.js');
+  ok(/!prop\(item,'name'\) && !prop\(item,'wave'\) && !prop\(item,'node'\) && !prop\(item,'data'\)/.test(irSrc2) &&
+     /l\.raw\|\|'\{\}'/.test(irSrc2) && /enc\(l\.raw\|\|'\{\}'\)/.test(irSrc2) && /raw:l\.raw/.test(irSrc2),
+    '空行（spacer）的判定或原文保留被改坏了（`{ spacer: 20 }` 会被改成 `{}`，或被误判成信号行）');
   // 分组可编辑（教程 Step 5 的双向缺口）：regroup 改变 groupPath，点组名 `[A/B]` 打开输入框。
   ok(/case 'regroup'/.test(read('src/core/ir.js')) && /function openGroupEditor\(/.test(read('src/editor/interactions.js')),
     '分组改名 / 重分组（regroup / openGroupEditor）缺失');
