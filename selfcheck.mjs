@@ -564,6 +564,16 @@ function check() {
      /data-group="'\+esc\(gpath\)/.test(shapesSrc) &&
      /getAttribute\('data-group'\)/.test(interSrc),
     '分组未画成「左侧花括号 + 竖排组名」，或括号没带本层路径（点外层括号会改错层）');
+  // 组路径的输入语义（0.11.1）：`/名字` = 在本层下加一层、首段等于本层名时按相对解释、
+  // 清空 = 退出这一层 —— 三者都在 resolveGroupPath 里，缺一个就会退回「第二层加不了层 /
+  // 写 b/c 把整组搬出父层 / 混选清空一路退到顶层」。输入框还必须**全选**：
+  // 光标落在末尾时敲一个字符会粘成 `a/bc`（第二层尤其容易撞上）。
+  ok(/function resolveGroupPath\(raw,base,bareBase\)/.test(interSrc) &&
+     /charAt\(0\)==='\/'/.test(interSrc) &&
+     /parts\[0\]===base\[base\.length-1\]/.test(interSrc) &&
+     /base\.slice\(0,Math\.max\(0,base\.length-1\)\)/.test(interSrc) &&
+     !/parentPathOf|caretEnd/.test(interSrc) && /inp\.select\(\)/.test(interSrc),
+    '组路径输入语义被改回去了（/名字加层 / 首段纠偏 / 清空退一层 / 输入框全选，四项缺一不可）');
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',

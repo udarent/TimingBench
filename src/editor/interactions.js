@@ -70,11 +70,9 @@ export function attachInteractions(ctx){
       }
       closeInline(true);
     });
-    try{
-      inp.focus();
-      if(opts.caretEnd){ var n=inp.value.length; inp.setSelectionRange(n,n); }
-      else inp.select();
-    }catch(e){}
+    // 一律全选：输入框里的值是「当前路径」，用户要么打一个新的，要么用 `/…` 从头写，
+    // 光把光标放末尾会让「想改个名」变成「把名字接在旧路径后面」（实测 a/b 上敲 c 得到 a/bc）。
+    try{ inp.focus(); inp.select(); }catch(e){}
   }
   function cellAt(e){
     var g=e.target;
@@ -316,7 +314,12 @@ export function attachInteractions(ctx){
   //     括号只显示本层名字（与上游一致），但改的是整条路径。
   //   · 行上下文条的「组」动作（不传参数）—— 改**当前行范围**：把这一段设成同一个路径，
   //     这就是「从 0 建组」与「扩 / 缩组」的唯一入口（范围是 1 行时就是单行归组）。
-  // 输入语义：裸名字 = 在当前层下再挂一层，带 `/` = 完整路径，清空 = 退出这一层。
+  //
+  // 输入语义（两个入口共用一套规则，只有「基准」不同 —— 见 resolveGroupPath）：
+  //   `名字`    括号入口 = 本层就地改名；行入口 = 在选中的行所在组下加一层
+  //   `/名字`   在本层（选中的行所在组）下加一层 —— 两个入口完全一致
+  //   `a/b/c`   完整路径（换父层 / 一次写多层）
+  //   空        退出这一层（子组自动上提一级）
   function openGroupEditor(groupPath){
     var el, prefill, target;
     if(groupPath!==undefined && groupPath!==null){
@@ -325,48 +328,48 @@ export function attachInteractions(ctx){
       var names=wrap.querySelectorAll('.laneGroupName');
       for(var gi=0;gi<names.length;gi++){ if(names[gi].getAttribute('data-group')===groupPath){ el=names[gi]; break; } }
       if(!el) return;
-      var segs=String(groupPath).split('/');
+      var segs=String(groupPath).split('/').filter(function(x){ return x.length; });
       prefill=groupPath;
-      // 「可省略已有前缀」：base = 这一组的**父层**，于是嵌套组里输裸名字是就地改名
-      // （`out/in` 输 `inner` → `out/inner`），写全路径则按全路径解释。
-      target={old:prefill, base:segs.slice(0,-1)};
+      // base = 这一层（`/名字` 挂在它下面）；bareBase = 父层（裸名字 = 就地改名）
+      target={old:prefill, base:segs, bareBase:segs.slice(0,-1)};
     } else {
       var span=ctx.spanLanes?ctx.spanLanes():[];
       if(!span.length||!state.ir) return;
       // 输入框贴在被选范围的首行行名上（没有行名时贴画布左上）
       el=wrap.querySelector('text.laneName[data-lane="'+span[0].id+'"]')||wrap.querySelector('svg');
-      // 预填：整段共同路径（都在同一组里就是该组名，混选则留空）。
-      // base 就是它 —— 输入裸名字时挂在它下面，没有 base 时就是顶层组。
+      // 预填：整段共同路径（都在同一组里就是该组名，混选则留空）
       var shared=commonPath(span.map(function(l){ return l.groupPath; }));
       prefill=shared.join('/');
-      target={lanes:span.map(function(l){ return l.id; }), base:shared};
+      // base = 这一段行所在的组（`/名字` 与裸名字都挂在它下面）
+      target={lanes:span.map(function(l){ return l.id; }), base:shared, bareBase:shared};
     }
     openInline(el,prefill,function(v){
-      var raw=String(v), parts=raw.split('/').map(function(x){return x.trim();}).filter(function(x){return x.length;});
-      // 清空输入 = 退出到父路径（不是清光）：嵌套组退一级才符合「移出这一层」的直觉，
-      // 顶层组清空即完全解散。规则只有一条 —— 取目标行里最浅的路径，砍掉最后一段。
-      var path;
-      if(!parts.length) path=parentPathOf(target);
-      else if(raw.indexOf('/')<0 && target.base && target.base.length) path=target.base.concat(parts);
-      else path=parts;
+      var path=resolveGroupPath(v,target.base,target.bareBase);
       var op=target.old!==undefined?{t:'regroup',old:target.old,path:path}:{t:'regroup',lanes:target.lanes,path:path};
       var label=(target.old!==undefined?'regroup ['+target.old+']':'group '+target.lanes.length+' row(s)')+
         ' -> '+(path.join('/')||'(none)');
       ctx.commit(op,label);
-    },{ title:'group path — a bare name nests under the current group, "a/b" is the full path, empty moves out one level',
-        placeholder:'group', width:180, caretEnd:true });
+    },{ title:'group path — name renames this level, /name nests under it, a/b is a full path, empty moves out one level',
+        placeholder:'group', width:180 });
   }
-  // 目标的「父路径」（清空输入 = 退到这一层）：按括号路径直接砍掉这一层；按行集合取
-  // 其中最浅的路径砍掉最后一段（混选里有未归组的行 → 直接空）。
-  function parentPathOf(target){
-    if(target.old!==undefined) return target.old.split('/').slice(0,-1).filter(function(x){return x;});
-    var depth=99, first=null;
-    state.ir.lanes.forEach(function(l){
-      if(target.lanes.indexOf(l.id)<0) return;
-      if(!first) first=l;
-      depth=Math.min(depth,l.groupPath.length);
-    });
-    return first?first.groupPath.slice(0,Math.max(0,depth-1)):[];
+  // 把输入框里的一个字符串解析成**目标路径数组**。两个入口共用，只有 base 不同：
+  //   括号入口 base = 本层（a/b），bareBase = 父层（a）→ 裸名字是就地改名；
+  //   行入口   base = bareBase = 选中行所在的组 → 裸名字是在它下面加一层。
+  //   `名字`   → bareBase + 名字
+  //   `/…`     → base + …（在本层下加一层：`/c` 在 a/b 上得 a/b/c）
+  //   空       → base 砍掉最后一段（退出这一层，子组自动上提）
+  //   `x/y`    → 完整路径；但**首段正好是本层名**时按相对本层解释（`b/c` 在 a/b 上得 a/b/c）——
+  //              否则用户想「在 b 下加 c」，结果整组被搬出 a，还把父组劈成两段同名括号。
+  function resolveGroupPath(raw,base,bareBase){
+    var s=String(raw===undefined||raw===null?'':raw).trim();
+    function split(x){ return x.split('/').map(function(p){ return p.trim(); }).filter(function(p){ return p.length; }); }
+    if(!s) return base.slice(0,Math.max(0,base.length-1));
+    var parts=split(s);
+    if(!parts.length) return base.slice(0,Math.max(0,base.length-1));
+    if(s.charAt(0)==='/') return base.concat(parts);
+    if(parts.length===1) return bareBase.concat(parts);
+    if(base.length && parts[0]===base[base.length-1]) return base.concat(parts.slice(1));
+    return parts;
   }
   // 一段行的最长公共分组前缀（数组）；不共享任何一段就是空数组
   function commonPath(paths){
