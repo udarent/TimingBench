@@ -370,11 +370,20 @@ function check() {
   const geoSrc = read('src/editor/geometry.js');
   ok(/export function lanePeriod/.test(geoSrc) && /export function laneShift/.test(geoSrc) &&
      /export function laneChars/.test(geoSrc) && /export function cellGeo/.test(geoSrc) &&
-     /return \(isFinite\(p\)&&p>0\) \? p : 0;/.test(geoSrc) &&
      !/Math\.(floor|round)\(p\s*\*\s*2\)/.test(geoSrc) &&
      !/Math\.ceil\(p\s*\*\s*2\)\s*\/\s*2/.test(geoSrc) &&
      !/laneLeadTrim/.test(geoSrc),
     '行级时间标尺被改坏（period/phase 只存不画，或 phase 又被量化——0.1 会和 0 / 0.5 重合）');
+  // laneShift 必须**原样**返回相位值，两条都重要：
+  //   ① 不量化（出现 round / floor / ceil 就又回到「0.1 与 0 重合」的老毛病）；
+  //   ② 不把负值抹成 0 —— 负相位是「整行右移」，上游 `render-wave-lane.js` 的 xoffset
+  //      对负值走 `-2p` 分支、且不吞整数部分（0.16.0 实测）。
+  // 判据取函数体而不是整行字面量：写法可以变，「不许量化 / 不许抹负」这两条语义不变。
+  {
+    const body = (/export function laneShift\s*\(l\)\s*\{([\s\S]*?)\n\}/.exec(geoSrc) || [null, ''])[1];
+    ok(!!body && !/Math\.(round|floor|ceil)/.test(body) && !/\bp\s*>\s*0\b/.test(body),
+      'laneShift 又量化了相位、或把负相位抹成 0（正向 0.1 会与 0 重合；负向整行不再右移）');
+  }
   ok(/var P=lanePeriod\(l\), sh=laneShift\(l\), cw=P\*CELL, chars=laneChars\(l,N\)/.test(shapesSrc) &&
      /clipPath id="lclip-'\+\w[^"]*"><rect x="'\+XS\+'"/.test(shapesSrc) &&
      /cellGeo\(l,i\)/.test(shapesSrc) && /lclip-/.test(shapesSrc) &&

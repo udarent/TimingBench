@@ -1,7 +1,7 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX } from './geometry.js';
+import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, PHASE_MIN } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import * as Cap from './cap.js';
@@ -278,13 +278,17 @@ export function createShapes(ctx){
     var N=ir.ticks;
     // 全图列数（参考周期）：period≠1 的行一个字符占多列，行宽不再都等于字符数，
     // 所以按「最宽的那一行」定画布宽度。全为 period:1 时 COLS 恒等于 N（默认情形零变化）。
-    // phase 只是行内左移，不会让行变宽。
-    var COLS=0;
+    // **负相位会让行变宽**：它把整行往右推，尾部会顶出原来的内容宽度 —— 正相位是往左推、
+    // 由 lclip 把越界部分裁掉，不需要额外空间；负相位必须补出这段余量，否则行尾被切在画布外。
+    var COLS=0, negExtent=0;
     ir.lanes.forEach(function(l){
       if(l.kind!=='signal') return;
       COLS=Math.max(COLS, laneChars(l,N)*lanePeriod(l));
+      var sh=laneShift(l);
+      if(sh<0) negExtent=Math.max(negExtent, -sh);
     });
-    var ACT_X=XS+COLS*CELL;
+    // negExtent 是周期数（可能含小数），乘 CELL 后作为右侧补宽；不参与列号循环（不新增列）。
+    var ACT_X=XS+(COLS+negExtent)*CELL;
     // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
     var viewW=Math.max(240, Math.round(wrap.clientWidth||0)||360);
@@ -521,7 +525,8 @@ export function createShapes(ctx){
         // 0.1 个周期只有 3~4px，光看波形分不出 0.1 与 0.2 —— 给数字才是可靠反馈。
         if(T){
           var pfs=Math.min(22,Math.max(11,Math.round(12/(state.fit||1))));
-          var ptx0=String(+(Math.min(Math.max(0,l.phase),PHASE_MAX)).toFixed(2));
+          // 负相位要带符号显示（读数是从「波形现在在哪儿」反推的唯一可靠依据）
+          var ptx0=String(+(Math.min(Math.max(PHASE_MIN,l.phase),PHASE_MAX)).toFixed(2));
           var ptw2=Math.round(pfs*0.62*(ptx0.length+1)+11);
           var plbX=XS+prow-ptw2-4;
           pgo.push('<rect x="'+plbX+'" y="'+(y+ROW_H/2-pfs*0.78)+'" width="'+ptw2+

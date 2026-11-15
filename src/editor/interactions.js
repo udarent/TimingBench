@@ -3,7 +3,7 @@
 // 键盘另有独立的 linkCursor 端点光标，保证不用鼠标也能完成全部编辑。
 // 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
-import { G, cellGeo, PHASE_STEP, PHASE_MAX } from './geometry.js';
+import { G, cellGeo, PHASE_STEP, PHASE_MAX, PHASE_MIN } from './geometry.js';
 import { TOUCH } from './mode.js';
 
 // 格宽受 config.hscale 影响，是每帧重算的运行时值 —— 这里一律现读 G.CELL，不缓存。
@@ -112,7 +112,8 @@ export function attachInteractions(ctx){
   // 每个行内工具 / 图元徽标对应的就地编辑规格
   function rowSpec(l,act){
     switch(act){
-      case 'phase': return { val:String(l.phase), title:'phase — shifts the lane left by that many periods (fractional is fine)', label:'phase', meta:true, width:96,
+      // 负值合法：整行**右移** |phase| 个周期（上游同样支持）。小数随便给，0.05 起都能表达。
+      case 'phase': return { val:String(l.phase), title:'phase — shifts the lane left (negative: right) by that many periods; fractions fine', label:'phase', meta:true, width:96,
         makeOp:function(v){ var n=Number(v); return v!==''&&isFinite(n)?{t:'setPhase',lane:l.id,v:n}:null; } };
       case 'period': return { val:String(l.period), title:'period (>=1)', label:'period', meta:true, width:96,
         makeOp:function(v){ var n=Number(v); return v!==''&&isFinite(n)&&n>=1?{t:'setPeriod',lane:l.id,v:n}:null; } };
@@ -241,7 +242,8 @@ export function attachInteractions(ctx){
     }
     var v=pe.gest0-dx/G.CELL;
     v=Math.round(v/PHASE_STEP)*PHASE_STEP;                // 吸附 0.05（与键盘、文本输入同一口径）
-    applyPhase(+Math.max(0,Math.min(PHASE_MAX,v)).toFixed(2));
+    // 区间**对称**：负相位把整行右移（上游同样支持，见 geometry.js 的 laneShift 注释）
+    applyPhase(+Math.max(PHASE_MIN,Math.min(PHASE_MAX,v)).toFixed(2));
     return true;
   }
 
@@ -1122,7 +1124,7 @@ export function attachInteractions(ctx){
         var pl=findLane(state.phaseEdit.lane);
         // 方向与拖动一致：← 波形左移（phase 变大）、→ 波形右移（phase 变小）
         var step=(pk==='ArrowLeft'?1:-1)*(e.shiftKey?0.5:PHASE_STEP);
-        if(pl) applyPhase(+Math.max(0,pl.phase+step).toFixed(2));
+        if(pl) applyPhase(+Math.max(PHASE_MIN,pl.phase+step).toFixed(2));
         return;
       }
       if(pk==='0'){ prevent(e); applyPhase(0); return; }

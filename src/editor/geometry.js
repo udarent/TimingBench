@@ -56,16 +56,24 @@ export function lanePeriod(l){
 // 实测（wavedrom@3.5.0 浏览器包，砖宽 20px、一格 40px）：phase 0.1 → translate(16)、0.2 → 12、
 // 0.3 → 8、0.5 → 0，折算下来每 0.1 相位正好移动 4px = 0.1 格。所以 0.1 与 0.2 **确实不同**。
 // 半砖粒度只体现在「上游行首被整块丢掉多少」上，不体现在位移量上。
+// **负值有效**：上游 `render-wave-lane.js` 的 xoffset 是分支的 ——
+//   `xoffset = (p > 0) ? (ceil(2p) - 2p) : (-2p)`
+// 正值走「丢整砖 + 分数补偿」，负值直接取 `-2p`（整块右移，不吞整数部分）。
+// 两条分支折算下来都是**净位移 = phase 个周期**，只是一个往左一个往右 —— 完全对称。
+// 所以这里不再把负值抹成 0，直接返回原值（`isFinite` 挡住 null / NaN / 字符串）。
 export function laneShift(l){
   var p=Number(l&&l.phase);
-  return (isFinite(p)&&p>0) ? p : 0;
+  return isFinite(p) ? p : 0;
 }
 // 相位尺（图形化改 phase）的两个参数：
 //   PHASE_STEP 拖动 / 方向键的吸附步长。取 0.05 —— 一格 38px 时 = 1.9px，够细且不会让
 //     指针稍微一抖就跳 0.1；要更细的精确值仍可点 ψ 徽标走文本输入。
-//   PHASE_MAX  尺子右端代表的周期数上限。相位超过 4 个周期没有实际用途（波形整体移出画布）。
+//   PHASE_MAX  可调范围的**上限**（往左移）。相位超过 4 个周期没有实际用途（波形整体移出画布）。
+//   PHASE_MIN  对称的**下限**（往右移，负相位）。上游对负值同样支持，且不吞整数部分，
+//              所以这里取对称区间 [-4, +4] —— 拖到两端时波形正好整行移出可视区。
 export const PHASE_STEP = 0.05;
 export const PHASE_MAX = 4;
+export const PHASE_MIN = -PHASE_MAX;
 
 // ---- config.hscale ---------------------------------------------------------
 // WaveJSON 的 `config.hscale` 是**全局横向倍率**：上游把它塞进 `extra = period*hscale - 1`，
