@@ -380,6 +380,14 @@ function check() {
      /cellGeo\(l,i\)/.test(shapesSrc) && /lclip-/.test(shapesSrc) &&
      /COLS=Math\.max\(COLS, laneChars\(l,N\)\*lanePeriod\(l\)\)/.test(shapesSrc),
     'period/phase 未接入绘制（格宽 / 起点 / 画布宽度 / phase 裁剪）');
+  // 0.15.2：桌面右侧不再为已删的行工具 / 列按钮留位（`W = ACT_X + ACT_W + PAD`）。
+  // ACT_W 一旦被加回去，画布就比内容宽出一截，小视口里变成一段能横向滚过去的空白。
+  // 判据取上限而不是字面量：触摸端 24 是幽灵列头的余量，桌面不该超过它。
+  {
+    const m = /ACT_W:\s*TOUCH \? (\d+) : (\d+)/.exec(geoSrc);
+    ok(!!m && +m[1] <= 24 && +m[2] <= 24,
+      '桌面右侧又给控件留了位（ACT_W 应 ≤ 24）：' + (m ? m[0] : '未匹配到 ACT_W'));
+  }
 
   // 相位模式（0.13.0 起，0.14.5 改成「直接抓波形」）：必须是「按需出现」的 —— 只有
   // state.phaseEdit 指向的那一行才画标记，默认文档里一个额外图元都不能有（否则会把每次

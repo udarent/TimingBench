@@ -144,8 +144,9 @@ svg{display:block;font-family:var(--sans)}
    原生滚动 —— 跟手、回弹、滚动条都还在。 */
 .svgwrap.is-phase{touch-action:none}
 .is-touch .cellSel{stroke-width:2.4}
-/* 桌面：上下文条钉在右侧（触摸端钉底部，规则在下面 .is-touch 段里）。
-   行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头按钮都已撤掉。 */
+/* 上下文条：桌面与触摸端都钉在**底部**（桌面是 34px 方按钮的整行条，触摸端换成 44px 大按钮，
+   规则在下面 .is-touch 段里）。行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头
+   按钮都已撤掉，所以画布右侧也不再为它们留位（ACT_W = 0，见 geometry.js）。 */
 /* 上下文条：整行、定高、**绝不换行**。换行会把这一条撑成两三排 —— 停靠区虽然恒高，
    但按钮会被自己的行高挤掉（44px × 3 排 > 61px），所以窄屏一律横向滚动。 */
 .tbpanel.open{display:flex;flex-wrap:nowrap;gap:4px;padding:6px 8px;height:var(--dock-acts);
