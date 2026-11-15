@@ -96,6 +96,9 @@ export function attachInteractions(ctx){
         // 只有带 data-act 的徽标才是可点入口（触摸端不接线，见 shapes.js）：否则落到外层行名上，
         // 一次「想选中这一行」的轻点不会顺手打开相位尺。
         if(g.classList&&g.classList.contains('laneMeta')&&g.getAttribute('data-act')) return {meta:g.getAttribute('data-act'),lane:ln};
+        // 触摸端相位模式里行尾那个 φ 读数（桌面不画）：轻点它 = 改这一行的精确相位值。
+        // 走的是同一个 meta 分支，所以「敲数字」与「拖波形」共用一条 setPhase 通路。
+        if(g.classList&&g.classList.contains('phaseValueHit')) return {meta:'phase',lane:ln};
         // 组名 / 括号命中区只认「这一层的路径」—— 行 id 在这里没用（行的 groupPath 是它自己的最深层）
         if(g.classList&&(g.classList.contains('laneGroupName')||g.classList.contains('groupHit')))
           return {group:g.getAttribute('data-group')};
@@ -133,7 +136,11 @@ export function attachInteractions(ctx){
     var anchor=spec.wide
       ? wrap.querySelector('rect.waveZone[data-lane="'+laneId+'"]')
       : spec.meta
-        ? wrap.querySelector('tspan.laneMeta[data-act="'+act+'"][data-lane="'+laneId+'"]')
+        // 桌面锚在行名旁的 φ 徽标；触摸端那两个字形「只画不接线」（没有 data-act），
+        // 退到同一位置的 tspan —— 读数命中区此时已随 closePhaseEdit 的 redraw 消失，不能当锚点。
+        ? (wrap.querySelector('tspan.laneMeta[data-act="'+act+'"][data-lane="'+laneId+'"]')
+           || wrap.querySelector('tspan.laneMeta[data-lane="'+laneId+'"]')
+           || wrap.querySelector('rect.phaseValueHit[data-lane="'+laneId+'"]'))
         : wrap.querySelector('g.rowTool[data-act="'+act+'"][data-lane="'+laneId+'"] rect');
     if(!anchor) return;
     openInline(anchor,spec.val,function(v){
@@ -647,8 +654,11 @@ export function attachInteractions(ctx){
     if(c.meta){
       if(dbl>1) return;
       e.preventDefault();
-      // 相位是连续量 → 图形化（相位尺）；周期是 1..N 的整数 → 保留文本输入（改一次就到位）
-      if(c.meta==='phase') openPhaseEdit(c.lane); else openRowEditor(c.lane,c.meta);
+      // 行名旁的 φ / T 都是「一个数」→ 直接就地输入（Enter 确认 / Esc 取消）。
+      // 相位的**图形化粗调**不再占这个入口：它挪到行工具的 φ 按钮上（见 shapes.js 的 rowTools）。
+      // 分工：行名给精确值（有键盘的用户敲 0.35 一步到位），行工具给手感（拖着看波形怎么挪）。
+      // 两个入口随时都在、互不打断 —— 拖完想精调就点数字，敲完想微调就去拖。
+      openRowEditor(c.lane,c.meta);
       return;
     }
     if(c.group!==undefined){ if(dbl>1) return; e.preventDefault(); openGroupEditor(c.group); return; }

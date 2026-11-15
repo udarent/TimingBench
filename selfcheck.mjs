@@ -412,6 +412,26 @@ function check() {
   ok(/var step=\(pk==='ArrowLeft'\?1:-1\)/.test(interSrc),
     '键盘 ←/→ 的方向与拖动不一致（会变成「一个键左移、另一个也左移」的混乱）');
 
+  // ---- 0.14.6：相位的两条入口分工 —— 数值在行名、拖拽在上下文条 ----------------
+  // 改「一个数」：行名旁的 φ 徽标弹就地输入（Enter 确认 / Esc 取消），有键盘就一步到位。
+  // 改「一种手感」：上下文条的 φ 按钮进拖拽模式，进去之后在波形上横拖。
+  // 两条路必须同时存在 —— 少一条就是要么丢掉精确输入，要么丢掉「拖着看波形怎么挪」。
+  const touchPhaseSrc = read('src/editor/touch.js');
+  ok(/if\(c\.meta\)\{[\s\S]{0,400}?openRowEditor\(c\.lane,c\.meta\)/.test(interSrc) &&
+     !/if\(c\.meta==='phase'\)\s*openPhaseEdit/.test(interSrc),
+    '行名旁的 φ 徽标退回了「进拖拽模式」（应改成就地输入一个精确值）');
+  ok(/case 'phase':[\s\S]{0,200}?ctx\.openPhaseEdit/.test(touchPhaseSrc),
+    '上下文条的 phase 按钮没接到图形化拖拽（那条入口会整条消失）');
+  // 触摸端：相位模式里行尾的 φ 读数是可点入口 —— 小卡片里 0.1 个周期只有 3~4px，
+  // 光靠拖分不出来，必须留一条「敲数字」的路。
+  ok(/class="phaseValueHit"/.test(shapesSrc) &&
+     /classList\.contains\('phaseValueHit'\)/.test(interSrc),
+    '触摸端相位读数不再是可点入口（精确值那条路被堵死）');
+  // 锚点：触摸端的 laneMeta 去掉了 data-act，但必须保留 data-lane —— 否则就地输入框
+  // 找不到位置（openRowEditor 靠 data-lane 在行里定位）。
+  ok(/T\?' data-lane="'\+l\.id\+'"'/.test(shapesSrc),
+    '触摸端 laneMeta 丢了 data-lane 锚点（就地输入框会找不到位置）');
+
   // 第七个参数是「这一格有多宽」：period≠1 的行按 period×CELL 传（渲染层自己的标尺），
   // 仍不得掺入 viewW / scrollLeft 这类操作层变量。
   ok(/waveGlyph\(w,prevCh,x0,yT,yM,yB,cw,/.test(shapesSrc) && /var P=lanePeriod\(l\), sh=laneShift\(l\), cw=P\*CELL/.test(shapesSrc),

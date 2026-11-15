@@ -459,8 +459,10 @@ export function createShapes(ctx){
       // 就变成改相位（与「移动视图」抢同一个手势）。触摸端改相位 / 周期走底部上下文条的大按钮。
       var meta='';
       if(can('laneMeta')){
-        var phAct=T?'':' data-act="phase" data-lane="'+l.id+'"';
-        var prAct=T?'':' data-act="period" data-lane="'+l.id+'"';
+        // 触摸端去掉 data-act（那是「可点入口」的标记，小字点不准），但**保留 data-lane**：
+        // 相位/周期的就地输入框需要它当锚点（openRowEditor 按 data-lane 找位置）。
+        var phAct=T?' data-lane="'+l.id+'"':' data-act="phase" data-lane="'+l.id+'"';
+        var prAct=T?' data-lane="'+l.id+'"':' data-act="period" data-lane="'+l.id+'"';
         meta='<tspan class="laneMeta"'+phAct+' font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
              '<tspan class="laneMeta"'+prAct+' font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
       }
@@ -568,6 +570,13 @@ export function createShapes(ctx){
           pgo.push('<text class="phaseValue" x="'+(plbX+ptw2/2)+'" y="'+(y+ROW_H/2)+'" text-anchor="middle"'+
             ' dominant-baseline="central" font-size="'+pfs+'" fill="var(--accent)" pointer-events="none">φ'+
             ptx0+'</text>');
+          // 读数是**可点的**：轻点它 → 就地输入框，敲一个精确值（只有软键盘也能精调）。
+          // 命中区取整行高、按徽标两端各留 8 —— 那两个 12px 的字形本身手指点不准；
+          // 用整行高而不是再放大，是因为横向再宽就会挡住行尾那些用来选格子的点击。
+          var hw=ptw2+16, hx=Math.max(XS, XS+prow-hw-2);
+          pgo.push('<rect class="phaseValueHit" data-lane="'+l.id+'" x="'+hx+'" y="'+(y+1)+'" width="'+hw+
+            '" height="'+(ROW_H-2)+'" rx="4" fill="transparent" stroke="none" pointer-events="auto"'+
+            ' style="cursor:pointer"/>');
         }
         o.push(pgo.join(''));
       }
