@@ -396,11 +396,10 @@ function check() {
   ok(!/phaseKnob|phaseOrigin|phaseFill/.test(shapesSrc) && !/phaseValueAt/.test(interSrc) &&
      /var v=pe\.gest0-dx\/G\.CELL/.test(interSrc) && /PHASE_DEAD/.test(interSrc),
     '相位拖动退回了「滑块 + 按下即定位」（应该是抓着波形本身做相对位移）');
-  // 方向（0.14.4，用户实测反馈）：滑块位置 = **波形起点**。phase 的语义是「整行左移 phase 个
-  // 周期」，所以「值越大」在画面上是往左跑；第一版把滑块画成「值越大越靠右」，于是手指往右拖、
-  // 波形往左跑，方向正好相反。现在尺子**右端是 phase 0（波形原位）**，指针越靠右值越小。
-  // 这条锁只看两端的换算表达式：交互层必须是 `maxV - (x-x0)/CELL`，绘制层必须把滑块画在
-  // `(pmax-pcur)` 处 —— 两处方向必须一致，改回任何一边都会重新变成「方向相反」。
+  // 方向（0.14.4 翻正、0.14.5 改抓波形后守恒）：phase 的语义是「整行左移 phase 个周期」。
+  // 现在直接拿波形当抓手：`v = gest0 - dx/CELL` —— 手往右拖(dx>0) → v 变小 → 波形右移，
+  // 手与波形始终同向，不再需要靠尺子端点对齐方向。0.14.4 那版用的是 `maxV-(x-x0)/CELL`
+  // 配绘制层 `(pmax-pcur)` 的成对换算；0.14.5 删掉滑块后那套已不成立，锁也换成下面这一条。
   ok(/var v=pe\.gest0-dx\/G\.CELL/.test(interSrc),
     '相位拖动的方向约定被改回去了（手指往右拖，波形应该往右移 = 相位变小）');
   // 拖动期间的提交必须是 skipUndo（一次手势最后合并成一步）；步长要读 PHASE_STEP，
