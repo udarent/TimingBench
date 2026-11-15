@@ -129,7 +129,7 @@ export const Core = (function () {
     return lane;
   }
 
-  function collect(items, groupPath, out, src, warnings) {
+  function collect(items, groupPath, out, src) {
     items.forEach(function(item) {
       if (item.k==='obj') {
         // WaveJSON 的空行就是**空对象 `{}`**（官方教程 Step 4「Spacers and Gaps」、Step 5 的组间
@@ -149,7 +149,7 @@ export const Core = (function () {
         out.push(makeLane(item, groupPath, 'l'+out.length, src));
       } else if (item.k==='arr') {
         var g = (item.items[0] && item.items[0].k==='str') ? item.items[0].v : '';
-        collect(item.items.slice(1), groupPath.concat([g]), out, src, warnings);
+        collect(item.items.slice(1), groupPath.concat([g]), out, src);
       }
     });
   }
@@ -164,8 +164,8 @@ export const Core = (function () {
     if (wrapped) { if (p.s[p.i]!==')') throw new Error('缺少右括号'); p.i++; p.ws(); }
     if (p.i < p.s.length) throw new Error('根对象后存在多余内容 @'+p.i);
     var sig=prop(root,'signal'); if(!sig||sig.val.k!=='arr') throw new Error('缺少 signal 数组');
-    var lanes=[], warnings=[];
-    collect(sig.val.items, [], lanes, src, warnings);
+    var lanes=[];
+    collect(sig.val.items, [], lanes, src);
     var N=0; lanes.forEach(function(l){ if(l.kind==='signal'){ N=Math.max(N,l.slots.length); normalizeSlots(l); } });
     var edges=[], extras=[];
     root.props.forEach(function(pr){
@@ -173,7 +173,7 @@ export const Core = (function () {
       if(pr.key==='edge' && pr.val.k==='arr'){ edges=pr.val.items.map(function(x){return String(x.v);}); return; }
       extras.push({ key:pr.key, text:src.slice(pr.s,pr.e), range:[pr.s,pr.e] });
     });
-    return { ticks:N, lanes:lanes, edges:edges, extras:extras, raw:src, rootRange:[root.s,root.e], warnings:warnings, rev:0 };
+    return { ticks:N, lanes:lanes, edges:edges, extras:extras, raw:src, rootRange:[root.s,root.e], rev:0 };
   }
 
   function quote(s,q){ q=q||"'"; return q+String(s).replace(/\\/g,'\\\\').replace(new RegExp(q,'g'),'\\'+q)
@@ -193,8 +193,10 @@ export const Core = (function () {
   function laneLabels(l){ return l.slots.filter(function(s){return s.point&&!s.gap&&BUS.test(s.w)&&s.label!==null;}).map(function(s){return s.label;}); }
   function needData(l){ var a=laneLabels(l); return a.length>0 && (l.dataForm!==null || a.some(function(x){return x!=='';})); }
 
+  // 空行照**源码原文**写回（`{ spacer: 20 }` 就写回 `{ spacer: 20 }`）；新建的空行没有原文 → `{}`。
+  function spacerSrc(l){ return l.raw||'{}'; }
   function emitLane(l){
-    if(l.kind==='spacer') return l.raw||'{}';
+    if(l.kind==='spacer') return spacerSrc(l);
     var labels=laneLabels(l), parts=[];
     parts.push('name: '+quote(l.name));
     parts.push('wave: '+quote(laneWave(l)));
@@ -208,7 +210,7 @@ export const Core = (function () {
     var out=[], i=0;
     while(i<items.length){
       var l=items[i];
-      if(l.kind==='spacer'){ out.push(l.raw||'{}'); i++; continue; }
+      if(l.kind==='spacer'){ out.push(spacerSrc(l)); i++; continue; }
       if(l.groupPath.length>depth){
         var g=l.groupPath[depth], sub=[];
         while(i<items.length && items[i].groupPath.length>depth && items[i].groupPath[depth]===g){ sub.push(items[i]); i++; }
@@ -229,7 +231,7 @@ export const Core = (function () {
   function canon(ir){
     var parts=[];
     ir.lanes.forEach(function(l){
-      if(l.kind==='spacer'){ parts.push(enc('~'+enc(l.groupPath.join('/'))+enc(l.raw||'{}'))); return; }
+      if(l.kind==='spacer'){ parts.push(enc('~'+enc(l.groupPath.join('/'))+enc(spacerSrc(l)))); return; }
       var ss=l.slots.map(function(s){ return enc(s.w)+enc(s.point?'P':'r')+enc(s.gap?'G':'-')+enc(s.label===null?'':s.label); }).join('');
       parts.push(enc(enc(l.name)+enc(String(l.phase))+enc(String(l.period))+enc(l.groupPath.join('/'))+enc(l.node.join(''))+enc(laneWave(l))+enc(ss)));
     });
@@ -238,7 +240,7 @@ export const Core = (function () {
   }
 
   function clone(ir){
-    return { ticks:ir.ticks, rev:ir.rev, raw:ir.raw, rootRange:ir.rootRange.slice(), warnings:ir.warnings.slice(),
+    return { ticks:ir.ticks, rev:ir.rev, raw:ir.raw, rootRange:ir.rootRange.slice(),
       edges:ir.edges.slice(), extras:ir.extras.map(function(x){return {key:x.key,text:x.text,range:x.range.slice()};}),
       lanes:ir.lanes.map(function(l){
         return { id:l.id, kind:l.kind, name:l.name, phase:l.phase, period:l.period, groupPath:l.groupPath.slice(),

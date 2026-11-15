@@ -557,7 +557,8 @@ function check() {
   // 否则改组名触发全量重生成会把用户写的 `{ spacer: 20 }` 悄悄改成 `{}`；③ canon 带上原文。
   const irSrc2 = read('src/core/ir.js');
   ok(/!prop\(item,'name'\) && !prop\(item,'wave'\) && !prop\(item,'node'\) && !prop\(item,'data'\)/.test(irSrc2) &&
-     /l\.raw\|\|'\{\}'/.test(irSrc2) && /enc\(l\.raw\|\|'\{\}'\)/.test(irSrc2) && /raw:l\.raw/.test(irSrc2),
+     /function spacerSrc\(l\)\{ return l\.raw\|\|'\{\}'; \}/.test(irSrc2) &&
+     /enc\(spacerSrc\(l\)\)/.test(irSrc2) && /raw:l\.raw/.test(irSrc2),
     '空行（spacer）的判定或原文保留被改坏了（`{ spacer: 20 }` 会被改成 `{}`，或被误判成信号行）');
   // 分组可编辑（教程 Step 5 的双向缺口）：regroup 改变 groupPath，点组名 `[A/B]` 打开输入框。
   ok(/case 'regroup'/.test(read('src/core/ir.js')) && /function openGroupEditor\(/.test(read('src/editor/interactions.js')),

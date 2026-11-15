@@ -74,7 +74,7 @@ export function attachInteractions(ctx){
           var btn=document.createElementNS('http://www.w3.org/1999/xhtml','button');
           btn.setAttribute('type','button'); btn.setAttribute('class','inline-step');
           btn.textContent=sp[0]; btn.title=sp[2]; btn.setAttribute('aria-label',sp[2]);
-          if(steps) btn.style.width=stepW+'px';   // 宽度按上面的反算值定（CSS 只负责配色）
+          btn.style.width=stepW+'px';             // 宽度按上面的反算值定（CSS 只负责配色）
           // mousedown 要拦住：否则焦点交给按钮 → 输入框 blur → 提前结算
           btn.addEventListener('mousedown',function(e){ e.preventDefault(); e.stopPropagation(); });
           btn.addEventListener('click',function(e){
