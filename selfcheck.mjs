@@ -557,10 +557,13 @@ function check() {
     '分组名不可点改（缺 laneGroupName 命中或入口）');
   // 分组显示（0.9.28）：UI 必须画成上游 render-groups 那样 —— 左侧花括号 + 竖排组名，
   // 行名后缀里不再挂 `[组名]`。退回旧写法（只挂后缀不画括号）就用这条拦住。
+  // 括号与命中区必须带**这一层**的完整路径（`data-group`）：只带行 id 时，点外层括号会去改
+  // 该行最内层的那一段（实测点 `out` 改掉了 `out/in`）。交互层也必须按这个属性回查。
   ok(/function groupRuns\(/.test(shapesSrc) && /class="groupBrace"/.test(shapesSrc) &&
      /rotate\(-90 /.test(shapesSrc) && !/laneGroupName[^\n]*>\[' \+/.test(shapesSrc) &&
-     /\.laneGroupName\[data-lane/.test(interSrc),
-    '分组未画成「左侧花括号 + 竖排组名」（或组名又退回行名后缀 / 点改命中失效）');
+     /data-group="'\+esc\(gpath\)/.test(shapesSrc) &&
+     /getAttribute\('data-group'\)/.test(interSrc),
+    '分组未画成「左侧花括号 + 竖排组名」，或括号没带本层路径（点外层括号会改错层）');
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',

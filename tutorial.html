@@ -168,8 +168,10 @@
     <div class="livecard" data-timingbench data-height="360"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p..Pp..P' }, ['Master', ['ctrl', { name: 'write', wave: '01.0....' }, { name: 'read', wave: '0...1..0' } ], { name: 'addr', wave: 'x3.x4..x', data: 'A1 A2' }, { name: 'wdata', wave: 'x3.x....', data: 'D1' } ], {}, ['Slave', ['ctrl', { name: 'ack', wave: 'x01x0.1x' } ], { name: 'rdata', wave: 'x.....4x', data: 'Q2' } ] ] }"></div>
     <p class="hint">You can build groups right on the canvas: select a row (Shift-click another row name to take a
-    range), then use <strong>group rows</strong> in the action bar and type a name — <code>/</code> nests, clearing it
-    moves those rows out of the group. Click a brace's label to rename the whole group. Moving a row out of a group
+    range), then use <strong>group rows</strong> in the action bar and type a name. Nesting works at any depth: a bare
+    name adds a level under the group you are already in (<code>c2</code> inside <code>a/b</code> gives
+    <code>a/b/c2</code>), while <code>a/b/c3</code> is read as a full path. Clearing the field moves those rows out one
+    level. Click the brace of the level you want to rename — the whole subtree follows. Moving a row out of a group
     simply drops it out, so a group never splits into two braces with the same name.</p>
   </section>
 

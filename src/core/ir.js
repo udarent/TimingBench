@@ -380,9 +380,16 @@ export const Core = (function () {
       case 'regroup': {
         var oldKey=String(op.old||'');
         var ids=op.lanes||null;
+        var depth=oldKey?oldKey.split('/').length:0;
         n.lanes.forEach(function(l){
-          var hit = ids ? ids.indexOf(l.id)>=0 : l.groupPath.join('/')===oldKey;
-          if(hit) l.groupPath=(op.path||[]).slice();
+          if(ids){ if(ids.indexOf(l.id)>=0) l.groupPath=(op.path||[]).slice(); return; }
+          // `old` 按**路径前缀**匹配，不是等值匹配：外层括号（如 `out`）自己没有行
+          // （行都在 `out/in` 里），等值匹配会「点了没反应」；前缀匹配同时覆盖叶子组
+          // （完全相等也是自己的前缀）与「改名后子树一起跟过去」。
+          var k=l.groupPath.join('/');
+          if(k===oldKey || (oldKey && k.indexOf(oldKey+'/')===0)){
+            l.groupPath=(op.path||[]).concat(l.groupPath.slice(depth));
+          }
         });
         break;
       }

@@ -475,11 +475,14 @@ export function createShapes(ctx){
       // 编辑态的可点区：整条括号高度 × 本层槽位宽（原来只有竖排名字形本身 —— 实测 15×21px，
       // 触摸端 10×14px，手指根本点不中，等于「组只能靠源码改」）。它画在括号之前、
       // 只做命中，不改任何视觉。
-      var hit=gEdit?'<rect class="groupHit" data-lane="'+ir.lanes[g.from].id+'" x="'+(bx-GSLOT)+'" y="'+y0+
-        '" width="'+GSLOT+'" height="'+h+'" fill="transparent" style="cursor:text"/>':'';
+      // 点它要改的是**这一层**（第 depth 层），不是该行最内层的路径 —— 所以带的是
+      // 「前 depth+1 段」的完整路径。此前只带 data-lane，点外层括号会去改最内层那一段。
+      var gpath=ir.lanes[g.from].groupPath.slice(0,g.depth+1).join('/');
+      var hit=gEdit?'<rect class="groupHit" data-group="'+esc(gpath)+'" data-lane="'+ir.lanes[g.from].id+
+        '" x="'+(bx-GSLOT)+'" y="'+y0+'" width="'+GSLOT+'" height="'+h+'" fill="transparent" style="cursor:text"/>':'';
       o.push('<g class="groupBrace">'+
         '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>'+hit+
-        '<text class="laneGroupName"'+(gEdit?' data-act="group" data-lane="'+ir.lanes[g.from].id+'"':'')+
+        '<text class="laneGroupName"'+(gEdit?' data-act="group" data-group="'+esc(gpath)+'" data-lane="'+ir.lanes[g.from].id+'"':'')+
         ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle"'+
         ' font-size="12" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
         '</g>');
