@@ -275,7 +275,6 @@ export function createShapes(ctx){
     // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
     var viewW=Math.max(240, Math.round(wrap.clientWidth||0)||360);
-    var viewH=Math.max(0, Math.round(wrap.clientHeight||0));
     // 波形层仍按内容撑宽并允许横向滚动；但至少铺满卡片，便于钉住的顶栏 / 底栏有落脚宽度。
     // 只读态（嵌入卡片默认）两项都不需要：既没有行工具（不预留 ACT_W），也没有钉住的顶栏 /
     // 底栏（不需要铺满 viewW）。所以只按「内容宽」算，窄了就交给下面的 fit 等比缩小，
@@ -310,7 +309,10 @@ export function createShapes(ctx){
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
     var contentH=actY+((state.embedCard&&state.readonly)?roTrimBottom:20);
-    var H=state.embedCard?contentH:Math.max(contentH, viewH), c, x;
+    // 画布高度**只由内容决定**（不再抬到视口高）。旧做法是「整页模式下把 SVG 拉到视口高」，
+    // 那是给当时「底栏画在 SVG 里、要钉住」用的；底栏早已是画布外的真实 flex 子项。
+    // 留在原地就成了另一种抖动源：停靠区一出现，视口变矮 → SVG 跟着变矮 → 又一次重排。
+    var H=contentH, c, x;
     // 只读卡片把顶部那段「HUD 区」从 viewBox 里裁掉：渲染高度同步变矮，卡片不再顶着一条死白。
     var vbTop=(state.embedCard&&state.readonly)?roTrimTop:0;
     var vbH=H-vbTop;

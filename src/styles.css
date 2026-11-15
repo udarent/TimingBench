@@ -1,5 +1,5 @@
 /* 共享样式：主页面上下分区 + 波形图元。 */
-:root{--bg:#fff;--panel:#fff;--src-bg:#f7f7f7;--ink:#1f2328;--muted:#8b8f96;--line:rgba(0,0,0,.10);--line2:rgba(0,0,0,.30);--accent:#185fa5;--accent-bg:#e9f2fc;--ok:#1d9e75;--ok-bg:#e1f5ee;--warn:#ba7517;--warn-bg:#faeeda;--err:#c0392b;--err-bg:#fcebeb;--bus:#ba7517;--bus-bg:#faeeda;--bus2:#fff;--bus3:#ffffb4;--bus4:#ffe0b9;--bus5:#b9e0ff;--bus6:#ccfdfe;--bus7:#cdfdc5;--bus8:#f0c1fb;--bus9:#f5c2c0;--wave-ink:var(--ink);--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+:root{--bg:#fff;--panel:#fff;--src-bg:#f7f7f7;--ink:#1f2328;--muted:#8b8f96;--line:rgba(0,0,0,.10);--line2:rgba(0,0,0,.30);--accent:#185fa5;--accent-bg:#e9f2fc;--ok:#1d9e75;--ok-bg:#e1f5ee;--warn:#ba7517;--warn-bg:#faeeda;--err:#c0392b;--err-bg:#fcebeb;--bus:#ba7517;--bus-bg:#faeeda;--bus2:#fff;--bus3:#ffffb4;--bus4:#ffe0b9;--bus5:#b9e0ff;--bus6:#ccfdfe;--bus7:#cdfdc5;--bus8:#f0c1fb;--bus9:#f5c2c0;--wave-ink:var(--ink);--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--dock-acts:47px;--dock-chars:40px;--sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
 @media (prefers-color-scheme:dark){:root{--bg:#191a1c;--panel:#222427;--src-bg:#202225;--ink:#e9e9e6;--muted:#9b9b95;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.3);--accent:#6cb0ee;--accent-bg:#14304a;--ok:#5dcaa5;--ok-bg:#12382b;--warn:#ef9f27;--warn-bg:#3a2a10;--err:#f09595;--err-bg:#3b1e1e;--bus:#ef9f27;--bus-bg:#3a2a10;--bus2:#3a3b3e;--bus3:#4a4a24;--bus4:#4a3520;--bus5:#1d3a55;--bus6:#1e4547;--bus7:#22452a;--bus8:#402748;--bus9:#4a2a28}}
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -30,7 +30,16 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
    所以不再盖在波形上、也不需要画布为它们预留高度。 */
 .pane.diagram{position:relative;display:flex;flex-direction:column;min-height:0}
 .svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto;background:var(--bg);outline:none}
-.dockzone{position:relative;flex:0 0 auto;display:flex;flex-direction:column;z-index:20}
+/* 停靠区**恒高**：动作条 + 字符条两条都算进高度，哪怕此刻只开了一条。
+   为什么必须恒高（用户实测「选中元素又移动时画面反复跳动」）：
+   曾由内容决定高度 —— 字符条只在「选中格」时出现，于是点格子画布矮 47px、点行名又长回 40px，
+   画布底边跟着跳，120ms 后的去抖重画再来一次。现在高度是常量（桌面 47+40、触摸 61+56），
+   换选中对象只换内容、不动版式；两条从底部往上排，没开的那条留下的空白是**透明的** ——
+   看上去就是画布多一点余量，而不是一条空工具条。
+   只读卡片不预留（那里没有这两条，`reportHeight` 也不能被它撑高）。 */
+.dockzone{position:relative;flex:0 0 auto;display:flex;flex-direction:column;justify-content:flex-end;z-index:20;
+  height:calc(var(--dock-acts) + var(--dock-chars) + env(safe-area-inset-bottom,0px))}
+.is-readonly .dockzone{height:0}
 /* 离屏文本测量容器：只给 shapes.js 量行名宽度用，永远不可见、不吃事件 */
 .measure{position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;visibility:hidden;font-family:var(--sans)}
 /* 键盘用户用 Tab / F6 进入画布时给出可见焦点；鼠标点击不显示 */
@@ -134,6 +143,7 @@ svg{display:block;font-family:var(--sans)}
 .topbar .hudBtn.dim,.topbar .hudBtn:disabled{opacity:.4;cursor:default}
 /* 只读态没有任何全局动作 → 顶栏整条不占位（否则卡片 iframe 会白白高 40px） */
 .topbar:empty{display:none}
+.is-touch{--dock-acts:61px;--dock-chars:56px}
 .is-touch .topbar{flex:0 0 54px;padding:0 8px;gap:8px}
 .is-touch .topbar .hudBtn{min-width:44px;height:44px;padding:0;font-size:18px;border-radius:10px}
 .is-touch body{overflow:hidden}
@@ -149,8 +159,10 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .cellSel{stroke-width:2.4}
 /* 桌面：上下文条钉在右侧（触摸端钉底部，规则在下面 .is-touch 段里）。
    行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头按钮都已撤掉。 */
-.tbpanel.open{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;
-  background:var(--panel);border-top:1px solid var(--line)}
+/* 上下文条：整行、定高、**绝不换行**。换行会把这一条撑成两三排 —— 停靠区虽然恒高，
+   但按钮会被自己的行高挤掉（44px × 3 排 > 61px），所以窄屏一律横向滚动。 */
+.tbpanel.open{display:flex;flex-wrap:nowrap;gap:4px;padding:6px 8px;height:var(--dock-acts);
+  background:var(--panel);border-top:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
 .tbpanel button.ctxbtn{width:34px;height:34px;min-width:34px;padding:0;border:1px solid var(--line);
   border-radius:7px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
   cursor:pointer}
@@ -158,7 +170,8 @@ svg{display:block;font-family:var(--sans)}
 .tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
 .tbpanel button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
 .is-touch .tbpanel{display:none}
-.is-touch .tbpanel.open{display:flex;flex-wrap:wrap;gap:8px;padding:8px;max-height:40dvh;overflow:auto}
+.is-touch .tbpanel.open{display:flex;flex-wrap:nowrap;gap:8px;padding:8px;
+  overflow-x:auto;overflow-y:hidden}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:13px var(--sans);touch-action:manipulation}
@@ -183,7 +196,7 @@ svg{display:block;font-family:var(--sans)}
    两套点击，还有一段「滚动时反向位移把 chips 钉回可视区」的补偿。现在一套。
    桌面放得下 23 颗就全平铺（不折叠），触摸端 4 颗 + ⋯，由 JS 按 TOUCH 决定数量。 */
 .chardock.open{display:flex;
-  align-items:center;justify-content:flex-start;gap:4px;height:40px;padding:4px 8px;
+  align-items:center;justify-content:flex-start;gap:4px;padding:4px 8px;height:var(--dock-chars);
   background:var(--panel);border-top:1px solid var(--line);user-select:none;
   /* 23 颗 × 30px ≈ 690：窄卡片（如 520 的 iframe）放不下时必须横向滚动，
      不能居中溢出 —— 居中会让第一颗跑到负坐标，用户看不到也点不到。 */
@@ -201,7 +214,7 @@ svg{display:block;font-family:var(--sans)}
 .chardock .chipbtn.clear{flex:0 0 26px;width:26px;min-width:26px}
 .chardock .chipbtn.clear span{font-size:14px;color:var(--muted)}
 .is-touch .chardock.open{display:flex;
-  align-items:center;gap:6px;height:56px;padding:6px 8px;
+  align-items:center;gap:6px;padding:6px 8px;
   background:var(--panel);border-top:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
   touch-action:pan-x;user-select:none}
@@ -276,12 +289,9 @@ svg{display:block;font-family:var(--sans)}
 /* 嵌入卡片里没有标签页与操作栏（卡片只承担「看 / 就地改」两件事），
    但**上下文条必须保留** —— 触摸端没有 hover，选中行 / 列后的 up·down·改名·加行
    全在 #tbpanel 里，隐藏它等于把行重排、行编辑、列操作整组功能关掉。 */
-/* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；面板挡住波形是瞬时的（选完即收） */
-.is-embed .tbpanel.open{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
-/* 嵌入卡片编辑态：上下文条压成**单行横向滚动** —— 矮卡片里 12 个 44px 按钮若折成两三排，
-   会把画布挤到只剩一条缝（用户实测「按钮把界面占满、没法编辑」）。单行是最省纵向空间的形态；
-   放不下的靠横向滑动看。全屏编辑（支持时）同样受益。用 :not(.is-readonly) 免得影响只读态。 */
-.is-embed:not(.is-readonly) .tbpanel.open{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-height:none}
+/* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；安全区由 .dockzone 统一让出
+   （0.10.4 起停靠区是一行定高，两条并排，不再各自加 padding-bottom）。
+   卡片编辑态的「单行横向滚动」不再是特例 —— 整页与卡片共用同一条单行规则。 */
 .is-embed .pane.src{display:none!important}
 /* 卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
    之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，

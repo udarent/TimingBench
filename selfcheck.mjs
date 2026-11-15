@@ -258,8 +258,23 @@ function check() {
   // 波形层仍按内容撑宽、可横向滚动 / 缩放。禁止退回「按整张画布宽度排字符条」或「不钉住」。
   // 只约束上下文条这类动作按钮：它们必须全部落在可视宽内。
   // 字符停靠条是有意的横向滚动（23 个字符一条排不下，等价于输入法候选条），不在约束范围。
-  ok(!/\.is-touch \.tbpanel\{[^}]*overflow-x:auto/.test(cssSrc),
-    '触摸上下文条仍允许横向滚动（窄屏会溢出）');
+  // 停靠区是**恒高**的（0.10.4）：动作条 + 字符条两条都算进高度，换选中对象只换内容。
+  // 反过来写会退回「高度随内容变」—— 字符条只在选中格时出现，画布随选中对象长高变矮，
+  // 用户看到的就是「选中元素再移动时画面反复跳动」。三条子规则必须同时在位。
+  ok(/\.dockzone\{[^}]*height:calc\(var\(--dock-acts\) \+ var\(--dock-chars\)/.test(cssSrc) &&
+     /\.is-readonly \.dockzone\{height:0\}/.test(cssSrc) &&
+     /\.tbpanel\.open\{[^}]*height:var\(--dock-acts\)/.test(cssSrc) &&
+     /\.chardock\.open\{[^}]*height:var\(--dock-chars\)/.test(cssSrc),
+    '停靠区又变成「高度由内容决定」了（换选中对象会把画布压得一跳一跳）');
+  // 两条都不能换行：停靠区恒高，换行后的按钮会被行高裁掉，只能横向滚动
+  ok(/\.tbpanel\.open\{[^}]*flex-wrap:nowrap/.test(cssSrc) &&
+     /\.is-touch \.tbpanel\.open\{[^}]*overflow-x:auto/.test(cssSrc),
+    '上下文条又允许换行了（恒高停靠区里会裁掉按钮；窄屏应改横向滚动）');
+  // 画布高度只由内容决定：不再把 SVG 拉到视口高（那是「底栏画在 SVG 里」时代的做法，
+  // 留着会让停靠区一出现就触发一次 SVG 重排，成为第二个抖动源）
+  ok(!/Math\.max\(contentH, *viewH\)/.test(read('src/editor/shapes.js')) &&
+     !/\bviewH\b/.test(read('src/editor/shapes.js')),
+    'shapes.js 又把画布拉高到视口了（停靠区一变就多重排一次）');
   // 嵌入卡片里不能把上下文条一起藏掉：触摸端没有行工具 / 拖拽把手，
   // 选中行后的 up·down·改名·加行全在 #tbpanel，藏了等于把行重排整组关掉。
   ok(!/\.is-embed[^{}]*\.tbpanel[^{}]*\{[^}]*display:\s*none/.test(cssSrc),
