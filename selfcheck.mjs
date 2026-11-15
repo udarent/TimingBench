@@ -441,13 +441,17 @@ function check() {
     '上下文条的 phase 按钮没接到图形化拖拽（那条入口会整条消失）');
   // 触摸端：相位模式里行尾的 φ 读数是可点入口 —— 小卡片里 0.1 个周期只有 3~4px，
   // 光靠拖分不出来，必须留一条「敲数字」的路。
-  ok(/class="phaseValueHit"/.test(shapesSrc) &&
-     /classList\.contains\('phaseValueHit'\)/.test(interSrc),
-    '触摸端相位读数不再是可点入口（精确值那条路被堵死）');
-  // 锚点：触摸端的 laneMeta 去掉了 data-act，但必须保留 data-lane —— 否则就地输入框
-  // 找不到位置（openRowEditor 靠 data-lane 在行里定位）。
-  ok(/T\?' data-lane="'\+l\.id\+'"'/.test(shapesSrc),
-    '触摸端 laneMeta 丢了 data-lane 锚点（就地输入框会找不到位置）');
+  // 触摸端：φ / T 两个字形的**放大命中区**必须都存在、且各带自己的 data-act。
+  // 字形本身只有 8~10px，手指点不准；合成一块就分不出「点 φ 改相位」与「点 T 改周期」。
+  // （0.17.0 前这里是「行尾相位读数」的命中区，读数与行名旁的 φ 重复，已删。）
+  ok(/class="laneMetaHit" data-act="phase"/.test(shapesSrc) &&
+     /class="laneMetaHit" data-act="period"/.test(shapesSrc) &&
+     /classList\.contains\('laneMetaHit'\)/.test(interSrc),
+    '触摸端 φ / T 不再是可点入口（精确值那条路被堵死）');
+  // 锚点：laneMeta 必须同时带 data-act 与 data-lane —— data-lane 是就地输入框的定位依据
+  // （openRowEditor 靠它在行里找锚点），漏了输入框就不出现。
+  ok(/class="laneMeta" data-act="(?:phase|period)" data-lane="/.test(shapesSrc),
+    'laneMeta 丢了 data-lane 锚点（就地输入框会找不到位置）');
 
   // 第七个参数是「这一格有多宽」：period≠1 的行按 period×CELL 传（渲染层自己的标尺），
   // 仍不得掺入 viewW / scrollLeft 这类操作层变量。

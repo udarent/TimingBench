@@ -93,9 +93,9 @@ export function attachInteractions(ctx){
         // 只有带 data-act 的徽标才是可点入口（触摸端不接线，见 shapes.js）：否则落到外层行名上，
         // 一次「想选中这一行」的轻点不会顺手打开相位尺。
         if(g.classList&&g.classList.contains('laneMeta')&&g.getAttribute('data-act')) return {meta:g.getAttribute('data-act'),lane:ln};
-        // 触摸端相位模式里行尾那个 φ 读数（桌面不画）：轻点它 = 改这一行的精确相位值。
+        // 触摸端 φ / T 字形的放大命中区（字形本身只有 8~10px，手指点不准）。
         // 走的是同一个 meta 分支，所以「敲数字」与「拖波形」共用一条 setPhase 通路。
-        if(g.classList&&g.classList.contains('phaseValueHit')) return {meta:'phase',lane:ln};
+        if(g.classList&&g.classList.contains('laneMetaHit')) return {meta:g.getAttribute('data-act'),lane:ln};
         // 组名 / 括号命中区只认「这一层的路径」—— 行 id 在这里没用（行的 groupPath 是它自己的最深层）
         if(g.classList&&(g.classList.contains('laneGroupName')||g.classList.contains('groupHit')))
           return {group:g.getAttribute('data-group')};
@@ -138,7 +138,7 @@ export function attachInteractions(ctx){
       ? wrap.querySelector('rect.waveZone[data-lane="'+laneId+'"]')
       : (wrap.querySelector('tspan.laneMeta[data-act="'+act+'"][data-lane="'+laneId+'"]')
          || wrap.querySelector('tspan.laneMeta[data-lane="'+laneId+'"]')
-         || wrap.querySelector('rect.phaseValueHit[data-lane="'+laneId+'"]'));
+         || wrap.querySelector('rect.laneMetaHit[data-act="'+act+'"][data-lane="'+laneId+'"]'));
     if(!anchor) return;
     openInline(anchor,spec.val,function(v){
       var op=spec.makeOp(v);

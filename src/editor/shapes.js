@@ -1,7 +1,7 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, PHASE_MIN } from './geometry.js';
+import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import * as Cap from './cap.js';
@@ -419,22 +419,32 @@ export function createShapes(ctx){
       }
       // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉。
       // 分组名不再挂在行名后面：它画在左侧括号旁（竖排，见下面的 groupRuns 渲染）。
-      // φ / T 徽标：桌面是「点一下就能改」的入口；触摸端只画不接事件 —— 那两个字形乘完缩放
-      // 只有 8~10px，手指点不准，却紧贴行名：点行名想选中，一偏就进了相位尺，紧接着的拖动
-      // 就变成改相位（与「移动视图」抢同一个手势）。触摸端改相位 / 周期走底部上下文条的大按钮。
-      var meta='';
+      // φ / T 徽标：四场景都是「点一下就能改」的入口（0.17.0 起触摸端也接线）。
+      // 0.14.2 曾把触摸端这两个字形断掉，理由是「点行名想选中、一偏就进了**相位尺**，紧接着的
+      // 拖动变成改相位」—— 那个理由已经不成立：点 φ / T 现在打开的是**就地输入框**（Esc 就退），
+      // 不再是一个会接管后续拖动的手势模式。触摸端字形只有 8~10px，所以另配放大命中区（见下）。
+      var meta='', metaHit='';
       if(can('laneMeta')){
-        // 触摸端去掉 data-act（那是「可点入口」的标记，小字点不准），但**保留 data-lane**：
-        // 相位/周期的就地输入框需要它当锚点（openRowEditor 按 data-lane 找位置）。
-        var phAct=T?' data-lane="'+l.id+'"':' data-act="phase" data-lane="'+l.id+'"';
-        var prAct=T?' data-lane="'+l.id+'"':' data-act="period" data-lane="'+l.id+'"';
-        meta='<tspan class="laneMeta"'+phAct+' font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
-             '<tspan class="laneMeta"'+prAct+' font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
+        meta='<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
+             '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
+        if(T){
+          // 两个字形**各自**一块透明命中区（宽度按实测字宽 + 3px，高度占满整行）：合成一块就分不出
+          // 「点 φ 改相位」和「点 T 改周期」。只覆盖到字形，行名文字仍归 `data-act="name"`。
+          var mR=NAME_W-6, wPer=measure(' T'+l.period,9), wPhi=measure(' φ'+l.phase,9);
+          var mP=mR-wPer, mPL=mP-wPhi-3;
+          metaHit='<rect class="laneMetaHit" data-act="phase" data-lane="'+l.id+'" x="'+mPL.toFixed(1)+
+              '" y="'+(y+1)+'" width="'+(mP-mPL).toFixed(1)+'" height="'+(ROW_H-2)+
+              '" fill="transparent" pointer-events="all" style="cursor:pointer"/>'+
+            '<rect class="laneMetaHit" data-act="period" data-lane="'+l.id+'" x="'+(mP-1).toFixed(1)+
+              '" y="'+(y+1)+'" width="'+(mR-mP+1).toFixed(1)+'" height="'+(ROW_H-2)+
+              '" fill="transparent" pointer-events="all" style="cursor:pointer"/>';
+        }
       }
       // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
         '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+'</text>');
+      if(metaHit) o.push(metaHit);   // 压在字形之上，接住触摸端点按
       // 行级时间标尺：period 决定这一行的格宽（字符按比例横向拉伸），phase 决定整行左移量。
       // period=1 / phase=0 时这些值与改造前逐一相同（P=1、sh=0、cw=CELL、chars=N）。
       var P=lanePeriod(l), sh=laneShift(l), cw=P*CELL, chars=laneChars(l,N);
@@ -521,28 +531,9 @@ export function createShapes(ctx){
           pgo.push('<line x1="'+ptx+'" x2="'+ptx+'" y1="'+(y+3)+'" y2="'+(y+7)+
             '" stroke="var(--accent)" stroke-opacity="'+(pk%2?0.25:0.5)+'" stroke-width="1" pointer-events="none"/>');
         }
-        // 触摸端的当前值徽标（这是**读数**，不是控件）：小卡片里整张图被等比缩小，
-        // 0.1 个周期只有 3~4px，光看波形分不出 0.1 与 0.2 —— 给数字才是可靠反馈。
-        if(T){
-          var pfs=Math.min(22,Math.max(11,Math.round(12/(state.fit||1))));
-          // 负相位要带符号显示（读数是从「波形现在在哪儿」反推的唯一可靠依据）
-          var ptx0=String(+(Math.min(Math.max(PHASE_MIN,l.phase),PHASE_MAX)).toFixed(2));
-          var ptw2=Math.round(pfs*0.62*(ptx0.length+1)+11);
-          var plbX=XS+prow-ptw2-4;
-          pgo.push('<rect x="'+plbX+'" y="'+(y+ROW_H/2-pfs*0.78)+'" width="'+ptw2+
-            '" height="'+(Math.round(pfs*1.56))+'" rx="3" fill="var(--panel)" stroke="var(--accent)"'+
-            ' stroke-opacity="0.35" stroke-width="0.6" pointer-events="none"/>');
-          pgo.push('<text class="phaseValue" x="'+(plbX+ptw2/2)+'" y="'+(y+ROW_H/2)+'" text-anchor="middle"'+
-            ' dominant-baseline="central" font-size="'+pfs+'" fill="var(--accent)" pointer-events="none">φ'+
-            ptx0+'</text>');
-          // 读数是**可点的**：轻点它 → 就地输入框，敲一个精确值（只有软键盘也能精调）。
-          // 命中区取整行高、按徽标两端各留 8 —— 那两个 12px 的字形本身手指点不准；
-          // 用整行高而不是再放大，是因为横向再宽就会挡住行尾那些用来选格子的点击。
-          var hw=ptw2+16, hx=Math.max(XS, XS+prow-hw-2);
-          pgo.push('<rect class="phaseValueHit" data-lane="'+l.id+'" x="'+hx+'" y="'+(y+1)+'" width="'+hw+
-            '" height="'+(ROW_H-2)+'" rx="4" fill="transparent" stroke="none" pointer-events="auto"'+
-            ' style="cursor:pointer"/>');
-        }
+        // 行尾**不再画相位读数**（0.17.0 删）：行名旁那个 `φ0.35` 一直在显示同一个值，
+        // 再在右侧画一个就是同一件事说两遍，还白占一段波形区。要改值就点左边那个 ——
+        // 触摸端也给它（和旁边的 T）配了放大命中区，见上面 laneMetaHit。
         o.push(pgo.join(''));
       }
       o.push('</g>');
