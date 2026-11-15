@@ -310,8 +310,7 @@ function check() {
   ok(!/revealLane\(laneOf, panel\.offsetHeight\)/.test(read('src/editor/touch.js')) &&
      !/state\.barH/.test(read('src/editor/interactions.js')),
     'revealLane 仍在重复扣面板高度（面板已是 flex 子项，多扣会多滚一截）');
-  // 字符停靠条：必须固定在卡片底部（不随画布滚动）、命中区 ≥44px
-  // 字符停靠条：在 dockzone 内（不再全屏 fixed）、命中区 ≥44px
+  // 字符停靠条：在停靠区内（随停靠区定高、不随画布滚动）、触摸端命中区 ≥48px
   ok(/\.dockzone\{[^}]*display:flex/.test(cssSrc) &&
      /\.is-touch \.chardock \.chipbtn[^{]*\{[^}]*flex:0 0 48px/.test(cssSrc),
     '字符停靠条未收进 dockzone，或触摸端命中区不足 48px');
