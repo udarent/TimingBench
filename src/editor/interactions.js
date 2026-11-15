@@ -29,7 +29,11 @@ export function attachInteractions(ctx){
     var ed=ctx.inlineCtx, v=ed.input.value;
     ctx.inlineCtx=null;
     if(ed.fo&&ed.fo.parentNode) ed.fo.parentNode.removeChild(ed.fo);
-    if(doCommit){ try{ ed.apply(v); }catch(e){ ctx.notify('Inline edit failed: '+e.message,true); } }
+    // 一个字都没改就不提交：失焦（点画布 / 切到源码框 / Tab）本来也算「结算」，
+    // 但「打开又关掉」不该产生任何编辑 —— 否则组路径这类「预填值重新解析 ≠ 原值」的输入
+    // 会凭空改文档（一级组里的行预填 `a`，单段按「加一层」解释，重交一次就成了 `a/a`），
+    // 顺带也不再往撤销栈里塞空步骤。
+    if(doCommit && v!==ed.initial){ try{ ed.apply(v); }catch(e){ ctx.notify('Inline edit failed: '+e.message,true); } }
     // 键盘结算（Enter / Esc）后把焦点还给画布，否则必须再点一次画布才能继续纯键盘编辑。
     // 失焦提交不抢焦点：用户可能正点进源码框。
     if(restoreFocus) ctx.focusCanvas();
@@ -52,7 +56,7 @@ export function attachInteractions(ctx){
     inp.title=opts.title||'Enter to confirm · Esc to cancel';
     inp.placeholder=opts.placeholder||'';
     fo.appendChild(inp); svg.appendChild(fo);
-    ctx.inlineCtx={apply:apply,input:inp,fo:fo};
+    ctx.inlineCtx={apply:apply,input:inp,fo:fo,initial:inp.value};
     inp.addEventListener('keydown',function(e){
       if(e.key==='Enter'){ e.preventDefault(); closeInline(true,true); }
       else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeInline(false,true); }
@@ -345,12 +349,24 @@ export function attachInteractions(ctx){
     }
     openInline(el,prefill,function(v){
       var path=resolveGroupPath(v,target.base,target.bareBase);
+      if(!groupPathChanged(path,target)) return;      // 解析结果与现状相同 ⇒ 什么都没发生，不提交
       var op=target.old!==undefined?{t:'regroup',old:target.old,path:path}:{t:'regroup',lanes:target.lanes,path:path};
       var label=(target.old!==undefined?'regroup ['+target.old+']':'group '+target.lanes.length+' row(s)')+
         ' -> '+(path.join('/')||'(none)');
       ctx.commit(op,label);
     },{ title:'group path — name renames this level, /name nests under it, a/b is a full path, empty moves out one level',
         placeholder:'group', width:180 });
+  }
+  // 解析出来的路径是否真的改变了目标 —— 用来挡掉「提交了但什么都没变」的空编辑
+  // （空编辑会整篇重排一次源码，还会在撤销栈里留一步）。
+  function groupPathChanged(path,target){
+    var key=path.join('/');
+    if(target.old!==undefined) return key!==target.old;
+    var changed=false;
+    state.ir.lanes.forEach(function(l){
+      if(target.lanes.indexOf(l.id)>=0 && l.groupPath.join('/')!==key) changed=true;
+    });
+    return changed;
   }
   // 把输入框里的一个字符串解析成**目标路径数组**。两个入口共用，只有 base 不同：
   //   括号入口 base = 本层（a/b），bareBase = 父层（a）→ 裸名字是就地改名；

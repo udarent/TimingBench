@@ -568,6 +568,12 @@ function check() {
   // 清空 = 退出这一层 —— 三者都在 resolveGroupPath 里，缺一个就会退回「第二层加不了层 /
   // 写 b/c 把整组搬出父层 / 混选清空一路退到顶层」。输入框还必须**全选**：
   // 光标落在末尾时敲一个字符会粘成 `a/bc`（第二层尤其容易撞上）。
+  // 「打开又关掉 = 什么都不改」（0.11.2）：预填值重新解析不一定等于原值（一级组里的行预填 `a`，
+  // 单段按「加一层」解释 → `a/a`），所以必须两道闸 —— 输入值没变不提交、解析路径没变不提交。
+  // 少了任何一道，点开 group rows 再取消就会凭空多一层。
+  ok(/v!==ed\.initial/.test(interSrc) && /function groupPathChanged\(path,target\)/.test(interSrc) &&
+     /if\(!groupPathChanged\(path,target\)\) return;/.test(interSrc),
+    '就地输入又会在「没改内容」时提交（点开 group rows 再取消会凭空多一层）');
   ok(/function resolveGroupPath\(raw,base,bareBase\)/.test(interSrc) &&
      /charAt\(0\)==='\/'/.test(interSrc) &&
      /parts\[0\]===base\[base\.length-1\]/.test(interSrc) &&
