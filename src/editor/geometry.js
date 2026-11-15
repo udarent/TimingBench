@@ -35,7 +35,7 @@ G.CHIPS_W = G.XS + Core.ALL.length * G.CHIP_STEP + 16;
 //   lane.phase  = (sigx.phase || 0) * 2       → 再逐 half-brick 从行首 shift 掉
 // 于是：period 把该行的每个字符横向拉长 period 倍（period=1 时一格是 2 个 half-brick）；
 // phase 把整行墨迹**连续**左移 phase 个周期 —— 位移量本身没有量化，half-brick 粒度只体现在
-// 「行首被整块丢掉多少」上（详见 laneShift / laneLeadTrim 的注释与 CHANGELOG 0.12.3 的实测表）。
+// 「上游行首被整块丢掉多少」上（我们不做这一步，见 laneShift 的注释；CHANGELOG 0.12.3 有实测表）。
 // 我们只在**绘制层**引入这套标尺：IR 里 tick 仍是「这一行自己的字符序号」，
 // 因此编辑语义（点哪一格改哪个字符、增删列、node 锚点、edge 端点）全都不变。
 export function lanePeriod(l){
@@ -43,6 +43,11 @@ export function lanePeriod(l){
   return (isFinite(p)&&p>=1) ? Math.round(p) : 1;
 }
 // 该行墨迹相对参考网格的左移量，单位是「周期」。**连续值，不做任何量化**。
+// （**只对齐结果，不复刻手段**：上游把位移拆成「整块丢砖 + 分数补偿」两步，是为了让砖块保持
+//   半砖对齐；我们按字符格直接绘制，没有砖的概念，所以只要位移量等于 phase 个周期就够了。
+//   由此产生的一处**有意差异**：上游会真的丢掉行首 ceil(2p) 个半砖（phase 0.1 时前 0.4 格
+//   波形直接消失），我们把波形完整画出来、只把越过波形起点的部分裁掉 —— 不丢信息。
+//   别把这条当 bug 改回「留白」，那是在复刻上游的实现副作用。）
 // 上游 wavedrom 的相位是「两步凑出来的连续位移」，很容易误读成量化（我们先后误读过两次）：
 //   ① `parse-wave-lanes.js`：`lane.phase = sigx.phase * 2`（半砖数）；`parse-wave-lane.js` 里
 //      `for (i=0; i<lane.phase; i+=1) R.shift()` —— 从行首**整块**丢掉 `ceil(2·phase)` 个半砖
@@ -52,18 +57,10 @@ export function lanePeriod(l){
 // 净位移 = `ceil(2p)·半砖 − (ceil(2p) − 2p)·半砖 = 2p·半砖 = p 个周期` —— **精确等于 phase**。
 // 实测（wavedrom@3.5.0 浏览器包，砖宽 20px、一格 40px）：phase 0.1 → translate(16)、0.2 → 12、
 // 0.3 → 8、0.5 → 0，折算下来每 0.1 相位正好移动 4px = 0.1 格。所以 0.1 与 0.2 **确实不同**。
-// 半砖粒度只体现在「行首被整块丢掉多少」上（见 laneLeadTrim），不体现在位移量上。
+// 半砖粒度只体现在「上游行首被整块丢掉多少」上，不体现在位移量上。
 export function laneShift(l){
   var p=Number(l&&l.phase);
   return (isFinite(p)&&p>0) ? p : 0;
-}
-// 行首要被丢掉的半砖（换算成「周期」）：上游是整块 shift 出去的，不画半块。
-// 所以相位行的波形并不是「整体左移 + 靠容器裁掉」，而是「先丢掉 ceil(2p) 个半砖，再右移补偿」——
-// 结果是在左边缘留下 `(ceil(2p) − 2p)/2` 个周期的空白，再往外才是波形。
-export function laneLeadTrim(l){
-  var p=Number(l&&l.phase);
-  if(!isFinite(p)||p<=0) return 0;
-  return (Math.ceil(p*2)-p*2)/2;
 }
 // 这一行要画多少个字符格：自身字符数与「补齐到全图参考宽度」取大。
 // period=1 时恒等于 ticks（与改造前完全一致）；period=2 时补一半。

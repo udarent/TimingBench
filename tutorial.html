@@ -192,7 +192,7 @@
     <p class="hint">Both fields are applied to the drawing and are editable in place: click the
     <code>&phi;</code> / <code>T</code> next to a row name. Phase shifts the lane left by exactly that many
     periods &mdash; it is continuous, so <code>0.1</code> and <code>0.2</code> differ by a tenth of a cell (WaveDrom
-    does the same: it drops whole half&nbsp;bricks and then compensates with a fractional translate). The numbered
+    shifts it the same way but throws away the leading half&nbsp;bricks; we keep them and clip at the wave origin). The numbered
     ruler above still counts reference periods, so a <code>period: 2</code> row spans two ruler columns per
     character.</p>
   </section>
