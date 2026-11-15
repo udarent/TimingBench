@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.12.0">
+<meta name="version" content="0.12.1">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -170,10 +170,10 @@
     <p class="hint">You can build groups right on the canvas: select a row (Shift-click another row name to take a
     range), then use <strong>group rows</strong> in the action bar and type a name. What you type is the
     <strong>whole path</strong> — one segment per level: <code>bus</code> is a top-level group, <code>a/b</code> nests it
-    one level down, and an empty path means "not in any group". To add or remove a level use the <code>+</code> and
-    <code>&minus;</code> buttons next to the input (they append and drop a segment for you); to rename, edit that
-    segment of the path. Click the brace of the level you want to change — the whole subtree follows. Moving a row out
-    of a group simply drops it out, so a group never splits into two braces with the same name.</p>
+    one level down, and an empty path means "not in any group". To add a level, append a segment
+    (<code>a/b</code> &rarr; <code>a/b/c</code>); to drop one, delete the last segment — the path is the whole story.
+    Click the brace of the level you want to change, and the whole subtree follows. Moving a row out of a group
+    simply drops it out, so a group never splits into two braces with the same name.</p>
   </section>
 
   <section class="step">

@@ -588,12 +588,13 @@ function check() {
   // 绝不允许再给「单段」加语义 —— 单段既可能是在建一级组、也可能是在退到一级组，
   // 猜哪边都会错一半（0.11.x 就先后踩过「裸名字=加层」「/名字=加层」「首段纠偏」三种推断）。
   // 加层 / 减层是输入框右侧的显式按钮（pathSteps → `+` / `−`），文本只表达结果。
+  // 组路径只有一条规则：**输入框里的文本就是完整路径**（一级一段，空 = 无组）。
+  // 既不许按写法推断层级，也不许在输入框旁边加「加一层 / 减一层」按钮 —— 那与直接在路径
+  // 文本上编辑重复（路径本身已经是全局描述，末尾写一段就是加层、删一段就是减层）。
   ok(/function groupPathOf\(raw\)/.test(interSrc) &&
      !/bareBase|resolveGroupPath|charAt\(0\)==='\/'/.test(interSrc) &&
-     /pathSteps:true/.test(interSrc) &&
-     /add a level|remove a level/.test(interSrc) &&
-     /\.inline-step\{/.test(cssSrc),
-    '组路径又开始「按写法推断层级」了（应改为：文本=完整路径、加/减层用 +/− 按钮）');
+     !/pathSteps|inline-step/.test(interSrc) && !/\.inline-step\{/.test(cssSrc),
+    '组路径重新变成「按写法推断层级」或又加了额外按钮（应只有一条：输入框文本 = 完整路径）');
 
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',

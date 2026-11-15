@@ -76,15 +76,6 @@ svg{display:block;font-family:var(--sans)}
 .inline-fo{overflow:visible}
 .inline-edit{width:100%;height:100%;box-sizing:border-box;font:12px var(--mono);padding:2px 6px;border:1px solid var(--accent);border-radius:5px;background:var(--panel);color:var(--ink);box-shadow:0 3px 12px rgba(0,0,0,.22);outline:none}
 .inline-edit:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg),0 3px 12px rgba(0,0,0,.22)}
-/* 路径输入（组路径）：输入框 + 两个显式按钮。加减层级是「看得见的动作」，
-   不靠文本写法去猜（单段到底是建一级组还是退到一级组，猜哪边都会错一半）。 */
-.inline-row{display:flex;align-items:stretch;gap:2px;height:100%}
-.inline-row .inline-edit{flex:1 1 auto;min-width:0}
-.inline-step{flex:0 0 auto;width:22px;padding:0;border:1px solid var(--accent);border-radius:5px;
-  background:var(--panel);color:var(--accent);font:13px/1 var(--mono);cursor:pointer;
-  box-shadow:0 3px 12px rgba(0,0,0,.22);user-select:none;touch-action:manipulation}
-.inline-step:hover{background:var(--accent-bg)}
-.is-touch .inline-step{font-size:15px}   /* 宽度由 JS 按画布缩放反算，见 openInline */
 /* 零行空态：整行是可点的占位按钮，悬停时描边与加号一起提亮 */
 .emptyRow{cursor:pointer}
 .emptyRow:hover rect{stroke:var(--accent)}

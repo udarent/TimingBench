@@ -44,56 +44,22 @@ export function attachInteractions(ctx){
     var svg=svgRoot(); if(!el||!svg) return;
     var bb;
     try{ bb=el.getBBox(); }catch(e){ return; }
-    var w=Math.max(34,Math.min(opts.width||bb.width,320)), h=22;
-    var x=Math.max(0,Math.min(bb.x,state.W-w-2)), y=Math.max(0,Math.min(bb.y-2,state.H-h-2));
-    // 路径类输入（组路径）在右侧多两个显式按钮：`+` 加一层、`−` 减一层。
-    // 为什么不是「靠输入的写法去猜」：单段既可能是在建一级组、也可能是在退到一级组，
-    // 猜哪边都会错一半 —— 增删层级改成看得见的动作，文本只表达结果。
-    var steps=!!opts.pathSteps;
-    // 触摸端整张画布是等比缩小的（state.fit），按 1:1 定的尺寸会被一起压小 ——
-    // 这两个按钮是给手指点的，按「至少 ~40 物理像素」反算用户单位（有上下限，别撑爆卡片）。
+    // 触摸端整张画布是等比缩小的（state.fit），按 1:1 定的框会被一起压小 ——
+    // 输入框按「≈36 物理像素高」反算用户单位（有上下限），手指点的仍是同一个输入框。
     var fit=state.fit||1;
-    var stepW=steps?(TOUCH?Math.min(64,Math.max(30,Math.round(40/fit))):22):0;
-    var foW=w+(steps?stepW*2+4:0), foH=steps?(TOUCH?Math.min(44,Math.max(32,Math.round(36/fit))):24):h;
+    var w=Math.max(34,Math.min(opts.width||bb.width,320));
+    var h=TOUCH?Math.min(44,Math.max(24,Math.round(36/fit))):22;
+    var x=Math.max(0,Math.min(bb.x,state.W-w-2)), y=Math.max(0,Math.min(bb.y-2,state.H-h-2));
     var fo=document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
     fo.setAttribute('class','inline-fo');
-    fo.setAttribute('x',x); fo.setAttribute('y',y); fo.setAttribute('width',foW); fo.setAttribute('height',foH);
+    fo.setAttribute('x',x); fo.setAttribute('y',y); fo.setAttribute('width',w); fo.setAttribute('height',h);
     var inp=document.createElementNS('http://www.w3.org/1999/xhtml','input');
     inp.setAttribute('class','inline-edit');
     inp.setAttribute('spellcheck','false'); inp.setAttribute('autocomplete','off');
     inp.value=(value===undefined||value===null)?'':String(value);
     inp.title=opts.title||'Enter to confirm · Esc to cancel';
     inp.placeholder=opts.placeholder||'';
-    if(!steps){ fo.appendChild(inp); }
-    else {
-      var row=document.createElementNS('http://www.w3.org/1999/xhtml','div');
-      row.setAttribute('class','inline-row');
-      row.appendChild(inp);
-      [['+',1,'add a level (append a segment)'],['\u2212',-1,'remove a level (drop the last segment)']]
-        .forEach(function(sp){
-          var btn=document.createElementNS('http://www.w3.org/1999/xhtml','button');
-          btn.setAttribute('type','button'); btn.setAttribute('class','inline-step');
-          btn.textContent=sp[0]; btn.title=sp[2]; btn.setAttribute('aria-label',sp[2]);
-          btn.style.width=stepW+'px';             // 宽度按上面的反算值定（CSS 只负责配色）
-          // mousedown 要拦住：否则焦点交给按钮 → 输入框 blur → 提前结算
-          btn.addEventListener('mousedown',function(e){ e.preventDefault(); e.stopPropagation(); });
-          btn.addEventListener('click',function(e){
-            e.preventDefault(); e.stopPropagation();
-            var v=inp.value;
-            if(sp[1]>0){
-              // 末尾追加一段空名（光标落在最后，接着打名字即可）；已有尾斜杠就不重复加
-              inp.value=(/\/$/.test(v)?v:v.replace(/\/+$/,'')+'/');
-            } else if(/\/$/.test(v)){
-              inp.value=v.replace(/\/+$/,'');            // 先撤掉刚加的尾斜杠（+ 的逆操作）
-            } else {
-              inp.value=v.replace(/\/+$/,'').split('/').slice(0,-1).join('/');
-            }
-            try{ inp.focus(); var n=inp.value.length; inp.setSelectionRange(n,n); }catch(err){}
-          });
-          row.appendChild(btn);
-        });
-      fo.appendChild(row);
-    }
+    fo.appendChild(inp);
     svg.appendChild(fo);
     ctx.inlineCtx={apply:apply,input:inp,fo:fo,initial:inp.value};
     inp.addEventListener('keydown',function(e){
@@ -359,8 +325,8 @@ export function attachInteractions(ctx){
   //
   // 输入框里就是**完整路径**，`/` 只是分隔符，一级一段：
   //   `bus` = 一级组；`a/b` = 二级；空 = 不属于任何组（顶层）。
-  // 不做任何推断 —— 加一层 / 减一层用输入框右侧的 `+` / `−` 按钮改文本，
-  // 因为「单段」既可能是在建一级组、也可能是在退到一级组（用户两种意图都有）。
+  // 加一层 / 减一层就是直接改这段文本（末尾写 `/c`、删掉一段）—— 路径本身就是全局描述，
+  // 不需要额外按钮，也不对文本做任何推断（单段到底是建一级组还是退到一级组，猜哪边都错一半）。
   function openGroupEditor(groupPath){
     var el, prefill, target;
     if(groupPath!==undefined && groupPath!==null){
@@ -387,8 +353,8 @@ export function attachInteractions(ctx){
       var label=(target.old!==undefined?'regroup ['+target.old+']':'group '+target.lanes.length+' row(s)')+
         ' -> '+(path.join('/')||'(none)');
       ctx.commit(op,label);
-    },{ title:'group path — one segment per level (a/b), empty = no group; + adds a level, \u2212 removes one',
-        placeholder:'group', width:180, pathSteps:true });
+    },{ title:'group path — one segment per level (a/b), empty = no group; type or edit the path directly',
+        placeholder:'group', width:180 });
   }
   // 解析出来的路径是否真的改变了目标 —— 用来挡掉「提交了但什么都没变」的空编辑
   // （空编辑会整篇重排一次源码，还会在撤销栈里留一步）。
