@@ -527,6 +527,28 @@ function check() {
   // 触摸端长按打开的就地编辑框，不能被「焦点被画布抢走」导致的 blur 关掉
   ok(/Date\.now\(\)-openedAt<1200/.test(gestureSrc) && /inp\.focus\(\)/.test(gestureSrc),
     '就地编辑框缺少焦点抢回逻辑（触摸端一抬手输入框就消失）');
+  // ---- 手势记账必须能自愈（0.14.3）-------------------------------------------
+  // 真机上抬手事件会丢（系统手势 / 切后台 / 捕获丢失 / 全屏切换）。旧实现靠「pointerId
+  // 记账里有几条」判断是不是第二根手指，一旦漏收一次 up，之后每次按下都被当成第二根手指
+  // 而直接 return —— 画布从此对一切点按与拖动无反应（用户实测：尺子拖不动、点行没反应）。
+  // 三条结构性要求，缺一条就会把整块画布锁死：
+  //   ① 第二根手指用 PointerEvent 自带的 isPrimary 做权威判据（不能只看记账）；
+  //   ② 手指滑出画布后仍要收到坐标 —— move/up/cancel 必须装在 document 上（capture），
+  //      只挂 wrap 的话一滑出去事件就断，表现为「按下去跳到一个值，之后拖不动」；
+  //   ③ 必须有清账兜底（捕获丢失 / 失焦 / 页面隐藏 / 手势间隔过长）。
+  ok(/isPrimary===false&&tCount\(\)>1/.test(gestureSrc),
+    '第二根手指的判定没有用 isPrimary（记账一旦漏收抬手，整块画布会锁死）');
+  ok(/document\.addEventListener\('pointermove',function\(e\)\{[\s\S]{0,80}tActive/.test(gestureSrc) &&
+     /document\.addEventListener\('pointerup',endPointer,true\)/.test(gestureSrc) &&
+     /document\.addEventListener\('pointercancel'/.test(gestureSrc),
+    '手势的 move / up / cancel 没有装在 document 上（手指滑出画布后拖动会断）');
+  ok(/function tReset\(/.test(gestureSrc) && /lostpointercapture/.test(gestureSrc) &&
+     /visibilitychange/.test(gestureSrc) && /T_GAP/.test(gestureSrc) && /T_HOLD/.test(gestureSrc),
+    '手势记账缺少自愈（捕获丢失 / 失焦 / 页面隐藏 / 间隔过久都没有清账）');
+  // setPointerCapture 传到的是一个「有 pointerId 的事件」：以前的 shim 没带 pointerId，
+  // 这句捕获从来没生效过（注释说着生效，实际一次都没跑）。
+  ok(/pointerId:e\.pointerId/.test(gestureSrc) && /wrap\.setPointerCapture\(e\.pointerId\)/.test(gestureSrc),
+    '指针捕获没有真的生效（shim 丢了 pointerId）');
   // Esc 逐层：内层消费后外层不得接管
   ok(/if \(e\.defaultPrevented\) return;/.test(read('src/editor/embed-shell.js')),
     '嵌入壳未尊重内层已消费的 Esc（一次 Esc 会跨层退出）');

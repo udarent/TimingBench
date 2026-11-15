@@ -208,7 +208,7 @@ export function attachInteractions(ctx){
     }
     ctx.redraw();
   }
-  function isPhaseTrack(t){ return !!(t&&t.getAttribute&&t.getAttribute('class')==='phaseTrack'); }
+  function isPhaseTrack(t){ return !!(t&&t.classList&&t.classList.contains('phaseTrack')); }
   // 按下即定位（滑块语义），之后按住拖动连续改；两者共用「指针 x → 相位」这一个换算
   function startPhaseDrag(e){
     var v=phaseValueAt(e.clientX); if(v===null) return false;
@@ -757,22 +757,33 @@ export function attachInteractions(ctx){
     }
   });
 
-  // 非鼠标指针：统一转成不阻止默认行为的轻量事件对象，保留原生滚动
+  // 非鼠标指针：统一转成不阻止默认行为的轻量事件对象，保留原生滚动。
+  // pointerId / isPrimary 必须带上 —— 相位拖动要靠 pointerId 把指针捕获设到 wrap、
+  // 第二根手指要靠 isPrimary 认（以前 shim 漏了 pointerId，那句 setPointerCapture 从来没生效过）。
   function pointerShim(e){
     return { target:e.target, button:0, detail:0, clientX:e.clientX||0, clientY:e.clientY||0,
+             pointerId:e.pointerId, pointerType:e.pointerType, isPrimary:e.isPrimary,
              preventDefault:function(){} };
   }
 
-  // ---- 触摸端：把「移动视图」与「改相位」彻底分开 -------------------------------
-  // 尺子开着时容器退出了原生平移（见 styles.css 的 `.is-ruler`），否则拖动会被浏览器的滚动仲裁
-  // 截断（0.14.1）。代价是这一段手势期间「一根手指拖别处」不再有原生滚动 —— 但用户拖别处的本意
-  // 就是移动视图，所以这里**手写平移**把它补回来。规则只有一条，起点定身份：
-  //   · 起点在尺子上        → 改相位（单指）；|dy| 明显大于 |dx| 时改判为移动视图
-  //   · 起点不在尺子上      → 移动视图（并把尺子收下，与点别处一致）
-  //   · 第二根手指落下      → 一律移动视图，且**撤回本次手势改出的相位**（见 tHandOffToPan）
-  // 于是「平移」与「改相位」不再抢同一个手势，也不会有拖动无反应的死手势。
-  var tPts={}, tPan=null, tDown=null;   // tPts: pointerId → {x,y}；tPan: 平移锚点；tDown: 手势起点
-  function tCount(){ return Object.keys(tPts).length; }
+  // ---- 触摸端的两个手势层 -----------------------------------------------------
+  // ①「这一下从哪开始」定语义（0.14.2）：起点在相位尺上＝改相位；起点在别处＝移动视图；
+  //    第二根手指落下＝移动视图，并把本次手势改出的相位撤回。
+  // ② 手势开始之后，**坐标一律从 document 收**（0.14.3）：手指很容易滑出画布 ——
+  //    相位尺在小卡片上只有 87px 宽，尺子外平移更是要滑很远。只听 wrap 上的 pointermove，
+  //    滑出去就再也没有事件，表现为「按下去跳到某个值，之后怎么拖都不动」。
+  //    document 用 capture 阶段装，任何元素 stopPropagation 都挡不住。
+  var tPts={}, tPan=null, tDown=null, tActive=false, tLast=0;
+  var T_STALE=2500;                       // 单个指针多久没有事件就认定它丢了
+  var T_GAP=1200;                         // 两次手势之间超过这个间隔：上一段一定已经结束
+  var T_HOLD=600;                         // 一条记账多久没更新就不再当作「还按着的手指」
+  function tid(e){ return e.pointerId===undefined?0:e.pointerId; }
+  function tPrune(){
+    var now=Date.now(), ks=Object.keys(tPts), i;
+    for(i=0;i<ks.length;i++) if(now-tPts[ks[i]].t>T_STALE) delete tPts[ks[i]];
+  }
+  function tCount(){ tPrune(); return Object.keys(tPts).length; }
+  function tReset(){ tPts={}; tPan=null; tDown=null; tActive=false; tLast=0; }
   function tCentroid(){
     var ks=Object.keys(tPts); if(!ks.length) return null;
     var sx=0, sy=0, i;
@@ -790,10 +801,9 @@ export function attachInteractions(ctx){
     wrap.scrollTop =tPan.top -(c.y-tPan.y);
     return true;
   }
-  function tDropPoint(id){ delete tPts[id]; if(!tCount()){ tPan=null; tDown=null; } }
+  function tDropPoint(id){ delete tPts[id]; if(!tCount()){ tPan=null; tDown=null; tActive=false; } }
   // 从「改相位」切到「移动视图」：把**本次手势**改出来的值撤回去（用户改主意了，这一步不算编辑），
-  // 然后以当前位置重新起锚。以前这里是「值留下、收成一步撤销」—— 两指平移一落下就把相位改了，
-  // 属于典型的误操作。
+  // 然后以当前位置重新起锚。两指一落下就把相位改了属于典型的误操作。
   function tHandOffToPan(){
     var pe=state.phaseEdit, l=pe&&findLane(pe.lane);
     if(pe&&l&&pe.gest0!==undefined&&l.phase!==pe.gest0){
@@ -808,22 +818,31 @@ export function attachInteractions(ctx){
     if(e.pointerType==='mouse') return;
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('class')==='inline-edit') return;
     if(e.isTrusted) ignoreMouseUntil=Date.now()+800;
-    var id=e.pointerId||0, cx=e.clientX||0, cy=e.clientY||0;
-    tPts[id]={ x:cx, y:cy };
-    if(tCount()===1) tDown={ x:cx, y:cy };
-    // 第二根手指落下：不管理由都算「我要移动视图」；正在拖的尺子被改判 —— 本次手势改出来的
-    // 相位会撤回（尺子本身留着，手放开后还能继续调）
-    if(tCount()>=2){ tHandOffToPan(); return; }
+    var id=tid(e), cx=e.clientX||0, cy=e.clientY||0, now=Date.now();
+    // 上一次手势没收到抬手：按「间隔」判定它已经结束，先清账再开始这一次。
+    // 否则残留的指针会污染这次的质心（平移一跳），tDown 也建不起来。
+    if(!tActive||now-tLast>T_GAP) tReset();
+    tActive=true; tLast=now;
+    // 先把「早就没动过的记账」清掉：抬手丢了之后它会一直躺在账上，
+    // 让下一次按下被误判成第二根手指。
+    Object.keys(tPts).forEach(function(k){ if(now-tPts[k].t>T_HOLD) delete tPts[k]; });
+    tPts[id]={ x:cx, y:cy, t:now };
+    if(tCount()===1){ tDown={ x:cx, y:cy }; tPan=null; }
+    // 第二根手指：`isPrimary` 是权威（真机第一根手指一定是 true），但它**不能单独用** ——
+    // 合成事件的 isPrimary 默认是 false，只看它会把每一次合成点按都当成第二根手指。
+    // 所以要求「明确声明不是 primary」且「账上确实还有一根按着的手指」。
+    if(e.isPrimary===false&&tCount()>1){ tHandOffToPan(); return; }
     handleDown(pointerShim(e),true);
   });
-  wrap.addEventListener('pointermove',function(e){
-    if(e.pointerType==='mouse') return;
-    var id=e.pointerId||0, cx=e.clientX||0, cy=e.clientY||0;
-    if(tPts[id]){ tPts[id].x=cx; tPts[id].y=cy; }
+
+  document.addEventListener('pointermove',function(e){
+    if(e.pointerType==='mouse'||!tActive) return;
+    var id=tid(e), cx=e.clientX||0, cy=e.clientY||0;
+    if(tPts[id]){ tPts[id].x=cx; tPts[id].y=cy; tPts[id].t=Date.now(); tLast=tPts[id].t; }
+    else if(!(tPan||ctx.phaseDrag)) return;   // 不认识的指针、也没有进行中的手势
     if(tPan){ tPanMove(); return; }
-    if(tCount()>=2){ tHandOffToPan(); return; }
-    // 正在拖尺子：竖向为主就等于「想上下看」，改判成移动视图，别把竖向手势卡成没反应
     if(ctx.phaseDrag){
+      // 尺子上竖向拖 = 想上下看：改判为移动视图，别把竖向手势卡成「没有反应」
       if(tDown&&Math.abs(cy-tDown.y)>14&&Math.abs(cy-tDown.y)>Math.abs(cx-tDown.x)*1.5){
         tHandOffToPan(); tPanMove(); return;
       }
@@ -844,10 +863,11 @@ export function attachInteractions(ctx){
     if(state.connect){
       var svg=svgRoot();
       if(svg){
-        var q2=svgXY(e.clientX||0,e.clientY||0); showConnectPreview(q2.x,q2.y);
+        var q2=svgXY(cx,cy); showConnectPreview(q2.x,q2.y);
       }
     }
-  });
+  },true);
+
   // 抬手才算数：位移 ≤12px、时长 ≤500ms 才是一次 tap，其余一律视为滑动（不改任何状态）。
   function confirmTap(cx,cy){
     var p=press; press=null;
@@ -872,17 +892,35 @@ export function attachInteractions(ctx){
   }
   function endPointer(e){
     if(e.pointerType==='mouse') return;
-    tDropPoint(e.pointerId||0);
+    tLast=Date.now();
+    if(!tActive) return;
+    tDropPoint(tid(e));
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
-    confirmTap(e.clientX,e.clientY);
+    confirmTap(e.clientX||0,e.clientY||0);
   }
-  document.addEventListener('pointerup',endPointer);
+  document.addEventListener('pointerup',endPointer,true);
   document.addEventListener('pointercancel',function(e){
     if(e.pointerType==='mouse') return;
-    clearLong(); press=null; tDropPoint(e.pointerId||0);
-    // 手势被系统 / 浏览器收走（来电话、系统手势、仍有滚动仲裁漏网）：值保留、但必须把这一串
+    clearLong(); press=null;
+    if(!tActive) return;
+    tDropPoint(tid(e));
+    // 手势被系统 / 浏览器收走（来电话、系统手势、滚动仲裁漏网）：值保留、但必须把这一串
     // 收成**一步撤销** —— 只是 `phaseDrag=false` 会让这次改动永远进不了撤销栈。
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
+  },true);
+  // 兜底：捕获丢失 / 页面被切走时把手势状态清干净。少了这一层，一次丢事件就会让
+  // 手势记账长期停在「有一根手指还在按」，之后的点按与拖动全部错判。
+  wrap.addEventListener('lostpointercapture',function(){ if(!ctx.phaseDrag) tReset(); });
+  window.addEventListener('blur',function(){
+    clearLong(); press=null;
+    if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
+    tReset();
+  });
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden) return;
+    clearLong(); press=null;
+    if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
+    tReset();
   });
 
   // 没有 Pointer Events 的老浏览器：用 touch 事件回退，命中点交给 elementFromPoint
