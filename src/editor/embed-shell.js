@@ -127,7 +127,7 @@ export function attachEmbed(ctx, opts) {
       // 拿 wasFs 判会一次都记不上，退出时自然还原不了。
       if (layout0 === undefined) layout0 = state.layout || null;
       fsOrient = null;
-      probeOrient();          // 探不通就不显示按钮（见 probeOrient 的注释）
+      showOrient(hasOrientApi && !orientMarkedBad());   // 有 API 就露出来，点一次才知道行不行
       paintOrient();
       ctx.redraw();
       return;
@@ -145,28 +145,33 @@ export function attachEmbed(ctx, opts) {
   //
   // ⚠️ 判据不能用「lock 函数在不在」—— 实测桌面 Chromium 也有这个方法，但一调必拒
   // （NotSupportedError）；小米 HyperOS + Obsidian 这类 WebView 里同样存在、同样必拒。
-  // 于是「API 在就画按钮」等于画了一个一点就报错的死控件（0.21.0 就是这么翻车的）。
   //
-  // 0.21.3：**进全屏时先探一次**，探不通就整场不显示这个按钮（用户要的是「不支持就别放」）：
-  //   探法 = 锁「当前方向」再立刻解锁。锁当前方向在视觉上无事发生，却能拿到平台的真实答复：
-  //     · resolve ⇒ 真能锁 ⇒ 露出按钮；
-  //     · reject 原因是 NotSupportedError ⇒ 这个环境压根不支持 ⇒ 整场不显示、并记住；
-  //     · reject 原因是「需要手势 / 权限」这类**可能靠一次真实点击通过**的 ⇒ 先露出来，
-  //       让用户点的那一次做最终判定（点了还失败就当场收起）。
-  //   不清一色 hide 的原因：有些实现要求 lock 必须在用户手势里调用，探测必然被拒 ——
-  //   一律按「不支持」处理会把 Android Chrome 也误杀。
+  // ⚠️ **更不能用「先锁一次试试」来探测**（0.21.3 试过，0.21.5 撤回）：实测那一下会真的
+  // 把屏幕转过去（锁目标取自 screen.orientation.type，而它在 iframe 里未必描述设备方向），
+  // 用户看到的是「点进编辑，画面先转一下」，之后能不能回正全看 unlock() 有没有生效 ——
+  // 比它要解决的问题更糟。**探测本身不许有副作用**，所以这个功能改成「点一次才知道」：
+  //   · 有 API 就露出按钮；
+  //   · 第一次点击失败 ⇒ **静默**收起按钮并记住（本会话不再出现），不弹提示 ——
+  //     环境不支持不是用户的错，报错只会像故障；
+  //   · 成功后方向状态记在 fsOrient 里，之后按钮只按它翻转，不再读「当前方向」
+  //     （那张表在 iframe 里不可信，读它会让按钮永远显示同一个方向）。
   // 不自己用 CSS 旋转 DOM：那会让 clientX/clientY 与图元坐标错位，命中、就地编辑、
   // 捏合锚点全部要跟着反变换，代价远大于收益。
   var so = (typeof screen !== 'undefined' && screen.orientation) || null;
   var ORIENT_BAD = 'tb-orient-bad';
+  // 「这个环境锁不了」的结论：内存里记一份，sessionStorage 再记一份。
+  // 内存那份是**主力** —— 实测在宿主是 opaque origin / 隐私模式的 iframe 里，
+  // sessionStorage 直接抛 SecurityError，只靠存储的话结论记不住，按钮会一次次冒出来。
+  var orientBad = false;
   function orientMarkedBad() {
+    if (orientBad) return true;
     try { return sessionStorage.getItem(ORIENT_BAD) === '1'; } catch (e) { return false; }
   }
   function markOrientBad() {
-    try { sessionStorage.setItem(ORIENT_BAD, '1'); } catch (e) { /* 隐私模式：只在本次页面内生效 */ }
+    orientBad = true;
+    try { sessionStorage.setItem(ORIENT_BAD, '1'); } catch (e) { /* 存储不可用：内存那份已生效 */ }
   }
   var hasOrientApi = !!(TOUCH && so && typeof so.lock === 'function');
-  var orientProbed = false;
   var orientBtn = opts && opts.orient;
   var fsOrient = null, layout0;   // layout0 未进过全屏时是 undefined，别当成 null 去清用户的偏好
   function showOrient(on) {
@@ -177,28 +182,6 @@ export function attachEmbed(ctx, opts) {
     var t = (so && so.type) || '';
     if (!t) t = window.innerWidth > window.innerHeight ? 'landscape-primary' : 'portrait-primary';
     return t.indexOf('landscape') === 0 ? 'landscape' : 'portrait';
-  }
-  // 探一次「这个环境到底能不能锁」。只在全屏里做（lock 要求文档处于全屏）。
-  function probeOrient() {
-    if (orientProbed || !hasOrientApi || !fsCurrent() || orientMarkedBad()) return;
-    orientProbed = true;
-    var settle = function (ok) {
-      if (!ok) markOrientBad();
-      showOrient(ok);
-      if (ok) { try { if (so.unlock) so.unlock(); } catch (e) { /* 忽略 */ } }
-      paintOrient();
-    };
-    var onReject = function (e) {
-      var name = (e && e.name) || '';
-      // 系统明确说「不支持」⇒ 这个环境就是没有；其余（需要手势 / 权限、或未知）⇒ 留给
-      // 用户那一次真实点击去判定，宁可多露一次也不误杀能用的环境。
-      settle(name !== 'NotSupportedError');
-    };
-    try {
-      var pr = so.lock(orientNow());
-      if (pr && pr.then) pr.then(function () { settle(true); }, onReject);
-      else settle(true);
-    } catch (e) { onReject(e); }
   }
   // 按钮显示的是「点一下会切到哪」：现在竖着就画横屏图标，反之亦然。
   function paintOrient() {
@@ -226,11 +209,11 @@ export function attachEmbed(ctx, opts) {
       paintOrient();
     };
     var fail = function () {
-      // 这个环境锁不了（桌面 / WebView / 权限被宿主挡掉）。**收起按钮并记住**：
-      // 留着一个「点了就出错」的控件，比没有更糟。指引换成用户此刻真能用上的两条。
+      // 这个环境锁不了（桌面 / WebView / 权限被宿主挡掉 / iframe 不给）。**静默收起并记住**：
+      // 留着一个点了没反应的控件比没有更糟，而弹一句「不支持」只会让用户以为是故障 ——
+      // 环境不支持不是用户做错了什么。按钮消失即是最清楚的答复。
       markOrientBad();
       showOrient(false);
-      if (ctx.notify) ctx.notify('This container cannot lock the screen orientation — rotate the device, or pinch to zoom');
     };
     if (!so || !so.lock) { fail(); return; }
     try {

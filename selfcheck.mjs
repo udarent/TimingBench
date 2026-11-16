@@ -204,18 +204,26 @@ function check() {
     '全屏方向控制不完整：需要 lock / unlock / 进全屏时记住分屏方向 / 跟随系统旋转重绘');
   // 「点了就报错」的回归（0.21.2）：lock 函数**存在**不等于能锁 —— 桌面 Chromium 与
   // Obsidian 这类 WebView 都有这个方法、一调必拒。所以失败必须自己收起按钮并记住，
-  // 否则就是一个永远点不动的控件（用户实测报障）。
-  ok(/sessionStorage\.setItem\(ORIENT_BAD/.test(embedSrc) && /showOrient\(false\)/.test(embedSrc) &&
+  // 否则就是一个永远点不动的控件。0.21.5 起失败还必须**静默**（不弹提示）：环境不支持
+  // 不是用户的错，弹一句「不支持」只会像故障。
+  // 结论必须**内存里也留一份**：实测宿主是 opaque origin 的 iframe 里 sessionStorage 直接抛
+  // SecurityError，只靠存储的话「已判死」记不住，按钮会一次次冒出来。
+  ok(/var orientBad = false;/.test(embedSrc) && /if \(orientBad\) return true;/.test(embedSrc) &&
+     /sessionStorage\.setItem\(ORIENT_BAD/.test(embedSrc) && /showOrient\(false\)/.test(embedSrc) &&
      /orientMarkedBad\(\)/.test(embedSrc),
     '锁定失败后没有收起按钮 / 没记住结论：会留下一个「点了就报错」的死控件');
-  // 判据要**正反两面都咬**：正面要有「进全屏就探 + 只把 NotSupportedError 当不支持」，
-  // 反面要有「绝不拿 hasOrientApi 之类的能力判据直接 show」——按钮只由探测结果决定。
-  // （只写正面时注入验证会假绿：函数还在文件里，调用点被换掉照样过。）
-  ok(/probeOrient\(\);/.test(embedSrc) &&
-     !/showOrient\(\s*(hasOrientApi|TOUCH|true)\s*\)/.test(embedSrc) &&
-     /so\.lock\(orientNow\(\)\)/.test(embedSrc) && /name !== 'NotSupportedError'/.test(embedSrc) &&
-     /orientProbed/.test(embedSrc),
-    '方向按钮没有在进全屏时探测可用性：不支持的环境仍会露出来（用户明确要求「不支持就别显示」）');
+  ok(/var fail = function \(\) \{[\s\S]{0,320}?showOrient\(false\)/.test(embedSrc) &&
+     !/cannot lock the screen orientation/.test(embedSrc),
+    '锁定失败时又弹提示了：环境不支持不是用户的错，按钮静默消失就是最清楚的答复');
+  // **不许再用「先锁一次试试」探测支持性**（0.21.3 试过，0.21.5 撤回）：那一下会真的把
+  // 屏幕转过去 —— 用户看到的是「点进编辑，画面先转一下」。探测不许有副作用。
+  ok(!/probeOrient/.test(embedSrc) && !/so\.lock\(orientNow\(\)\)/.test(embedSrc),
+    '方向按钮又在用「锁一次」探测支持性了：那会在用户点进编辑那一瞬把屏幕转过去');
+  // 显示条件：有 API 且本会话没被判死；方向状态必须由 fsOrient 驱动（iframe 里那张
+  // 「当前方向」表不可信，读它会让按钮永远显示同一个方向 = 切不动）。
+  ok(/showOrient\(hasOrientApi && !orientMarkedBad\(\)\)/.test(embedSrc) &&
+     /var cur = fsOrient \|\| orientNow\(\)/.test(embedSrc),
+    '方向按钮的显示条件或翻转依据不对（应「有 API 就露」+「按 fsOrient 翻转」）');
   // 注意：曾经想用 allow="screen-orientation" 给 iframe 放行，但 Chromium 把它判为
   // 未知特性（控制台告警 Unrecognized feature），且转屏根本不受该策略管辖 —— 已撤回。
   ok(/setAttribute\('allow', *'fullscreen'\)/.test(read('embed.js')),
