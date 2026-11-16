@@ -135,7 +135,14 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .pane.src{border-right:0;border-bottom:0}
 .is-touch .gutter{font-size:13px;line-height:1.9}
 .is-touch .pane.src textarea{font-size:14px;line-height:1.9;padding-left:52px}
-.is-touch .svgwrap{touch-action:manipulation;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+/* 画布这一层：允许单指原生平移与惯性（`pan-x pan-y`），**但把「浏览器整页缩放」关掉**。
+   这一条是捏合缩放的前提，不是顺手改的：`manipulation` 的语义是 pan + **pinch-zoom**，
+   两指落下时浏览器会把它当成页面缩放吃掉 —— CDP 两指拉开实测：pointercancel×2、
+   visualViewport.scale 1→4.96、编辑器连一个 pointermove 都收不到（于是「捏合」在手机上
+   一直是「连顶栏和源码一起放大」）。换成 `pan-x pan-y` 后同一手势完整交回（20 次 move、
+   0 次 cancel），单指滚动与惯性分毫不动 —— 这是唯一既拿回捏合、又不牺牲滚动手感的组合。
+   `none` 不行：它连单指原生滚动一起关掉，那只适合下面相位尺那种临时模式。 */
+.is-touch .svgwrap{touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* 相位模式打开时（那一行可以直接抓着波形横向拖），画布这一层不参与原生平移。原因是浏览器的
    「滚动仲裁」：`touch-action:manipulation` 允许平移，一次横向拖动会被判成滚动并发出 pointercancel ——
    而拖动中每帧都在重绘，指针流一断，拖动就只剩前两帧（Android 实测：按下去动一下，后面怎么拖都不动）。

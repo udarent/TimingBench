@@ -3,7 +3,7 @@
 // 键盘另有独立的 linkCursor 端点光标，保证不用鼠标也能完成全部编辑。
 // 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
-import { G, cellGeo, PHASE_STEP, PHASE_MAX, PHASE_MIN } from './geometry.js';
+import { G, cellGeo, PHASE_STEP, PHASE_MAX, PHASE_MIN, clampZoom } from './geometry.js';
 import { TOUCH } from './mode.js';
 
 // 格宽受 config.hscale 影响，是每帧重算的运行时值 —— 这里一律现读 G.CELL，不缓存。
@@ -799,13 +799,79 @@ export function attachInteractions(ctx){
   var T_STALE=2500;                       // 单个指针多久没有事件就认定它丢了
   var T_GAP=1200;                         // 两次手势之间超过这个间隔：上一段一定已经结束
   var T_HOLD=600;                         // 一条记账多久没更新就不再当作「还按着的手指」
+  // ---- 捏合缩放 -----------------------------------------------------------
+  // 两指手势在 0.20.0 之前只有「平移」一个归宿（tHandOffToPan）。现在同一入口再加缩放：
+  // 中点负责平移、两点距离负责倍数，两者本来就是同一段手势，不该抢。
+  // 为什么必须自己接管（实测而非推测）：`.svgwrap` 上原来是 `touch-action:manipulation`，
+  // 两指落下时浏览器把它当成**整页缩放**收走 —— CDP 两指拉开实测 pointercancel×2、
+  // visualViewport.scale 1→4.96、编辑器一个 pointermove 都收不到。换成 `pan-x pan-y` 后
+  // 同一手势完整交回（20 次 move、0 次 cancel），而单指原生滚动与惯性分毫不动 ——
+  // 唯一同时满足「拿回捏合」和「不牺牲滚动手感」的组合（`none` 会把单指原生滚动一起关掉，
+  // 那只适合相位尺这种临时模式）。
+  var ZMIN_D=24;                          // 两指靠得比这还近：只认平移，不认缩放（d0 太小的比值会爆炸）
+  var tPinch=null;                        // {d0,z0,ax,ay}：d0=起始指距，z0=起始倍数，a=锚点（用户坐标）
+  var tMulti=false;                       // 本次手势用过 ≥2 指 ⇒ 抬手不许变成 tap
+  var tZoomed=false;                      // 本次手势改过缩放 ⇒ 抬手补一次完整重绘落定
+  function tPinchStart(){
+    if(state.readonly) return false;      // 只读卡片不接管：那里没有编辑，缩放留给宿主页面
+    var ks=Object.keys(tPts); if(ks.length<2) return false;
+    var a=tPts[ks[0]], b=tPts[ks[1]];
+    var c={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+    var an=svgXY(c.x,c.y);
+    var dx=a.x-b.x, dy=a.y-b.y;
+    tPinch={ d0:Math.sqrt(dx*dx+dy*dy), z0:(state.zoom||1), ax:an.x, ay:an.y };
+    return true;
+  }
+  // 中点对应的那个内容点在缩放前后必须钉在同一处：这既固定了缩放锚点，
+  // 又天然把「两指一起平移」包含进来（中点一动，内容跟着走），不必另算平移。
+  function tPinchMove(){
+    if(!tPinch) return false;
+    var ks=Object.keys(tPts); if(ks.length<2) return false;
+    var a=tPts[ks[0]], b=tPts[ks[1]];
+    var c={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+    if(tPinch.d0>=ZMIN_D){
+      var dx=a.x-b.x, dy=a.y-b.y;
+      var z=clampZoom(tPinch.z0*Math.sqrt(dx*dx+dy*dy)/tPinch.d0);
+      if(Math.abs(z-(state.zoom||1))>0.002){
+        state.zoom=z; tZoomed=true;
+        // 快路只改宽高（viewBox 不动），命中区与图元坐标全不受影响
+        if(ctx.applyZoom&&!ctx.applyZoom()){ state.zoom=tPinch.z0; }
+      }
+    }
+    var svg=svgRoot(), vb=svg&&svg.viewBox&&svg.viewBox.baseVal, r=svg&&svg.getBoundingClientRect();
+    if(!vb||!r||!r.width||!vb.width) return true;
+    var px=r.left+(tPinch.ax-vb.x)*r.width/vb.width;
+    var py=r.top +(tPinch.ay-vb.y)*r.height/vb.height;
+    if(px!==c.x) wrap.scrollLeft+=px-c.x;
+    if(py!==c.y) wrap.scrollTop +=py-c.y;
+    return true;
+  }
+  // 第二根手指落下：这一下从「编辑」改判为「多指手势」。三件事必须立刻做，
+  // 否则留下的都是看不见的错账（都是实测过的）：
+  // ① 一指已经建好的候选点按与长按计时必须作废 —— 两指常常落得很近，抬手点距按下点
+  //    可能 ≤12px，不拦就会在捏合完顺手选中一个格子；
+  // ② 连线跟手预览要收起来，否则它会跟着第二根手指甩到别处；
+  // ③ 相位模式先撤回本次手势改出的值（复用 tHandOffToPan），再起锚。
+  function tStartMulti(){
+    tMulti=true;
+    press=null; clearLong();
+    var svg=svgRoot(), pv=svg&&svg.querySelector('path.connectPreview');
+    if(pv&&pv.parentNode) pv.parentNode.removeChild(pv);
+    tHandOffToPan();
+    tPinchStart();
+  }
+  function tEndMulti(){
+    if(tCount()) return;
+    tMulti=false;
+    if(tZoomed){ tZoomed=false; ctx.redraw(); }   // 落定：让 shapes.js 按同一套取整复算一次
+  }
   function tid(e){ return e.pointerId===undefined?0:e.pointerId; }
   function tPrune(){
     var now=Date.now(), ks=Object.keys(tPts), i;
     for(i=0;i<ks.length;i++) if(now-tPts[ks[i]].t>T_STALE) delete tPts[ks[i]];
   }
   function tCount(){ tPrune(); return Object.keys(tPts).length; }
-  function tReset(){ tPts={}; tPan=null; tDown=null; tActive=false; tLast=0; }
+  function tReset(){ tPts={}; tPan=null; tDown=null; tActive=false; tLast=0; tPinch=null; tMulti=false; tZoomed=false; }
   function tCentroid(){
     var ks=Object.keys(tPts); if(!ks.length) return null;
     var sx=0, sy=0, i;
@@ -824,13 +890,22 @@ export function attachInteractions(ctx){
     return true;
   }
   function tDropPoint(id){ delete tPts[id]; if(!tCount()){ tPan=null; tDown=null; tActive=false; } }
-  // 从「改相位」切到「移动视图」：把**本次手势**改出来的值撤回去（用户改主意了，这一步不算编辑），
-  // 然后以当前位置重新起锚。两指一落下就把相位改了属于典型的误操作。
+  // 从「改相位」切到「移动视图 / 捏合」：把**本次手势**改出来的值撤回去（用户改主意了，
+  // 这一步不算编辑），然后以当前位置重新起锚。两指一落下就把相位改了属于典型的误操作。
+  //
+  // 回滚用「这次手势开始前的快照」（pe.pending，applyPhase 在第一次 commit 之前拍的），
+  // **不是再提交一次旧值**。两者语义等价、源码不等价：提交旧值走的是最小补丁，
+  // 本来没有 `phase` 字段的行会被补出一段 —— 实测捏合撤回后源码多出 `data: [...], phase: 0  }`。
+  // 用户看到的是「我什么都没改，源码却动了」，而注释写着「净变化为零」。拍照回滚才是真的零。
   function tHandOffToPan(){
     var pe=state.phaseEdit, l=pe&&findLane(pe.lane);
-    if(pe&&l&&pe.gest0!==undefined&&l.phase!==pe.gest0){
-      ctx.commit({t:'setPhase',lane:pe.lane,v:pe.gest0},'phase',true,true);
-      pe.pending=null;                       // 净变化为零，撤销栈里不留这一步
+    if(pe&&l&&pe.pending&&l.phase!==pe.orig){
+      var keep={ sel:state.sel, selCell:state.selCell, selLane:state.selLane };
+      ctx.code.value=pe.pending.src;
+      ctx.fromCode(pe.pending.src);          // 不推撤销栈：这一串本来就没进过
+      state.sel=keep.sel; state.selCell=keep.selCell; state.selLane=keep.selLane;
+      pe.pending=null;
+      ctx.redraw();
     }
     ctx.phaseDrag=false;
     tPanStart();
@@ -849,11 +924,13 @@ export function attachInteractions(ctx){
     // 让下一次按下被误判成第二根手指。
     Object.keys(tPts).forEach(function(k){ if(now-tPts[k].t>T_HOLD) delete tPts[k]; });
     tPts[id]={ x:cx, y:cy, t:now };
-    if(tCount()===1){ tDown={ x:cx, y:cy }; tPan=null; }
+    // 上一段多指手势刚结束又立刻落下新的一根手指（两次手势间隔 < T_GAP，tReset 没跑）：
+    // 这里必须把「本次=多指」的记账清掉，否则这一下轻点会被当成上一段手势的收尾而不生效。
+    if(tCount()===1){ tDown={ x:cx, y:cy }; tPan=null; tPinch=null; tMulti=false; tZoomed=false; }
     // 第二根手指：`isPrimary` 是权威（真机第一根手指一定是 true），但它**不能单独用** ——
     // 合成事件的 isPrimary 默认是 false，只看它会把每一次合成点按都当成第二根手指。
     // 所以要求「明确声明不是 primary」且「账上确实还有一根按着的手指」。
-    if(e.isPrimary===false&&tCount()>1){ tHandOffToPan(); return; }
+    if(e.isPrimary===false&&tCount()>1){ tStartMulti(); return; }
     handleDown(pointerShim(e),true);
   });
 
@@ -862,6 +939,8 @@ export function attachInteractions(ctx){
     var id=tid(e), cx=e.clientX||0, cy=e.clientY||0;
     if(tPts[id]){ tPts[id].x=cx; tPts[id].y=cy; tPts[id].t=Date.now(); tLast=tPts[id].t; }
     else if(!(tPan||ctx.phaseDrag)) return;   // 不认识的指针、也没有进行中的手势
+    // 多指优先：捏合里已经含了「中点跟手」，再跑一次 tPanMove 会把同一段位移加两遍。
+    if(tPinch&&tCount()>=2&&tPinchMove()) return;
     if(tPan){ tPanMove(); return; }
     // 相位模式：**按下时是「待命」，过了死区才算拖动** —— 所以这两态都要交给 movePhaseDrag。
     // （0.14.5 第一版漏了「待命」这一支，结果触摸端按下后怎么拖都不动，只有桌面能动。）
@@ -920,7 +999,11 @@ export function attachInteractions(ctx){
     tLast=Date.now();
     if(!tActive) return;
     tDropPoint(tid(e));
+    if(tPinch&&tCount()<2) tPinch=null;      // 抬起一指：从缩放回到单指平移，倍数保持当前值
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
+    // 多指手势不产生 tap，也不许触发「相位尺点一下就退出」：两指往往落得很近，
+    // 抬手点与按下点可能只差几像素，不拦住就会出现「捏合完画面里多出个选中框」/「尺子莫名收起」。
+    if(tMulti){ tEndMulti(); return; }
     if(endPhaseTap(true)) return;
     confirmTap(e.clientX||0,e.clientY||0);
   }
@@ -933,20 +1016,24 @@ export function attachInteractions(ctx){
     // 手势被系统 / 浏览器收走（来电话、系统手势、滚动仲裁漏网）：值保留、但必须把这一串
     // 收成**一步撤销** —— 只是 `phaseDrag=false` 会让这次改动永远进不了撤销栈。
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
+    if(tPinch&&tCount()<2) tPinch=null;
+    if(tMulti) tEndMulti();
   },true);
   // 兜底：捕获丢失 / 页面被切走时把手势状态清干净。少了这一层，一次丢事件就会让
   // 手势记账长期停在「有一根手指还在按」，之后的点按与拖动全部错判。
-  wrap.addEventListener('lostpointercapture',function(){ if(!ctx.phaseDrag) tReset(); });
+  // 捏合期间改过缩放的话，先把这次的倍数落定（快路只改了宽高，derived 状态要重算一次）。
+  function tSettle(){ if(tZoomed){ tZoomed=false; ctx.redraw(); } tReset(); }
+  wrap.addEventListener('lostpointercapture',function(){ if(!ctx.phaseDrag) tSettle(); });
   window.addEventListener('blur',function(){
     clearLong(); press=null;
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
-    tReset();
+    tSettle();
   });
   document.addEventListener('visibilitychange',function(){
     if(!document.hidden) return;
     clearLong(); press=null;
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
-    tReset();
+    tSettle();
   });
 
   // 没有 Pointer Events 的老浏览器：用 touch 事件回退，命中点交给 elementFromPoint

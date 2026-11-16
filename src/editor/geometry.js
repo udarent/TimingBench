@@ -104,3 +104,12 @@ export function cellGeo(l,tick){
   return {x0:x0, w:w, cx:x0+w/2};
 }
 
+
+// 捏合缩放的倍数上下限（相对布局算出的 fit 基数）。下限 1 =「捏回原始大小」，不给缩小 ——
+// 手机上基数本来就是「整宽装下」，再往下缩只会让格子变成点不中的几像素。
+export const ZOOM_MAX = 4;
+export function clampZoom(z){
+  z = Number(z);
+  if (!isFinite(z) || z <= 0) return 1;
+  return z < 1 ? 1 : (z > ZOOM_MAX ? ZOOM_MAX : z);
+}

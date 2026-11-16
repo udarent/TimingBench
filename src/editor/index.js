@@ -12,7 +12,7 @@ export function createEditor(dom){
     code:dom.code, wrap:dom.wrap, gutter:dom.gutter, errdot:dom.errdot,
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, selRows:null, ratio:1, parseOK:false,
-            ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0, phaseEdit:null,
+            ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0, phaseEdit:null, zoom:1,
             W:0, H:0, drag:null, rev:0, readonly:false },
     inlineCtx:null, painting:null
   };
@@ -305,6 +305,9 @@ export function createEditor(dom){
     on=!!on;
     if(state.readonly===on) return;
     state.readonly=on;
+    // 只读 ↔ 编辑会换掉整条 fit 基数（整图缩进卡片 ↔ 1:1 滚动），捏合缩放叠在上面就会
+    // 变成「刚放大的倍数乘到另一套基数上」，同一个手势忽然放大到 3 倍屏。宁可每次切换归位。
+    state.zoom=1;
     if(on){
       state.selCell=null; state.sel=null; state.selLane=null;
       state.linkMode=false; state.connect=null; state.linkCursor=null;

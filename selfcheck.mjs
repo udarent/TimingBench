@@ -167,6 +167,24 @@ function check() {
   const interSrc = read('src/editor/interactions.js');
   const editorSrc = read('src/editor/index.js');
   const cssSrc = read('src/styles.css');
+  // 捏合缩放（0.20.0）的三条结构前提。都是「删掉之后照样跑得通、功能却静默消失」的那种，
+  // 靠断言盯住比靠注释可靠：
+  // ① touch-action 必须是 pan-x pan-y —— 改回 manipulation 就等于把 pinch-zoom 让给浏览器，
+  //    两指一落下就变成「整页缩放」（实测 pointercancel×2、visualViewport.scale→4.96）；
+  // ② 缩放必须乘进 fit 基数，且把 baseFit 留档 —— 手势期间的快路与整次重绘要算出同一个宽高；
+  // ③ 指针层要有「多指入口 + 缩放计算 + tap 作废」三件，缺一件就是捏合完顺手选中一个格子。
+  ok(/\.is-touch \.svgwrap\{[^}]*touch-action:pan-x pan-y/.test(cssSrc),
+    '画布 touch-action 不是 pan-x pan-y：浏览器会把捏合当整页缩放收走（现象：连顶栏一起放大）');
+  ok(/var fit = baseFit \* zoom/.test(shapesSrc) && /state\.baseFit=baseFit/.test(shapesSrc) &&
+     /function applyZoom\(\)/.test(shapesSrc),
+    '手势缩放没乘进 fit 基数，或没给手势快路留档 baseFit / applyZoom（快路与重绘会算出不同宽高）');
+  // 两道防线缺一不可：tStartMulti 里清掉候选点按（双指落下那一刻），endPointer 里否掉 tap
+  // （抬手那一刻）。实测：只留其中一道，双指原地轻点就会选中一个格子。
+  ok(/tStartMulti\(\)/.test(interSrc) && /tPinchMove\(\)/.test(interSrc) &&
+     /function tStartMulti\(\)\{[^}]*press=null/.test(interSrc) &&
+     /if\(tMulti\)\{\s*tEndMulti\(\);\s*return;\s*\}/.test(interSrc),
+    '指针层缺少多指手势入口 / 缩放计算 / 候选点按作废（双指轻点会误选中格子）');
+
   ok(!/nodeAnchor|<circle|connecting/.test(shapesSrc), '绘制层仍存在锚点小圆圈 / 连线态样式');
   ok(!/\.nodeAnchor|\.connecting/.test(cssSrc), '样式层仍存在锚点规则');
   ok(/linkMode/.test(editorSrc) && /setLinkMode/.test(editorSrc), '状态层缺少唯一的连线模式入口');
