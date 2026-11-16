@@ -515,8 +515,9 @@ export function attachInteractions(ctx){
   // ---- 统一输入层 -------------------------------------------------------
   // 鼠标：mousedown / mousemove / mouseup（保留桌面拖拽漫刷与既有验收）
   // 触摸 / 笔：pointerdown / move / up / cancel，共用同一组命令与 EditOp
-  // 触摸端不调 preventDefault，原生滚动与双指缩放照常可用；双击由「同目标 330ms
-  // 内两次点按」识别，长按 480ms 是就地编辑的备用入口。
+  // 触摸端不调 preventDefault，单指原生滚动照常；双指捏合 / 平移由本层接管（见下面的 tPinch*），
+  // 浏览器自带的 pinch-zoom 已在样式层用 `touch-action:pan-x pan-y` 关掉。
+  // 双击由「同目标 330ms 内两次点按」识别，长按 480ms 是就地编辑的备用入口。
   var lastTap=null, longPress=null, longTimer=null, ignoreMouseUntil=0;
 
   function hitKey(c){
@@ -1046,6 +1047,9 @@ export function attachInteractions(ctx){
                preventDefault:function(){} };
     }
     wrap.addEventListener('touchstart',function(e){
+      // 老浏览器没有 Pointer Events ⇒ 认不了 isPrimary，手指数就是唯一线索。规则与上面一致：
+      // 多指手势不产生点按（否则双指轻点会顺手选中一个格子）。
+      if(e.touches&&e.touches.length>1){ press=null; clearLong(); return; }
       var s=touchShim(e); if(!s) return;
       if(e.isTrusted) ignoreMouseUntil=Date.now()+800;
       handleDown(s,true);
@@ -1060,6 +1064,8 @@ export function attachInteractions(ctx){
       }
     },{passive:true});
     document.addEventListener('touchend',function(e){
+      // 还有手指按着就不结算：先抬起的那根不算一次 tap（与 Pointer 路径的 tMulti 同义）。
+      if(e.touches&&e.touches.length) return;
       var t=e.changedTouches&&e.changedTouches[0];
       confirmTap(t?t.clientX:0, t?t.clientY:0);
     },{passive:true});

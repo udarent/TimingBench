@@ -628,5 +628,5 @@ export function createShapes(ctx){
     return true;
   }
   ctx.applyZoom=applyZoom;
-  return { redraw:redraw, applyZoom:applyZoom };
+  return { redraw:redraw };
 }
