@@ -377,7 +377,6 @@ export function createShapes(ctx){
     // 整组不画。零行空态同样不画：0 个周期时列号与「末尾追加」都没有意义。
     if(can('colhead')) for(c=0;c<=N&&!isEmpty;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
-      var gapc=ghost?false:ir.lanes.some(function(l){ return l.kind==='signal'&&l.slots[c]&&l.slots[c].gap; });
       o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'" role="img" aria-label="Column '+c+(ghost?' — append a cycle':'')+'">');
       // 整列列头透明命中区：让悬停 / 点击落在列头上，而不是落到背景矩形
       o.push('<rect x="'+(XS+c*CELL+1)+'" y="'+(COL_Y-2)+'" width="'+(CELL-2)+'" height="'+(TOP-COL_Y-2)+'" fill="transparent"/>');
