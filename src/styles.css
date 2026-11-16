@@ -155,8 +155,9 @@ svg{display:block;font-family:var(--sans)}
 .tbpanel button.ctxbtn{width:34px;height:34px;min-width:34px;padding:0;border:1px solid var(--line);
   border-radius:7px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
   cursor:pointer}
-/* 图标 18px（按钮 34×34 ⇒ 偏移 8px 落在整像素）；配下面那条 non-scaling-stroke 才清晰
-   —— 17px 时偏移是 8.5 半像素、描边被缩成 0.708px，1 倍屏上线条发灰带缺口（0.19.3 修）。 */
+/* 图标 24px（按钮 34×34 ⇒ 偏移 5px）+ 2px 描边，与停靠条那三个动作按钮同一套参数。
+   早先是 17px：偏移落到 8.5 半像素、1px 描边被缩成 0.708px，1 倍屏上线条发灰带缺口（0.19.3 修）。
+   为什么必须是 24/2：见上面格级动作那段注释 —— 同一批 24 单位图标，只有 1:1 才清晰。 */
 .tbpanel button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2}
 .tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
 .tbpanel button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
@@ -199,27 +200,23 @@ svg{display:block;font-family:var(--sans)}
 .chardock .chipbtn span{position:relative;font:600 12px var(--mono);
   text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
 /* 停靠条左侧的三个格级动作（label / node / link）：与字符同尺寸，靠一条竖线分开。
-   图标是 24×24 的 stroke 图，不套 .chipbtn svg 的波形配色，所以单独复位。
+   它们画的是 24×24 网格的 stroke 图，不是波形预览，所以不套字符那套配色与缩放。
 
-   ⚠️ 这里的**声明顺序**是功能性的，别顺手重排：`inset` 是 top/right/bottom/left 的简写，
-   它会覆盖同一块里写在它**前面**的那几个长属性。`inset:auto` 是用来抵消上面 `.chipbtn svg`
-   的 `inset:0` 的，必须写在 `left/top:50%` **之前**；一旦挪到后面，left/top 被重置成 auto，
-   图标退回静态起点再被 translate 推出按钮，最后被 `overflow:hidden` 裁掉 —— 按钮里只剩一抹残影。
-   （0.18.0 就是这么写错的，0.19.1 由实测 bbox 抓出：按钮 30×28、svg 17×17、偏移 dx=-7.5。）
+   ⚠️ **基础规则必须把它排除在外**（上面那条 `:not(.act)`）。这个位置的坑踩过两次：
+   · 0.18.0：`.chipbtn svg{inset:0}` 与这里同特异性、写在后面，把 `left/top:50%` 重置成 auto，
+     图标被 translate 推出按钮再被 `overflow:hidden` 裁掉（实测按钮 30×28、svg 17×17、dx=-7.5）；
+   · 0.19.3：同上但发生在触摸端 —— `.is-touch` 那条又把 `inset:0` 盖回来，偏移 -11,-11，
+     44px 按钮里只剩左上角一条缝。
+   两次的教训是同一条：**别靠声明顺序或 `!important` 抢，直接让基础规则不匹配它。**
 
-   ⚠️ 尺寸取 **18px**（不是 17）也是功能性的：24 单位的图标缩到 17px 是 0.708 倍，描边 1px 被缩成
-   0.708px 且中心落在半像素（(30−17)/2 = 6.5）—— 抗锯齿把线摊到两个像素上，亮度减半、粗细不均，
-   斜边还会出现断口。1 倍屏实测（无插值放大 8 倍看）：标签图标的斜边是锯齿断线、节点图标的圆环
-   发灰缺口。18 让 (30−18)/2 = 6、(28−18)/2 = 5 都落在整像素，配合下面那条
-   `vector-effect:non-scaling-stroke`（描边不参与缩放，恒定 1 物理像素）才是真正清晰。
-   0.19.3 修的就是这个 —— 和 0.19.1 是两回事：那次修「图标被裁到按钮外」，这次修「图标在按钮里发虚」。 */
-.chardock .chipbtn.act svg{--wave-ink:var(--ink);opacity:1;stroke:currentColor;fill:none;
-  width:24px;height:24px;position:absolute;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);stroke-width:2}
-/* 描边不随缩放变细：这条是上面「18px」的搭档，两个一起才有清晰度。上下文条的图标同理。 */
-
-/* 触摸端这三个按钮收到 44（不跟字符的 48）：320px 卡片里省下的 12px 正好能多摆一颗字符 */
+   ⚠️ 尺寸与描边也是功能性的：24 单位的图标必须 **24px 1:1 渲染 + 2px 描边**。缩成 17px 就是
+   0.708 倍，1px 描边变成亚像素、中心还落在半像素上 —— 抗锯齿把线摊到两个像素，1 倍屏上
+   斜边断口、圆环发灰（0.19.3 用户实测「头两个按钮图标异常」；2 倍屏和缩略图上都看不出来）。 */
+.chardock .chipbtn.act svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2}
+/* 触摸端这三个按钮收到 44（不跟字符的 48）：320px 卡片里省下的 12px 正好能多摆一颗字符。
+   图标尺寸沿用上面的 24，不另设 —— 多出来的空间留给命中区。 */
 .is-touch .chardock .chipbtn.act{flex:0 0 44px;width:44px;min-width:44px;height:44px}
-.is-touch .chardock .chipbtn.act svg{width:24px;height:24px}
 .docksep{flex:0 0 1px;align-self:stretch;margin:6px 6px;background:var(--line)}
 .chardock .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
 .chardock .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}

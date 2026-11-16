@@ -300,11 +300,13 @@ function check() {
   // 顺序一反，left/top 被重置成 auto，图标退回静态起点、被 translate 推出按钮、再被
   // overflow:hidden 裁掉 —— 按钮里只剩一抹残影（0.18.0 就是这么错的，0.19.1 由 bbox 抓出）。
   // 判据看「位置先后」而不是锁整行文本：允许改数值，不许改顺序。
+  // 顺序坑的**正确修法**是让基础规则不匹配动作按钮；万一有人又把 `inset` 简写搬回来，
+  // 只要它写在 `left/top` 之后就会重置定位 —— 所以这条锁允许「没有 inset」，但不允许「写在后面」。
   {
     const block = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    const iInset = block.indexOf('inset:auto'), iLeft = block.indexOf('left:50%');
-    ok(iInset >= 0 && iLeft > iInset,
-      '格级动作按钮的图标会被裁掉：inset:auto 必须写在 left/top 之前（顺序反了会把 left/top 重置成 auto）');
+    const iInset = block.indexOf('inset:'), iLeft = block.indexOf('left:50%');
+    ok(iInset < 0 || iLeft > iInset,
+      '格级动作按钮的图标会被裁掉：`inset` 若出现在这条规则里，必须写在 left/top 之前（简写会覆盖它前面的长属性）');
   }
   // 光有顺序还不够：`.is-touch .chardock .chipbtn svg{inset:0}` 与动作图标规则**特异性相同**、
   // 但写在文件后面，照样会把 inset 盖回去 —— 触摸端实测偏移 -11,-11，图标被推出 44px 按钮只剩一条缝。
