@@ -197,8 +197,10 @@ function check() {
   // 全屏方向（0.20.1）：三个可观测动作缺一不可 —— 锁方向、退出时解锁、
   // 进全屏前记住分屏方向并在退出时还原（判据用「还没记过」，不能依赖 wasFs：
   // requestFullscreen 的 promise 可能先于 fullscreenchange 结算）。
-  ok(/ctx\.setLayout/.test(editorSrc) && /function setLayout\(name\)/.test(editorSrc),
-    '状态层缺少显式分屏入口 setLayout（全屏方向切换与还原都要用它）');
+  // 分屏仍然要能手动翻（顶栏那个 ⇄/⇅）。唯一入口是 toggleLayout，别把它删掉 ——
+  // 全屏方向按钮退出时那个「还原成进全屏前的方向」的入口已随 0.22.0 一并移除。
+  ok(/function toggleLayout\(\)/.test(editorSrc) && /ctx\.toggleLayout=toggleLayout/.test(editorSrc),
+    '状态层缺少分屏切换 toggleLayout（顶栏 ⇄/⇅ 靠它）');
   // 嵌入模式**没有**方向按钮（0.22.0 删除）：实测嵌入卡片里 \`.pane.src\` 是 display:none、
   // \`.is-embed .app\` 永远单列 —— 所以「切横屏」除了让屏幕转一下，没有任何版式收益；而系统锁在
   // 国产浏览器 / WebView 里普遍不可用，还有把物理旋转一起锁死的副作用（0.21.6 查出的那个）。

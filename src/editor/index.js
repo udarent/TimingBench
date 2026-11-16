@@ -163,22 +163,15 @@ export function createEditor(dom){
     if(state.layout) dom.app.setAttribute('data-layout',state.layout);
     else dom.app.removeAttribute('data-layout');
   }
+  // 切分屏：只在 rows / cols 之间翻，写进 localStorage 当偏好。没有「切回自动」的入口 ——
+  // 那需要一个显式的 null 值，而唯一会传 null 的调用方（全屏方向按钮退出时还原）已在
+  // 0.22.0 随方向功能一起删掉；留一条没人走的分支比没有更糟。
   function toggleLayout(){
-    setLayout(currentLayout()==='cols'?'rows':'cols');
-  }
-  // 显式指定分屏方向（null = 交回「跟随宽度」的自动判定）。全屏里选横屏 / 竖屏、
-  // 退出全屏时还原，都对不上「切换一下」这个动作，所以另开一个入口，而不是连点两次。
-  function setLayout(name){
-    if(name==='cols'||name==='rows'){
-      state.layout=name;
-      try{ localStorage.setItem('tb-layout',name); }catch(e){ /* 隐私模式等忽略 */ }
-    }else{
-      state.layout=null;
-      try{ localStorage.removeItem('tb-layout'); }catch(e){ /* 同上 */ }
-    }
+    state.layout = currentLayout()==='cols' ? 'rows' : 'cols';
+    try{ localStorage.setItem('tb-layout',state.layout); }catch(e){ /* 隐私模式等忽略 */ }
     applyLayout(); ctx.redraw();
   }
-  ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout; ctx.setLayout=setLayout;
+  ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout;
 
   // ---- 行范围：分组是「一段连续行」的概念，单选一行表达不了 ------------------
   // `state.selRows` 是行 id 数组（按行序、连续），null 表示「就是 selLane 那一行」。
