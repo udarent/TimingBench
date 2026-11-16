@@ -52,6 +52,25 @@ export function createEditor(dom){
   }
   function status(){ if(state.parseOK){ errdot.hidden=true; errdot.title=''; } }
 
+  // 解析失败的完整原因目前只活在 8px 红点的 title 里 —— 鼠标要悬停等一秒才看到，
+  // 触摸端根本没有 hover，键盘也取不到，等于「写得很好的错误文案没人读得到」。
+  // 点一下（或聚焦后 Enter / 空格）把完整原因打到已有的 toast 上：复用同一套提示，
+  // 不新增任何视觉语言、不加常驻文字。
+  // 为什么不在每次解析失败时自动弹：源码是逐键解析的，自动弹会连成一串，
+  // 正好盖住用户正在看的波形 —— 提示要"可得"，不能"抢戏"。
+  if(errdot){
+    errdot.setAttribute('role','button');
+    errdot.setAttribute('tabindex','0');
+    errdot.setAttribute('aria-label','Parse error — open the message');
+    var showParseError=function(){
+      if(!errdot.hidden && errdot.title && ctx.say) ctx.say(errdot.title);
+    };
+    errdot.addEventListener('click',showParseError);
+    errdot.addEventListener('keydown',function(e){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); showParseError(); }
+    });
+  }
+
   function quotePos(l,tick){
     if(!l.waveRange) return null;
     var base=l.waveRange[0]+1, s=l.orig.wave, n=0, i=0;

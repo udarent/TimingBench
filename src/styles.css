@@ -1,5 +1,5 @@
 /* 共享样式：主页面上下分区 + 波形图元。 */
-:root{--bg:#fff;--panel:#fff;--src-bg:#f7f7f7;--ink:#1f2328;--muted:#8b8f96;--line:rgba(0,0,0,.10);--line2:rgba(0,0,0,.30);--accent:#185fa5;--accent-bg:#e9f2fc;--ok:#1d9e75;--ok-bg:#e1f5ee;--warn:#ba7517;--warn-bg:#faeeda;--err:#c0392b;--err-bg:#fcebeb;--bus:#ba7517;--bus-bg:#faeeda;--bus2:#fff;--bus3:#ffffb4;--bus4:#ffe0b9;--bus5:#b9e0ff;--bus6:#ccfdfe;--bus7:#cdfdc5;--bus8:#f0c1fb;--bus9:#f5c2c0;--wave-ink:var(--ink);--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--dock-acts:47px;--dock-chars:40px;--sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+:root{--bg:#fff;--panel:#fff;--src-bg:#f7f7f7;--ink:#1f2328;--muted:#6b7078;--line:rgba(0,0,0,.10);--line2:rgba(0,0,0,.30);--accent:#185fa5;--accent-bg:#e9f2fc;--ok:#1d9e75;--ok-bg:#e1f5ee;--warn:#ba7517;--warn-bg:#faeeda;--err:#c0392b;--err-bg:#fcebeb;--bus:#ba7517;--bus-bg:#faeeda;--bus2:#fff;--bus3:#ffffb4;--bus4:#ffe0b9;--bus5:#b9e0ff;--bus6:#ccfdfe;--bus7:#cdfdc5;--bus8:#f0c1fb;--bus9:#f5c2c0;--wave-ink:var(--ink);--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--dock-acts:47px;--dock-chars:40px;--sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
 @media (prefers-color-scheme:dark){:root{--bg:#191a1c;--panel:#222427;--src-bg:#202225;--ink:#e9e9e6;--muted:#9b9b95;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.3);--accent:#6cb0ee;--accent-bg:#14304a;--ok:#5dcaa5;--ok-bg:#12382b;--warn:#ef9f27;--warn-bg:#3a2a10;--err:#f09595;--err-bg:#3b1e1e;--bus:#ef9f27;--bus-bg:#3a2a10;--bus2:#3a3b3e;--bus3:#4a4a24;--bus4:#4a3520;--bus5:#1d3a55;--bus6:#1e4547;--bus7:#22452a;--bus8:#402748;--bus9:#4a2a28}}
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -197,9 +197,15 @@ svg{display:block;font-family:var(--sans)}
 .chardock .chipbtn span{position:relative;font:600 12px var(--mono);
   text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
 /* 停靠条左侧的三个格级动作（label / node / link）：与字符同尺寸，靠一条竖线分开。
-   图标是 24×24 的 stroke 图，不套 .chipbtn svg 的波形配色，所以单独复位。 */
+   图标是 24×24 的 stroke 图，不套 .chipbtn svg 的波形配色，所以单独复位。
+
+   ⚠️ 这里的**声明顺序**是功能性的，别顺手重排：`inset` 是 top/right/bottom/left 的简写，
+   它会覆盖同一块里写在它**前面**的那几个长属性。`inset:auto` 是用来抵消上面 `.chipbtn svg`
+   的 `inset:0` 的，必须写在 `left/top:50%` **之前**；一旦挪到后面，left/top 被重置成 auto，
+   图标退回静态起点再被 translate 推出按钮，最后被 `overflow:hidden` 裁掉 —— 按钮里只剩一抹残影。
+   （0.18.0 就是这么写错的，0.19.1 由实测 bbox 抓出：按钮 30×28、svg 17×17、偏移 dx=-7.5。） */
 .chardock .chipbtn.act svg{--wave-ink:var(--ink);opacity:1;stroke:currentColor;fill:none;
-  width:17px;height:17px;left:50%;top:50%;transform:translate(-50%,-50%);position:absolute;inset:auto}
+  width:17px;height:17px;position:absolute;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%)}
 /* 触摸端这三个按钮收到 44（不跟字符的 48）：320px 卡片里省下的 12px 正好能多摆一颗字符 */
 .is-touch .chardock .chipbtn.act{flex:0 0 44px;width:44px;min-width:44px;height:44px}
 .is-touch .chardock .chipbtn.act svg{width:22px;height:22px}
@@ -398,3 +404,14 @@ html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
 .is-touch .shareTab{min-height:44px;padding:8px 16px;font-size:13.5px}
 .is-touch .shareCode{font-size:12.5px}
 .is-touch .shareCopy{min-height:44px;padding:10px 20px;font-size:13.5px}
+
+/* 尊重系统的「减少动态效果」偏好。
+   这里只关掉**自动播放**的装饰动效，不碰交互反馈：
+   · 首屏手势引导（gFinger 2.2s + 两圈扩散）是打开页面自己就开始播的，
+     对前庭敏感的人不友好（WCAG 2.2.2 要求这类动效可停）—— 直接不播。
+     它只是提示「点格子可以编辑」，节点已被 JS 在 2.4s 后自行移除，隐藏不影响任何逻辑。
+   · 错误红点的脉冲是纯装饰，红点本身常亮就够传达「有错」。 */
+@media (prefers-reduced-motion:reduce){
+  .gesture{display:none}
+  .errdot.pulse{animation:none}
+}

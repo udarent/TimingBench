@@ -316,6 +316,10 @@ export function attachTouchUI(ctx, dom) {
       b.setAttribute('data-act', k);
       b.setAttribute('data-name', NAMES[k] || k);
       b.setAttribute('aria-label', NAMES[k] || k);
+      // 这些按钮只有 17px 图标、没有文字，桌面端 mouse 用户能拿到的唯一线索就是 title。
+      // 之前只写了 aria-label（读屏能读，鼠标悬停什么都没有），等于把「14 个图标靠猜」
+      // 留给了视力正常但没记住含义的人 —— 补 title 是零视觉变化的一条。
+      b.title = NAMES[k] || k;
       if (k === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
       b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[ICON_KEY[k] || k] || '') + '</svg>';
       panel.appendChild(b);
@@ -388,6 +392,7 @@ export function attachTouchUI(ctx, dom) {
     b.setAttribute('data-cellact', act);
     b.setAttribute('data-name', NAMES[act] || act);
     b.setAttribute('aria-label', NAMES[act] || act);
+    b.title = NAMES[act] || act;
     if (act === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
     b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
       (ICONS[ICON_KEY[act] || act] || '') + '</svg>';

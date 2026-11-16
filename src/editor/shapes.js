@@ -406,7 +406,15 @@ export function createShapes(ctx){
       var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
       var cellH=ROW_H-10, i, hi=state.selLane===l.id||!!spanSet[l.id];
       o.push('<g class="laneGrp'+(hi?' sel':'')+'" data-lane="'+l.id+'">');
-      o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(ROW_H-2)+'" rx="3" fill="'+(hi?'var(--accent-bg)':'transparent')+'" style="cursor:pointer"/>');
+      // 选中底衬只铺到**内容右缘**（ACT_X，已含负相位补出的宽度）。原先它铺到 W-PAD*2，
+      // 而 W 至少被 viewW / 560 撑大 —— 1440 窗口下 918 宽的底衬里 400 多像素盖在什么都
+      // 没有的白区上，读起来像「表格选中行」，而不是「这条波形被选中」。
+      // 点击面（下面的 laneRow）仍然整幅宽：点空白处也能选中这一行，那是另一个职责，
+      // 所以底衬单独一个 rect 且 pointer-events:none，不参与命中。
+      var hiW=Math.max(24,ACT_X-PAD);
+      if(hi) o.push('<rect class="laneHi" x="'+PAD+'" y="'+(y+1)+'" width="'+hiW+
+        '" height="'+(ROW_H-2)+'" rx="3" fill="var(--accent-bg)" pointer-events="none"/>');
+      o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(ROW_H-2)+'" rx="3" fill="transparent" style="cursor:pointer"/>');
       if(l.kind==='spacer'){
         // 只读卡片上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
         // 否则读者会看到一条莫名其妙的「spacer」文字。

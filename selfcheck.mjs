@@ -293,6 +293,64 @@ function check() {
   ok(/\.tbpanel\.open\{[^}]*flex-wrap:nowrap/.test(cssSrc) &&
      /\.is-touch \.tbpanel\.open\{[^}]*overflow-x:auto/.test(cssSrc),
     '上下文条又允许换行了（恒高停靠区里会裁掉按钮；窄屏应改横向滚动）');
+
+  // ---- 停靠条左侧三个格级动作的图标：声明顺序是功能性的 ----
+  // `inset` 是 top/right/bottom/left 的简写，会覆盖同一块里写在它**前面**的长属性。
+  // `inset:auto` 是用来抵消 `.chipbtn svg{inset:0}` 的，必须写在 left/top 之前；
+  // 顺序一反，left/top 被重置成 auto，图标退回静态起点、被 translate 推出按钮、再被
+  // overflow:hidden 裁掉 —— 按钮里只剩一抹残影（0.18.0 就是这么错的，0.19.1 由 bbox 抓出）。
+  // 判据看「位置先后」而不是锁整行文本：允许改数值，不许改顺序。
+  {
+    const block = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const iInset = block.indexOf('inset:auto'), iLeft = block.indexOf('left:50%');
+    ok(iInset >= 0 && iLeft > iInset,
+      '格级动作按钮的图标会被裁掉：inset:auto 必须写在 left/top 之前（顺序反了会把 left/top 重置成 auto）');
+  }
+
+  // ---- 浅色档的低层级文字要够读 ----
+  // --muted 承担时间轴数字、行号、φ/T 徽标、字符按钮里的波形预览。对白底与 --src-bg
+  // 都必须 ≥ 4.5:1（WCAG 2.1 AA 正文）。用真实相对亮度公式算，不锁色值 ——
+  // 换一个更深的灰同样合格，锁死色值只会在下次调色时误报。
+  {
+    const light = (/^:root\{([^}]*)\}/m.exec(cssSrc) || [null, ''])[1];
+    const pick = (name) => {
+      const m = new RegExp('--' + name + ':(#[0-9a-fA-F]{3,6})').exec(light);
+      if (!m) return '';
+      let h = m[1].slice(1);
+      if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+      return '#' + h;
+    };
+    const lum = (hex) => {
+      const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    };
+    const cr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const muted = pick('muted'), bg = pick('bg'), srcbg = pick('src-bg');
+    ok(!!muted && !!bg && !!srcbg && cr(muted, bg) >= 4.5 && cr(muted, srcbg) >= 4.5,
+      '浅色档 --muted 对比度不足 4.5:1（时间轴数字 / 行号 / φ·T 徽标 / 字符条波形预览都会读不清）：' +
+      (muted && bg ? cr(muted, bg).toFixed(2) : '?') + ':1 on bg, ' +
+      (muted && srcbg ? cr(muted, srcbg).toFixed(2) : '?') + ':1 on src-bg');
+  }
+
+  // ---- 图标按钮：没有常驻文字，桌面鼠标用户唯一的线索是 title ----
+  // 只写 aria-label 的话只有读屏能拿到名称，鼠标悬停一片空白（用户实测「14 个图标全靠猜」）。
+  {
+    const t = read('src/editor/touch.js');
+    const ctxBtn = /b\.setAttribute\('aria-label', NAMES\[k\] \|\| k\);[\s\S]{0,400}?b\.title = NAMES\[k\] \|\| k;/.test(t);
+    const dockBtn = /b\.setAttribute\('aria-label', NAMES\[act\] \|\| act\);\s*b\.title = NAMES\[act\] \|\| act;/.test(t);
+    ok(ctxBtn && dockBtn,
+      '图标按钮缺 title（鼠标悬停看不到名称，只有读屏能读出 aria-label）');
+  }
+
+  // ---- 行选中底衬贴着内容右缘 ----
+  // 铺到 W-PAD*2 会在宽屏上盖住几百像素空白（实测 1440 窗口下 918 宽底衬里 400 多像素
+  // 盖在什么都没画的区域），读起来像「表格选中行」而不是「这条波形被选中」。
+  // 命中面（laneRow）仍整幅宽 —— 点空白处也能选中这一行是另一个职责。
+  ok(/var hiW=Math\.max\(24,ACT_X-PAD\);/.test(shapesSrc) &&
+     /class="laneHi"/.test(shapesSrc) && /width="'\+hiW/.test(shapesSrc) &&
+     /class="laneRow"[\s\S]{0,200}?width="'\+\(W-PAD\*2\)/.test(shapesSrc),
+    '行选中底衬没贴着内容右缘（宽屏上会盖住大片空白，看起来像表格选中行）');
   // 画布高度只由内容决定：不再把 SVG 拉到视口高（那是「底栏画在 SVG 里」时代的做法，
   // 留着会让停靠区一出现就触发一次 SVG 重排，成为第二个抖动源）
   ok(!/Math\.max\(contentH, *viewH\)/.test(read('src/editor/shapes.js')) &&
