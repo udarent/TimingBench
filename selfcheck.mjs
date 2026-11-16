@@ -208,6 +208,14 @@ function check() {
   ok(/sessionStorage\.setItem\(ORIENT_BAD/.test(embedSrc) && /showOrient\(false\)/.test(embedSrc) &&
      /orientMarkedBad\(\)/.test(embedSrc),
     '锁定失败后没有收起按钮 / 没记住结论：会留下一个「点了就报错」的死控件');
+  // 判据要**正反两面都咬**：正面要有「探测 + 只把 NotSupportedError 当不支持」，
+  // 反面要有「初始 canOrient 是 false、绝不拿 hasOrientApi 直接 show」。
+  // （只写正面时注入验证会假绿 —— 函数还在文件里，但调用点被换掉了照样过。）
+  ok(/var canOrient = false;/.test(embedSrc) && /probeOrient\(\);/.test(embedSrc) &&
+     !/showOrient\(hasOrientApi\)/.test(embedSrc) &&
+     /so\.lock\(orientNow\(\)\)/.test(embedSrc) && /name !== 'NotSupportedError'/.test(embedSrc) &&
+     /orientProbed/.test(embedSrc),
+    '方向按钮没有在进全屏时探测可用性：不支持的环境仍会露出来（用户明确要求「不支持就别显示」）');
   // 注意：曾经想用 allow="screen-orientation" 给 iframe 放行，但 Chromium 把它判为
   // 未知特性（控制台告警 Unrecognized feature），且转屏根本不受该策略管辖 —— 已撤回。
   ok(/setAttribute\('allow', *'fullscreen'\)/.test(read('embed.js')),

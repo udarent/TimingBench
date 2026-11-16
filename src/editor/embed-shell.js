@@ -127,6 +127,7 @@ export function attachEmbed(ctx, opts) {
       // 拿 wasFs 判会一次都记不上，退出时自然还原不了。
       if (layout0 === undefined) layout0 = state.layout || null;
       fsOrient = null;
+      probeOrient();          // 探不通就不显示按钮（见 probeOrient 的注释）
       paintOrient();
       ctx.redraw();
       return;
@@ -143,11 +144,17 @@ export function attachEmbed(ctx, opts) {
   // `screen.orientation.lock()` 一条路。
   //
   // ⚠️ 判据不能用「lock 函数在不在」—— 实测桌面 Chromium 也有这个方法，但一调必拒
-  // （NotSupportedError）；Obsidian 这类 WebView 里同样存在、同样必拒。于是「API 在就画
-  // 按钮」等于画了一个一点就报错的死控件（0.21.0 就是这么翻车的）。现在：
-  //   · 有 API 就先露出来（真的能锁的环境：Android Chrome / Edge）；
-  //   · 第一次失败立刻**收起按钮并把结论记进本次会话** —— 用户只看到一次指引，之后
-  //     不会再有一个点了就报错的东西杵在那儿。
+  // （NotSupportedError）；小米 HyperOS + Obsidian 这类 WebView 里同样存在、同样必拒。
+  // 于是「API 在就画按钮」等于画了一个一点就报错的死控件（0.21.0 就是这么翻车的）。
+  //
+  // 0.21.3：**进全屏时先探一次**，探不通就整场不显示这个按钮（用户要的是「不支持就别放」）：
+  //   探法 = 锁「当前方向」再立刻解锁。锁当前方向在视觉上无事发生，却能拿到平台的真实答复：
+  //     · resolve ⇒ 真能锁 ⇒ 露出按钮；
+  //     · reject 原因是 NotSupportedError ⇒ 这个环境压根不支持 ⇒ 整场不显示、并记住；
+  //     · reject 原因是「需要手势 / 权限」这类**可能靠一次真实点击通过**的 ⇒ 先露出来，
+  //       让用户点的那一次做最终判定（点了还失败就当场收起）。
+  //   不清一色 hide 的原因：有些实现要求 lock 必须在用户手势里调用，探测必然被拒 ——
+  //   一律按「不支持」处理会把 Android Chrome 也误杀。
   // 不自己用 CSS 旋转 DOM：那会让 clientX/clientY 与图元坐标错位，命中、就地编辑、
   // 捏合锚点全部要跟着反变换，代价远大于收益。
   var so = (typeof screen !== 'undefined' && screen.orientation) || null;
@@ -155,18 +162,45 @@ export function attachEmbed(ctx, opts) {
   function orientMarkedBad() {
     try { return sessionStorage.getItem(ORIENT_BAD) === '1'; } catch (e) { return false; }
   }
-  var canOrient = !!(TOUCH && so && typeof so.lock === 'function') && !orientMarkedBad();
+  function markOrientBad() {
+    try { sessionStorage.setItem(ORIENT_BAD, '1'); } catch (e) { /* 隐私模式：只在本次页面内生效 */ }
+  }
+  var hasOrientApi = !!(TOUCH && so && typeof so.lock === 'function');
+  var canOrient = false;            // 探测通过（或「可能是手势问题」）才为 true
+  var orientProbed = false;
   var orientBtn = opts && opts.orient;
   var fsOrient = null, layout0;   // layout0 未进过全屏时是 undefined，别当成 null 去清用户的偏好
   function showOrient(on) {
     if (!docEl.classList) return;
     if (on) docEl.classList.add('is-orient'); else docEl.classList.remove('is-orient');
   }
-  showOrient(canOrient);
   function orientNow() {
     var t = (so && so.type) || '';
     if (!t) t = window.innerWidth > window.innerHeight ? 'landscape-primary' : 'portrait-primary';
     return t.indexOf('landscape') === 0 ? 'landscape' : 'portrait';
+  }
+  // 探一次「这个环境到底能不能锁」。只在全屏里做（lock 要求文档处于全屏）。
+  function probeOrient() {
+    if (orientProbed || !hasOrientApi || !fsCurrent() || orientMarkedBad()) return;
+    orientProbed = true;
+    var settle = function (ok) {
+      canOrient = ok;
+      if (!ok) markOrientBad();
+      showOrient(ok);
+      if (ok) { try { if (so.unlock) so.unlock(); } catch (e) { /* 忽略 */ } }
+      paintOrient();
+    };
+    var onReject = function (e) {
+      var name = (e && e.name) || '';
+      // 系统明确说「不支持」⇒ 这个环境就是没有；其余（需要手势 / 权限、或未知）⇒ 留给
+      // 用户那一次真实点击去判定，宁可多露一次也不误杀能用的环境。
+      settle(name !== 'NotSupportedError');
+    };
+    try {
+      var pr = so.lock(orientNow());
+      if (pr && pr.then) pr.then(function () { settle(true); }, onReject);
+      else settle(true);
+    } catch (e) { onReject(e); }
   }
   // 按钮显示的是「点一下会切到哪」：现在竖着就画横屏图标，反之亦然。
   function paintOrient() {
@@ -197,7 +231,7 @@ export function attachEmbed(ctx, opts) {
       // 这个环境锁不了（桌面 / WebView / 权限被宿主挡掉）。**收起按钮并记住**：
       // 留着一个「点了就出错」的控件，比没有更糟。指引换成用户此刻真能用上的两条。
       canOrient = false;
-      try { sessionStorage.setItem(ORIENT_BAD, '1'); } catch (e) { /* 隐私模式：只在本次页面内生效 */ }
+      markOrientBad();
       showOrient(false);
       if (ctx.notify) ctx.notify('This container cannot lock the screen orientation — rotate the device, or pinch to zoom');
     };
