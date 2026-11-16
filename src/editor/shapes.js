@@ -1,7 +1,7 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, clampZoom } from './geometry.js';
+import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, clampZoom, ZOOM_MIN } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import * as Cap from './cap.js';
@@ -356,18 +356,30 @@ export function createShapes(ctx){
     // （上面四条），用户回答「想放多大看」。所以 fit = baseFit × zoom，后续所有
     // 「用户坐标 ↔ 像素」的换算依旧只认 state.fit，一处改、全链路跟着对。
     // 四个模式的缩放通道由交互层提供（触摸捏合 / 桌面 Ctrl+滚轮），这里只认倍数。
-    var zoom = clampZoom(state.zoom);
+    //
+    // 下限：**「整张图刚好装进视口」所需的比例**，而不是常量 1。
+    // 常量 1 的语义是「回到布局基数」——桌面基数就是 1:1，于是宽图只能横向滚、缩不小，
+    // 可用户想要的恰恰是「一眼看全」。所以下限按可视区反算：能缩到刚好看全，再小只会
+    // 多出空白。手机上基数本来就是整宽装下，这个下限通常正好等于 1（不会更糊）。
+    var availH = wrap.clientHeight || 0;   // 可视高（只用来算「装下整图」的下限，不参与 H 的推导）
+    var fitView = Math.min(1, rawFit, availH > 0 ? availH / H : 1);
+    var zoomMin = Math.min(1, Math.max(ZOOM_MIN, fitView / baseFit));
+    var zoom = clampZoom(state.zoom, zoomMin);
     var fit = baseFit * zoom;
-    var outW = fit < 1 ? viewW : Math.round(W * fit);
+    // 基数对应的渲染宽先算一遍（基数<1 时就是填满容器、不留半像素缝），再乘倍数。
+    // 不能写成 `fit<1 ? viewW : W*fit`：缩小后 fit 也 <1，那条捷径会把倍数整个吞掉。
+    var baseOutW = baseFit < 1 ? viewW : Math.round(W * baseFit);
+    var outW = zoom === 1 ? baseOutW : Math.round(baseOutW * zoom);
     var outH = Math.round(vbH * outW / W);
     // state.fit 记**真实渲染比**（outW/W，含取整误差），凡「用户坐标 ↔ 像素」的换算都用它。
     state.barY=actY; state.viewW=viewW; state.fit=outW/W;
     // 手势期间要走「只改宽高」的快路（见 applyZoom），它必须能复算出与本帧逐字节相同的
     // outW / outH —— 所以基数与视口宽都留档，别在快路里另写一套取整。
     state.baseFit=baseFit; state.vbH=vbH; state.zoom=zoom;
+    state.zoomMin=zoomMin; state.baseOutW=baseOutW;
     // 高度上报用**未缩放**的像素高：宿主按它设 iframe 高度，若跟着放大后的高度上报，
     // 用户在只读卡片里捏一下，宿主那张卡片就被撑高一次（内容溢出交给画布自己滚）。
-    var outW0 = baseFit < 1 ? viewW : Math.round(W * baseFit);
+    var outW0 = baseOutW;
     state.contentH=state.embedCard?Math.round(vbH * outW0 / W):contentH;
     state.W=W; state.H=H;
     // xMidYMin：只读卡片把 svg 拉满视口时，比例若略有偏差，多出来的空间留在下方而不是
@@ -620,15 +632,17 @@ export function createShapes(ctx){
   function applyZoom(){
     var svg=wrap.querySelector('svg');
     if(!svg||!state.W||!state.baseFit) return false;
-    var zoom=clampZoom(state.zoom), fit=state.baseFit*zoom;
-    var outW = fit < 1 ? state.viewW : Math.round(state.W * fit);
+    var zoom=clampZoom(state.zoom, state.zoomMin);
+    // 与 redraw 里逐字相同：基数宽先算（基数<1 时填满容器），再乘倍数。
+    var baseOutW = state.baseOutW || (state.baseFit < 1 ? state.viewW : Math.round(state.W * state.baseFit));
+    var outW = zoom === 1 ? baseOutW : Math.round(baseOutW * zoom);
     var outH = Math.round((state.vbH||state.H) * outW / state.W);
     svg.setAttribute('width',outW);
     svg.setAttribute('height',outH);
     state.zoom=zoom; state.fit=outW/state.W;
     // 只读卡片默认由 CSS 拉满（`width:100%`），放大时必须让位给上面这两个属性，
     // 否则「设了 width 也不生效」—— 同一个开关也顺便让其它模式知道「此刻是放大态」。
-    if(wrap.classList) wrap.classList.toggle('is-zoom', zoom>1);
+    if(wrap.classList) wrap.classList.toggle('is-zoom', Math.abs(zoom-1)>0.001);
     return true;
   }
   // 把「某个用户坐标点」钉回屏幕坐标 (cx,cy)：渲染尺寸变了，滚动位置要补上差值。
@@ -649,7 +663,7 @@ export function createShapes(ctx){
   // cx/cy 只用来定锚点，省略则钉视口中心。
   function setZoom(z,cx,cy){
     var svg=wrap.querySelector('svg'); if(!svg||!state.W) return false;
-    var before=state.zoom||1, next=clampZoom(z);
+    var before=state.zoom||1, next=clampZoom(z, state.zoomMin);
     if(Math.abs(next-before)<0.001) return false;
     var r=svg.getBoundingClientRect(), vb=svg.viewBox&&svg.viewBox.baseVal;
     var ax = (cx===undefined) ? r.left+wrap.clientWidth/2 : cx;

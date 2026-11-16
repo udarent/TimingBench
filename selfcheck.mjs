@@ -205,6 +205,15 @@ function check() {
   // 上报高度必须用**未缩放**的那份，否则读者在只读卡片里捏一下，宿主 iframe 就被撑高一次。
   ok(/state\.contentH=state\.embedCard\?Math\.round\(vbH \* outW0 \/ W\)/.test(shapesSrc),
     '上报高度跟着缩放走了：只读卡片放大后会把宿主 iframe 撑高');
+  // 缩小下限（0.21.1）：它必须是**算出来的**「整图装下」比例，不是常量 1。
+  // 钉死为 1 的后果就是用户报的这个现象 —— 桌面基数本来就是 1:1，宽图永远缩不到一眼看全。
+  ok(/export function clampZoom\(z, min\)/.test(read('src/editor/geometry.js')) &&
+     /export const ZOOM_MIN = 0\.2/.test(read('src/editor/geometry.js')),
+    'clampZoom 又只认固定下限了（缩放下限必须可传入，另配一个绝对底）');
+  ok(/var fitView = Math\.min\(1, rawFit, availH > 0 \? availH \/ H : 1\)/.test(shapesSrc) &&
+     /var zoomMin = Math\.min\(1, Math\.max\(ZOOM_MIN, fitView \/ baseFit\)\)/.test(shapesSrc) &&
+     /state\.zoomMin=zoomMin/.test(shapesSrc),
+    '缩放的下限没有按「整图装进视口」现算（宽图会缩不小）');
 
   ok(!/nodeAnchor|<circle|connecting/.test(shapesSrc), '绘制层仍存在锚点小圆圈 / 连线态样式');
   ok(!/\.nodeAnchor|\.connecting/.test(cssSrc), '样式层仍存在锚点规则');
@@ -410,8 +419,8 @@ function check() {
     '行选中底衬没贴着内容右缘（宽屏上会盖住大片空白，看起来像表格选中行）');
   // 画布高度只由内容决定：不再把 SVG 拉到视口高（那是「底栏画在 SVG 里」时代的做法，
   // 留着会让停靠区一出现就触发一次 SVG 重排，成为第二个抖动源）
-  ok(!/Math\.max\(contentH, *viewH\)/.test(read('src/editor/shapes.js')) &&
-     !/\bviewH\b/.test(read('src/editor/shapes.js')),
+  // 判据盯的是「H 由视口高推出」这件事，不是「不许读视口高」—— 缩放的下限要读可视高。
+  ok(!/H *= *Math\.max\(contentH/.test(read('src/editor/shapes.js')),
     'shapes.js 又把画布拉高到视口了（停靠区一变就多重排一次）');
   // 嵌入卡片里不能把上下文条一起藏掉：触摸端没有行工具 / 拖拽把手，
   // 选中行后的 up·down·改名·加行全在 #tbpanel，藏了等于把行重排整组关掉。
@@ -637,7 +646,7 @@ function check() {
   // viewBox 必须是内部坐标，缩放只改渲染尺寸 —— 这样图元几何、getBBox 与就地编辑的
   // 换算都不受影响，波形层指纹也不会因缩放而变。
   ok(/viewBox="0 '\+vbTop\+' '\+W\+' '\+vbH\+'"/.test(shapesSrc) &&
-     /var outW = fit < 1 \? viewW : Math\.round\(W \* fit\)|var outW=fit<1\?viewW:Math\.round\(W\*fit\)/.test(shapesSrc),
+     /var outW = zoom === 1 \? baseOutW : Math\.round\(baseOutW \* zoom\)/.test(shapesSrc),
     '缩放未保持 viewBox 为内部坐标（图元几何与就地编辑坐标会错位）');
   // 只读卡片不能追加周期，末尾那一列也没有任何波形内容 —— 必须整列不画
   // （否则只留一个空编号框，悬停还会露出一个点不动的 +，且右侧白占一格宽度）。

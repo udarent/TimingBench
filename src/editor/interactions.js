@@ -847,7 +847,7 @@ export function attachInteractions(ctx){
     var c={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
     if(tPinch.d0>=ZMIN_D){
       var dx=a.x-b.x, dy=a.y-b.y;
-      var z=clampZoom(tPinch.z0*Math.sqrt(dx*dx+dy*dy)/tPinch.d0);
+      var z=clampZoom(tPinch.z0*Math.sqrt(dx*dx+dy*dy)/tPinch.d0, state.zoomMin);
       if(Math.abs(z-(state.zoom||1))>0.002){
         state.zoom=z; tZoomed=true;
         // 快路只改宽高（viewBox 不动），命中区与图元坐标全不受影响

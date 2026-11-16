@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **Timing diagrams you edit directly.** Click a waveform cell and the WaveJSON source is rewritten; change the source and the diagram redraws. Neither side is ever treated as the "real" one.
 
-`0.21.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
+`0.21.1` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
 
 Your source is not reformatted behind your back: diagram edits are written back as a minimal patch — comments, indentation, key order and quotes survive — and any result that would not round-trip is rolled back.
 
@@ -81,7 +81,7 @@ Don't want to hand-write any of this? Draw the diagram in the editor and click `
 - **No mouse needed.** Every edit has a shortcut; the canvas takes focus with `Tab` or `F6`.
 - **Nothing leaves the page.** No requests, no accounts, no telemetry.
 
-On touch devices the same editor runs in a dedicated layout: 44 px targets, the 23 characters in a dock that slides up from the bottom of the card, and the panes stacked. Two fingers pinch to zoom the canvas (1–4×, anchored between the fingers) and pan the view; one finger still scrolls natively. On desktop and in embed cards it is `Ctrl`/`⌘` + wheel (a trackpad pinch arrives as exactly that). Read-only cards zoom too, and the height reported to the host stays unchanged. `?touch=1` previews that layout on a desktop.
+On touch devices the same editor runs in a dedicated layout: 44 px targets, the 23 characters in a dock that slides up from the bottom of the card, and the panes stacked. Two fingers pinch to zoom the canvas (0.2–4×, shrinking at most until the whole diagram fits; anchored between the fingers) and pan the view; one finger still scrolls natively. On desktop and in embed cards it is `Ctrl`/`⌘` + wheel (a trackpad pinch arrives as exactly that). Read-only cards zoom too, and the height reported to the host stays unchanged. `?touch=1` previews that layout on a desktop.
 
 ## Keyboard shortcuts
 

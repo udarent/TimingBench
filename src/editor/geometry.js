@@ -105,11 +105,17 @@ export function cellGeo(l,tick){
 }
 
 
-// 捏合缩放的倍数上下限（相对布局算出的 fit 基数）。下限 1 =「捏回原始大小」，不给缩小 ——
-// 手机上基数本来就是「整宽装下」，再往下缩只会让格子变成点不中的几像素。
+// 缩放的倍数上下限（相对布局算出的 fit 基数）。
+//   · 上限 4×：再大就只是在放大矢量、没有更多信息，且一屏只剩两三个格子。
+//   · 下限**不是常量**：交给布局层算「整张图刚好装进视口」所需的比例（见 shapes.js 的
+//     state.zoomMin），再兜一个绝对底 0.2 防止极端文档把内容缩成一张邮票。
+//     0.20.x 曾把下限钉死为 1（= 捏回原始大小）—— 那对「手机上的基数本来就是整宽装下」
+//     成立，但桌面基数就是 1:1：宽图只能靠横向滚动，想「缩到一眼看全」做不到。
 export const ZOOM_MAX = 4;
-export function clampZoom(z){
+export const ZOOM_MIN = 0.2;
+export function clampZoom(z, min){
   z = Number(z);
-  if (!isFinite(z) || z <= 0) return 1;
-  return z < 1 ? 1 : (z > ZOOM_MAX ? ZOOM_MAX : z);
+  if (!isFinite(z) || z <= 0) return min === undefined ? 1 : min;
+  var lo = (min === undefined || !isFinite(min)) ? 1 : Math.min(1, Math.max(ZOOM_MIN, min));
+  return z < lo ? lo : (z > ZOOM_MAX ? ZOOM_MAX : z);
 }
