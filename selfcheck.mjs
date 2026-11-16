@@ -306,6 +306,22 @@ function check() {
     ok(iInset >= 0 && iLeft > iInset,
       '格级动作按钮的图标会被裁掉：inset:auto 必须写在 left/top 之前（顺序反了会把 left/top 重置成 auto）');
   }
+  // 光有顺序还不够：`.is-touch .chardock .chipbtn svg{inset:0}` 与动作图标规则**特异性相同**、
+  // 但写在文件后面，照样会把 inset 盖回去 —— 触摸端实测偏移 -11,-11，图标被推出 44px 按钮只剩一条缝。
+  // 修法不是加 !important，而是让基础规则**别管动作按钮**（`:not(.act)`），两边从此不打架。
+  ok(/\.chardock \.chipbtn:not\(\.act\) svg\{/.test(cssSrc) &&
+     /\.is-touch \.chardock \.chipbtn:not\(\.act\) svg/.test(cssSrc),
+    '基础 .chipbtn svg 规则没有排除 .act（同特异性下写在后面会把 inset:0 盖回来，触摸端图标又被推出按钮）');
+  // 24 单位的线性图标必须按 1:1 渲染、描边 ≥2px：缩到 17px 时 1px 描边变 0.708px 且中心落在
+  // 半像素，1 倍屏上线条被摊成两个半透明像素 —— 斜边断口、圆环发灰（0.19.3 用户实测）。
+  // 判据只要求「尺寸 = 24」与「描边 ≥2」，不锁具体 px 写法。
+  {
+    const actSvg = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const ctxSvg = (/\.tbpanel button\.ctxbtn svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    ok(/width:24px;height:24px/.test(actSvg) && /stroke-width:2/.test(actSvg) &&
+       /width:24px;height:24px/.test(ctxSvg) && /stroke-width:2/.test(ctxSvg),
+      '图标没按 1:1 画（24 单位图必须 24px 渲染 + 2px 描边，缩放会让 1 倍屏线条发灰断口）');
+  }
 
   // ---- 浅色档的低层级文字要够读 ----
   // --muted 承担时间轴数字、行号、φ/T 徽标、字符按钮里的波形预览。对白底与 --src-bg
