@@ -33,12 +33,13 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
 /* 停靠区**恒高**：动作条 + 字符条两条都算进高度，哪怕此刻只开了一条。
    为什么必须恒高（用户实测「选中元素又移动时画面反复跳动」）：
    曾由内容决定高度 —— 字符条只在「选中格」时出现，于是点格子画布矮 47px、点行名又长回 40px，
-   画布底边跟着跳，120ms 后的去抖重画再来一次。现在高度是常量（桌面 47+40、触摸 61+56），
-   换选中对象只换内容、不动版式；两条从底部往上排，没开的那条留下的空白是**透明的** ——
-   看上去就是画布多一点余量，而不是一条空工具条。
+   画布底边跟着跳，120ms 后的去抖重画再来一次。所以高度必须是常量。
+   **0.18.0：常量取两者的较大者，不再相加。** 因为这两条已经**互斥**：上下文条只在选中
+   行 / 列时出现，字符停靠条只在选中格时出现（格级三个动作已挪进停靠条左侧），同一时刻最多
+   一条。按「两条都在」预留等于永远空着一整行；取 max 既保持恒定（不抖），又只占一行。
    只读卡片不预留（那里没有这两条，`reportHeight` 也不能被它撑高）。 */
 .dockzone{position:relative;flex:0 0 auto;display:flex;flex-direction:column;justify-content:flex-end;z-index:20;
-  height:calc(var(--dock-acts) + var(--dock-chars) + env(safe-area-inset-bottom,0px))}
+  height:calc(max(var(--dock-acts), var(--dock-chars)) + env(safe-area-inset-bottom,0px))}
 .is-readonly .dockzone{height:0}
 /* 离屏文本测量容器：只给 shapes.js 量行名宽度用，永远不可见、不吃事件 */
 .measure{position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;visibility:hidden;font-family:var(--sans)}
@@ -195,6 +196,14 @@ svg{display:block;font-family:var(--sans)}
   --wave-ink:var(--muted);opacity:.85;pointer-events:none}
 .chardock .chipbtn span{position:relative;font:600 12px var(--mono);
   text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
+/* 停靠条左侧的三个格级动作（label / node / link）：与字符同尺寸，靠一条竖线分开。
+   图标是 24×24 的 stroke 图，不套 .chipbtn svg 的波形配色，所以单独复位。 */
+.chardock .chipbtn.act svg{--wave-ink:var(--ink);opacity:1;stroke:currentColor;fill:none;
+  width:17px;height:17px;left:50%;top:50%;transform:translate(-50%,-50%);position:absolute;inset:auto}
+/* 触摸端这三个按钮收到 44（不跟字符的 48）：320px 卡片里省下的 12px 正好能多摆一颗字符 */
+.is-touch .chardock .chipbtn.act{flex:0 0 44px;width:44px;min-width:44px;height:44px}
+.is-touch .chardock .chipbtn.act svg{width:22px;height:22px}
+.docksep{flex:0 0 1px;align-self:stretch;margin:6px 6px;background:var(--line)}
 .chardock .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
 .chardock .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
 .chardock .chipbtn.on span{color:var(--accent)}

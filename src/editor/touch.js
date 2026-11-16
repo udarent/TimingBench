@@ -135,7 +135,8 @@ export function attachTouchUI(ctx, dom) {
   // 动作」与「图元里多一个按钮」各说各话。图标与英文名留在本文件（只有触摸端用得上）。
   var ROW_ACTS = Cap.ACTS.row;
   var COL_ACTS = Cap.ACTS.col;
-  var CELL_ACTS = Cap.ACTS.cell;
+  // 停靠条左侧那三个格级动作（label / node / link）—— 0.18.0 从上下文条挪过来
+  var DOCK_ACTS = Cap.ACTS.dock;
 
   function needCell() {
     if (state.selCell && state.ir) return state.selCell;
@@ -233,15 +234,12 @@ export function attachTouchUI(ctx, dom) {
     if (!panel) return;                           // 不跑编辑器的页面（如验收页）没有上下文条容器
     if (ctx.inlineCtx) { hideContext(); return; }
     var kind = null, acts = null, key = null, laneOf = null;
-    if (state.selCell && state.ir) {
-      // 格级：改这一格的 data 标签 / 节点锚点字符。这两件事原先只有桌面的 ✎ 徽标能做
-      // （触摸端没有 hover，13×11 的命中区手指也点不中），是 CAP 里最后一处 swap。
-      // 现在四场景共用这一条通道，画布上不再画徽标。
-      kind = 'cell'; acts = CELL_ACTS;
-      key = state.selCell.lane + '@' + state.selCell.tick;
-      laneOf = state.selCell.lane;
-    }
-    else if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS; key = state.sel; }
+    // 格级动作（label / node / link）已搬到字符停靠条的左侧（0.18.0）—— 选中格子时
+    // 上下文条**整条收起**，不再和停靠条各占一行。
+    // 必须显式 return：选格时 selLane 往往也被设着，漏掉这一句就会落到下面的行分组上，
+    // 表现为「点格子却弹出 15 个行动作」。
+    if (state.selCell && state.ir) { hideContext(); return; }
+    if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS; key = state.sel; }
     else if (state.selLane) { kind = 'row'; acts = ROW_ACTS; key = state.selLane; laneOf = state.selLane; }
     if (!kind) { hideContext(); return; }
     // 同一对象不重绘（避免连点闪烁）—— 但必须确认面板**当前真的是开着的**：
@@ -321,33 +319,72 @@ export function attachTouchUI(ctx, dom) {
     b.innerHTML = chipButton(v);
     return b;
   }
+  // 停靠条左侧那三个格级动作的按钮：尺寸复用 .chipbtn，图标走上下文条同一套 ICONS。
+  function makeActBtn(act) {
+    var pressed = act === 'link' && !!state.linkMode;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chipbtn act' + (pressed ? ' on' : '');
+    b.setAttribute('data-cellact', act);
+    b.setAttribute('data-name', NAMES[act] || act);
+    b.setAttribute('aria-label', NAMES[act] || act);
+    if (act === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+      (ICONS[ICON_KEY[act] || act] || '') + '</svg>';
+    return b;
+  }
   function renderDock() {
     if (!dock) return;
-    var visible = !state.readonly && !state.linkMode && !!state.selCell && !ctx.inlineCtx;
+    // 0.18.0：连线模式**也要显示**。左侧那个 link 按钮是退出连线模式的唯一入口 ——
+    // 原来这里带 `!state.linkMode`，而 link 按钮又在 dock 里，进去之后整条 dock 隐藏，
+    // 按钮就再也点不到了（纯死锁）。
+    var visible = !state.readonly && !!state.selCell && !ctx.inlineCtx;
     if (!visible) { hideDock(); return; }
     // 宽度自适应：能放多少颗就放多少颗（常用优先），放不下的收进 ⋯。
     // 不再按 TOUCH 二选一 —— 宽屏（含宽屏触摸 / 宽嵌卡片）一次铺满全部字符，窄屏才折叠，
     // 把有限宽度用在刀刃上，避免「明明很宽却只摆 4 颗 + ⋯」的浪费。
-    var chipW = TOUCH ? 48 : 30, gap = TOUCH ? 6 : 4;
+    // 触摸端 gap 取 4（原 6）：左侧多了三个常驻按钮，320px 卡片里那 2px/个的余量正好决定
+    // 「能不能摆下一颗字符」。按钮本身也收到 44（触屏最小可点尺寸），再加就要靠横向滚动。
+    var chipW = TOUCH ? 48 : 30, gap = TOUCH ? 4 : 4;
     var clearW = TOUCH ? 44 : 26, moreW = TOUCH ? 44 : 30;
+    var actW = TOUCH ? 44 : 30;
+    // 左侧三个格级动作 + 分隔线是**常驻**的，先把它占掉的宽度从预算里扣掉。
+    // 分隔线本身 1px + 两侧 margin 各 6 + 与左右按钮的两个 gap ≈ 17（12 会少算 5px，实测溢出）
+    var actsW = DOCK_ACTS.length * (actW + gap) + (TOUCH ? 17 : 15);
     var host = dock.parentElement;
-    var budget = (host ? host.clientWidth : dock.clientWidth) - 16;   // 减 dock 左右 padding
+    var budget = (host ? host.clientWidth : dock.clientWidth) - 16 - actsW;
+    // 连线模式下不写字（那一段只留左侧三个按钮），字符预算直接清零 ——
+    // 否则「放不下的收进 ⋯」会算出一堆摆不下的位置。
+    var charsOn = !state.linkMode;
+    if (!charsOn) budget = 0;
     var order = QUICK.concat(Core.ALL.filter(function (v) { return QUICK.indexOf(v) < 0; }));
     if (state.ch && order.indexOf(state.ch) < 0) order.unshift(state.ch); // 当前字符永远可见
-    var total = order.length;
-    var fitAll = Math.floor((budget - clearW + gap) / (chipW + gap));
+    var total = charsOn ? order.length : 0;
+    // 预算的准确口径：n 颗字符 + n 个间隙 + ⋯ 按钮 + ✕ 按钮 + 一个间隙 ≤ budget
+    //   ⇒ n ≤ (budget − moreW − clearW − gap) / (chipW + gap)
+    // 写成 `+ gap` 会多算一颗的余量，360px 这种宽度就会溢出 8px（实测过）。
+    var fitAll = Math.floor((budget - clearW) / (chipW + gap));
     var fit, hidden;
-    if (fitAll >= total) { fit = total; hidden = []; }
+    if (!charsOn) { fit = 0; hidden = []; }
+    else if (fitAll >= total) { fit = total; hidden = []; }
     else {
-      fit = Math.max(QUICK.length, Math.floor((budget - clearW - moreW + gap) / (chipW + gap)));
+      // 不再用 `QUICK.length` 兜底：左侧三个按钮吃掉宽度后，320px 卡片只够摆 1 颗，
+      // 强留 4 颗就会横向溢出、被裁在卡片外（用户点不到）。宁可全部收进 ⋯ ——
+      // 用户的要求正是「显示不下的字符条依然放到 ⋯」，宁可多收不可溢出。
+      fit = Math.max(0, Math.floor((budget - clearW - moreW - gap) / (chipW + gap)));
       fit = Math.min(fit, total);
       hidden = order.slice(fit);
     }
-    var key = state.selCell.lane + '@' + state.selCell.tick + '|' + state.ch + '|' + moreOpen + '|' + fit;
+    var key = state.selCell.lane + '@' + state.selCell.tick + '|' + state.ch + '|' + moreOpen +
+      '|' + fit + '|' + (charsOn ? '-' : 'L');
     if (key === dockKey) return;                 // 同一状态不重建，避免点一下闪一下
     dockKey = key;
     dock.textContent = '';
-    order.slice(0, fit).forEach(function (v) { dock.appendChild(makeChip(v)); });
+    DOCK_ACTS.forEach(function (a) { dock.appendChild(makeActBtn(a)); });
+    var dp = document.createElement('span');
+    dp.className = 'docksep';
+    dock.appendChild(dp);
+    if (charsOn) order.slice(0, fit).forEach(function (v) { dock.appendChild(makeChip(v)); });
     if (more && hidden.length) {
       var mb = document.createElement('button');
       mb.type = 'button';
@@ -386,6 +423,9 @@ export function attachTouchUI(ctx, dom) {
     if (!b) return;
     if (b.getAttribute('data-more')) { moreOpen = !moreOpen; dockKey = null; renderDock(); return; }
     if (b.getAttribute('data-clear')) { state.selCell = null; moreOpen = false; ctx.redraw(); return; }
+    // 左侧三个格级动作：走与上下文条同一个 doAct，执行体只有一份
+    var ca = b.getAttribute('data-cellact');
+    if (ca) { doAct(ca); return; }
     var ch = b.getAttribute('data-ch');
     if (ch) { moreOpen = false; ctx.writeChar(ch); }
   }

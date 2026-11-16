@@ -94,9 +94,9 @@ export function isSwap(name, scene) {
   return !!v && v[scene] === SW;
 }
 
-// 业务动作的唯一清单：触摸端上下文条（#tbpanel）按这两组渲染，桌面端由行工具 / 列操作
-// 直接画同名动作。动作名 → 图标 / 英文名在 touch.js，动作本身由 interactions.js 执行，
-// 三处共用这一份清单，避免「面板里少一个动作」与「图元里多一个按钮」各说各话。
+// 业务动作的唯一清单：上下文条（#tbpanel）按 row / col 两组渲染，字符停靠条（#chardock）
+// 按 dock 一组渲染左侧那三个格级动作。动作名 → 图标 / 英文名在 touch.js，动作本身由
+// interactions.js 执行，三处共用这一份清单，避免「面板里少一个动作」与「图元里多一个按钮」各说各话。
 export var ACTS = {
   // group / spanUp / spanDown 是「分组」这一组动作：group 按当前**行范围**归组（输入组名，
   // 可用 / 嵌套，清空 = 退出这一层）；spanUp / spanDown 把范围向外推一行 —— 触摸端没有
@@ -105,8 +105,9 @@ export var ACTS = {
         'group', 'spanUp', 'spanDown', 'link'],
   col: ['insert', 'delete', 'gap', 'append', 'link'],
   // 格级：作用对象是「某一个格子」而不是整行 / 整列。行级的 data / nodeStr 改的是整行
-  // 全部标签 / 整行锚点串；这两项才是「只改这一格」，原先只有桌面的徽标能触发。
-  // link（连线）三套场景都带：它原本在顶栏，0.9.17 移到底部动作行、与 label / node 同排，
-  // 选中任意对象都能起手连线。
-  cell: ['label', 'node', 'link']
+  // 全部标签 / 整行锚点串；这两项才是「只改这一格」。
+  // **0.18.0 从上下文条挪到字符停靠条左侧**：它们和字符一样「只在选中格子时才有意义」，
+  // 放同一行既省掉一整行常驻，也让「点格子 → 改这一格」的工具聚在一处。
+  // link 同时留在 row / col 组里 —— 选中整行 / 整列时也要能起手连线，而停靠条那时不显示。
+  dock: ['label', 'node', 'link']
 };

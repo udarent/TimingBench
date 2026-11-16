@@ -275,11 +275,20 @@ function check() {
   // 停靠区是**恒高**的（0.10.4）：动作条 + 字符条两条都算进高度，换选中对象只换内容。
   // 反过来写会退回「高度随内容变」—— 字符条只在选中格时出现，画布随选中对象长高变矮，
   // 用户看到的就是「选中元素再移动时画面反复跳动」。三条子规则必须同时在位。
-  ok(/\.dockzone\{[^}]*height:calc\(var\(--dock-acts\) \+ var\(--dock-chars\)/.test(cssSrc) &&
-     /\.is-readonly \.dockzone\{height:0\}/.test(cssSrc) &&
+  // 判据写成「语义」而不是某一种写法：高度必须是**与内容无关的常量**（不能 auto / 100%），
+  // 必须同时引用两条的高度变量，**且不许相加** —— 相加意味着「两条都会出现」，而 0.18.0 起
+  // 上下文条（行 / 列）与字符停靠条（格）已经互斥，相加等于永远空着一整行。
+  {
+    const dz = (/\.dockzone\{[^}]*?height:([^;}]+)/.exec(cssSrc) || [null, ''])[1];
+    ok(!!dz && /var\(--dock-acts\)/.test(dz) && /var\(--dock-chars\)/.test(dz) &&
+       !/^(auto|100%|fit-content)/.test(dz.trim()) &&
+       !/var\(--dock-acts\)\s*\+\s*var\(--dock-chars\)/.test(dz),
+      '停靠区高度必须是常量且两条取 max（不能 auto 会抖、不能相加会永远空一行）：' + (dz || '未匹配'));
+  }
+  ok(/\.is-readonly \.dockzone\{height:0\}/.test(cssSrc) &&
      /\.tbpanel\.open\{[^}]*height:var\(--dock-acts\)/.test(cssSrc) &&
      /\.chardock\.open\{[^}]*height:var\(--dock-chars\)/.test(cssSrc),
-    '停靠区又变成「高度由内容决定」了（换选中对象会把画布压得一跳一跳）');
+    '停靠区两条子规则被改坏（只读不预留 / 各自定高）');
   // 两条都不能换行：停靠区恒高，换行后的按钮会被行高裁掉，只能横向滚动
   ok(/\.tbpanel\.open\{[^}]*flex-wrap:nowrap/.test(cssSrc) &&
      /\.is-touch \.tbpanel\.open\{[^}]*overflow-x:auto/.test(cssSrc),
@@ -534,17 +543,18 @@ function check() {
     ok(Cap.can('inlineEdit','deskEdit') && Cap.can('inlineEdit','touchEdit') &&
        !Cap.isSwap('inlineEdit','deskEdit') && !Cap.isSwap('inlineEdit','touchEdit'),
       '就地编辑在桌面 / 触摸应同为 on，且不是 swap');
-    // 格级动作（数据标签 / 节点锚点）是 ACTS 的第三组，四场景共用同一个上下文条。
-    // 原先它只有桌面能用（画布上的 ✎ 徽标），那是 CAP 里最后一处 swap —— 现在应彻底消失。
-    ok(Cap.ACTS.cell.length === 3 && Cap.ACTS.cell.indexOf('label') >= 0 &&
-       Cap.ACTS.cell.indexOf('node') >= 0 && Cap.ACTS.cell.indexOf('link') >= 0,
-      '格级动作清单缺失（应为 label / node / link）');
+    // 格级动作（数据标签 / 节点锚点 / 连线）0.18.0 从上下文条挪到字符停靠条左侧，
+    // 清单改名 `ACTS.dock`。原先它只有桌面能用（画布上的 ✎ 徽标），那是 CAP 里最后一处 swap。
+    ok(Cap.ACTS.dock.length === 3 && Cap.ACTS.dock.indexOf('label') >= 0 &&
+       Cap.ACTS.dock.indexOf('node') >= 0 && Cap.ACTS.dock.indexOf('link') >= 0,
+      '格级动作清单缺失（应为 label / node / link，归在 ACTS.dock）');
+    ok(!Cap.ACTS.cell, '格级动作仍留在上下文条（应已挪到停靠条左侧，ACTS.cell 不应存在）');
     ok(Cap.ACTS.row.indexOf('link') >= 0 && Cap.ACTS.col.indexOf('link') >= 0,
       '行 / 列动作未带上连线按钮（link 应与 label / node 同排，四套场景都带）');
     const swaps = Object.keys(Cap.CAP).filter((n) =>
       Cap.isSwap(n,'deskEdit') !== Cap.isSwap(n,'touchEdit'));
     ok(swaps.length === 0, '桌面与触摸仍有能力差异（swap 标注不一致）：' + swaps.join(' / '));
-    ok(!Cap.CAP.cellLabel, 'cellLabel 徽标能力应已删除（改走 ACTS.cell）');
+    ok(!Cap.CAP.cellLabel, 'cellLabel 徽标能力应已删除（改走 ACTS.dock）');
   }
   ok(/var roW=Math\.max\(ACT_X\+PAD, 360\)/.test(shapesSrc),
     '只读画布宽度仍为幽灵列预留一格（右侧会多一条空白）');
