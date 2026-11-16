@@ -372,23 +372,6 @@ html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
 }
 /* 两态都在右上，位置固定不动 —— 点进编辑时按钮不会跳，读者不用重新找它。 */
 
-/* 全屏里的「横屏 / 竖屏」按钮（0.21.0 起）：只有在全屏里、且**探测确认这个环境真能锁方向**
-   （embed-shell 的 probeOrient 探通后才加 .is-orient）才显示 —— 卡片里转屏幕没有意义，
-   而 lock 要求文档处于全屏、且平台真的实现了它（小米 HyperOS + Obsidian 这类不实现）。
-   图标表示「点一下会切到哪」：现在竖着就画横屏的机器，反之亦然。 */
-.is-embed .orientbtn{display:none}
-.is-embed .orientbtn .o-port{display:none}
-.is-embed .orientbtn.want-port .o-land{display:none}
-.is-embed .orientbtn.want-port .o-port{display:block}
-html.is-embed.is-orient:fullscreen .orientbtn,
-html.is-embed.is-orient:-webkit-full-screen .orientbtn{
-  display:flex;width:48px;height:48px;border-radius:12px;z-index:130;opacity:1;
-  top:calc(10px + env(safe-area-inset-top,0px));
-  /* 让开右上角的「完成」按钮（48px + 间距），压缩包里两个并排更容易点错 */
-  right:calc(66px + env(safe-area-inset-right,0px))}
-html.is-embed.is-orient:fullscreen .orientbtn .hintico,
-html.is-embed.is-orient:-webkit-full-screen .orientbtn .hintico{width:24px;height:24px}
-
 /* ---------------------------------------------------------------------------
    嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。
    浮层只在交互时出现，不进入 SVG，因此不影响波形层指纹。

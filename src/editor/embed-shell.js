@@ -116,145 +116,19 @@ export function attachEmbed(ctx, opts) {
   function onFsChange() {
     // state.fsEdit 同时是布局开关：全屏里画布按 1:1 画、靠滑动移动（见 shapes.js 的 fit 规则），
     // 回到卡片立即恢复「等比缩进卡片」。两种状态都要重画，否则尺寸会停在旧值上。
-    var wasFs = state.fsEdit;
     state.fsEdit = !!fsCurrent();
     // 进出全屏换掉的是**整条 fit 基数**（卡片等比 ↔ 全屏 1:1），倍数必须归位：
     // 留着的话「卡片里放大 3 倍」会被乘到全屏基数上，一进去就是 3 倍屏。
     state.zoom = 1;
     if (state.fsEdit) {
-      // 记住进全屏前的分屏方向。判据用「还没记过」，**不用 wasFs** —— requestFullscreen 的
-      // promise 可能先于 fullscreenchange 结算（实测就是：事件到时 state.fsEdit 已经 true），
-      // 拿 wasFs 判会一次都记不上，退出时自然还原不了。
-      if (layout0 === undefined) layout0 = state.layout || null;
-      fsOrient = null;
-      showOrient(hasOrientApi && !orientMarkedBad());   // 有 API 就露出来，点一次才知道行不行
-      paintOrient();
       ctx.redraw();
       return;
     }
-    releaseOrient();
     if (fsForEdit) { fsForEdit = false; if (!state.readonly) setEditing(false, null, true); }
     else ctx.redraw();
   }
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
-
-  // ---- 全屏里的「横屏 / 竖屏」-------------------------------------------
-  // 手机上一张 390px 宽的卡片进全屏后仍然竖着，宽图只能横向拖。真要转屏幕只有
-  // `screen.orientation.lock()` 一条路。
-  //
-  // ⚠️ 判据不能用「lock 函数在不在」—— 实测桌面 Chromium 也有这个方法，但一调必拒
-  // （NotSupportedError）；小米 HyperOS + Obsidian 这类 WebView 里同样存在、同样必拒。
-  //
-  // ⚠️ **更不能用「先锁一次试试」来探测**（0.21.3 试过，0.21.5 撤回）：实测那一下会真的
-  // 把屏幕转过去（锁目标取自 screen.orientation.type，而它在 iframe 里未必描述设备方向），
-  // 用户看到的是「点进编辑，画面先转一下」，之后能不能回正全看 unlock() 有没有生效 ——
-  // 比它要解决的问题更糟。**探测本身不许有副作用**，所以这个功能改成「点一次才知道」：
-  //   · 有 API 就露出按钮；
-  //   · 第一次点击失败 ⇒ **静默**收起按钮并记住（本会话不再出现），不弹提示 ——
-  //     环境不支持不是用户的错，报错只会像故障；
-  //   · 成功后方向状态记在 fsOrient 里，之后按钮只按它翻转，不再读「当前方向」
-  //     （那张表在 iframe 里不可信，读它会让按钮永远显示同一个方向）。
-  // 不自己用 CSS 旋转 DOM：那会让 clientX/clientY 与图元坐标错位，命中、就地编辑、
-  // 捏合锚点全部要跟着反变换，代价远大于收益。
-  var so = (typeof screen !== 'undefined' && screen.orientation) || null;
-  var ORIENT_BAD = 'tb-orient-bad';
-  // 「这个环境锁不了」的结论：内存里记一份，sessionStorage 再记一份。
-  // 内存那份是**主力** —— 实测在宿主是 opaque origin / 隐私模式的 iframe 里，
-  // sessionStorage 直接抛 SecurityError，只靠存储的话结论记不住，按钮会一次次冒出来。
-  var orientBad = false;
-  function orientMarkedBad() {
-    if (orientBad) return true;
-    try { return sessionStorage.getItem(ORIENT_BAD) === '1'; } catch (e) { return false; }
-  }
-  function markOrientBad() {
-    orientBad = true;
-    try { sessionStorage.setItem(ORIENT_BAD, '1'); } catch (e) { /* 存储不可用：内存那份已生效 */ }
-  }
-  var hasOrientApi = !!(TOUCH && so && typeof so.lock === 'function');
-  var orientBtn = opts && opts.orient;
-  var fsOrient = null, layout0;   // layout0 未进过全屏时是 undefined，别当成 null 去清用户的偏好
-  function showOrient(on) {
-    if (!docEl.classList) return;
-    if (on) docEl.classList.add('is-orient'); else docEl.classList.remove('is-orient');
-  }
-  function orientNow() {
-    var t = (so && so.type) || '';
-    if (!t) t = window.innerWidth > window.innerHeight ? 'landscape-primary' : 'portrait-primary';
-    return t.indexOf('landscape') === 0 ? 'landscape' : 'portrait';
-  }
-  // 方向**真的**变成 want 了吗？这一问是必需的，不是保险：
-  // 小米 HyperOS 的浏览器会接受 lock()（promise resolve）、屏幕却不转，而**锁定状态已经生效**
-  // —— 用户看到的是「点了没反应」，接着发现「连转手机也不灵了」（旋转自由被那次锁没收）。
-  // 所以锁完必须校验，没转就立刻 unlock。
-  // 两个来源任一命中即算成：orientation.type 会先更新，窗口尺寸要等转屏动画结束才跟上。
-  // 尺寸那一路只在全屏里采信 —— 卡片里的 innerWidth/Height 是卡片尺寸，不代表设备方向。
-  function orientFits(want) {
-    var t = (so && so.type) || '';
-    if (t && t.indexOf(want) === 0) return true;
-    if (!state.fsEdit) return false;
-    var w = window.innerWidth || 0, h = window.innerHeight || 0;
-    if (!w || !h || w === h) return false;
-    return want === 'landscape' ? w > h : h > w;
-  }
-  // 按钮显示的是「点一下会切到哪」：现在竖着就画横屏图标，反之亦然。
-  function paintOrient() {
-    if (!orientBtn) return;
-    var cur = fsOrient || orientNow();
-    var want = cur === 'landscape' ? 'portrait' : 'landscape';
-    orientBtn.classList.toggle('want-port', want === 'portrait');
-    var label = 'Switch to ' + want;
-    orientBtn.setAttribute('aria-label', label);
-    orientBtn.title = label;
-  }
-  function releaseOrient() {
-    try { if (so && so.unlock) so.unlock(); } catch (e) { /* 没锁过 / 不支持：忽略 */ }
-    fsOrient = null;
-    if (layout0 !== undefined) { if (ctx.setLayout) ctx.setLayout(layout0 || null); layout0 = undefined; }
-    paintOrient();
-  }
-  function toggleOrient() {
-    var want = (fsOrient || orientNow()) === 'landscape' ? 'portrait' : 'landscape';
-    var done = function () {
-      fsOrient = want;
-      // 版式跟着方向走：横屏左右分栏、竖屏上下。手机转过来后宽度通常仍不到 860px 的自动
-      // 阈值，少了这一句，「横屏」拿到的是横的屏幕 + 竖的版式，等于白转。
-      if (ctx.setLayout) ctx.setLayout(want === 'landscape' ? 'cols' : 'rows');
-      paintOrient();
-    };
-    var fail = function () {
-      // 这个环境锁不了（桌面 / WebView / 权限被宿主挡掉 / iframe 不给）。**静默收起并记住**：
-      // 留着一个点了没反应的控件比没有更糟，而弹一句「不支持」只会让用户以为是故障 ——
-      // 环境不支持不是用户做错了什么。按钮消失即是最清楚的答复。
-      markOrientBad();
-      showOrient(false);
-    };
-    // 锁被接受 ≠ 屏幕转了：校验一轮，没转就把旋转自由还给设备再降级（见 orientFits 的注释）。
-    var verify = function () {
-      var n = 0;
-      (function tick() {
-        if (orientFits(want)) { done(); return; }
-        if (++n > 7) {                        // 约 560ms：够 Android 转屏动画，又不至于让用户干等
-          try { if (so && so.unlock) so.unlock(); } catch (e) { /* 没锁住：无所谓 */ }
-          fsOrient = null;
-          fail();
-          return;
-        }
-        setTimeout(tick, 70);
-      })();
-    };
-    if (!so || !so.lock) { fail(); return; }
-    try {
-      var pr = so.lock(want);
-      if (pr && pr.then) pr.then(verify, fail); else verify();
-    } catch (e) { fail(); }
-  }
-  if (orientBtn) {
-    orientBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleOrient(); });
-  }
-  if (so && so.addEventListener) so.addEventListener('change', paintOrient);
-  window.addEventListener('orientationchange', paintOrient);
-
   // 从只读切到编辑，缩放会从「整图缩进卡片」跳成 1:1 —— 如果不管滚动位置，
   // 手指下面那块内容会整体挪走，第二次点按就落到别的格子上（手机端最难受的地方）。
   // 这里把被点的格子「钉」在原来的屏幕位置上：知道它的内部坐标、知道手指在视口里的位置，

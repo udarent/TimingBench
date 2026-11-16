@@ -20,4 +20,4 @@ const ctx = createEditor({
 });
 
 // 嵌入模式（?embed=1）：只显示波形卡片，并接管只读 / 编辑切换与宿主通信
-if (EMBED) attachEmbed(ctx, { hint: document.getElementById('embedhint'), orient: document.getElementById('fsorient') });
+if (EMBED) attachEmbed(ctx, { hint: document.getElementById('embedhint') });

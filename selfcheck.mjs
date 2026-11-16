@@ -199,41 +199,26 @@ function check() {
   // requestFullscreen 的 promise 可能先于 fullscreenchange 结算）。
   ok(/ctx\.setLayout/.test(editorSrc) && /function setLayout\(name\)/.test(editorSrc),
     '状态层缺少显式分屏入口 setLayout（全屏方向切换与还原都要用它）');
-  ok(/so\.lock\(want\)/.test(embedSrc) && /so\.unlock/.test(embedSrc) &&
-     /layout0 === undefined/.test(embedSrc) && /orientationchange/.test(embedSrc),
-    '全屏方向控制不完整：需要 lock / unlock / 进全屏时记住分屏方向 / 跟随系统旋转重绘');
-  // 「点了就报错」的回归（0.21.2）：lock 函数**存在**不等于能锁 —— 桌面 Chromium 与
-  // Obsidian 这类 WebView 都有这个方法、一调必拒。所以失败必须自己收起按钮并记住，
-  // 否则就是一个永远点不动的控件。0.21.5 起失败还必须**静默**（不弹提示）：环境不支持
-  // 不是用户的错，弹一句「不支持」只会像故障。
-  // 结论必须**内存里也留一份**：实测宿主是 opaque origin 的 iframe 里 sessionStorage 直接抛
-  // SecurityError，只靠存储的话「已判死」记不住，按钮会一次次冒出来。
-  ok(/var orientBad = false;/.test(embedSrc) && /if \(orientBad\) return true;/.test(embedSrc) &&
-     /sessionStorage\.setItem\(ORIENT_BAD/.test(embedSrc) && /showOrient\(false\)/.test(embedSrc) &&
-     /orientMarkedBad\(\)/.test(embedSrc),
-    '锁定失败后没有收起按钮 / 没记住结论：会留下一个「点了就报错」的死控件');
-  ok(/var fail = function \(\) \{[\s\S]{0,320}?showOrient\(false\)/.test(embedSrc) &&
-     !/cannot lock the screen orientation/.test(embedSrc),
-    '锁定失败时又弹提示了：环境不支持不是用户的错，按钮静默消失就是最清楚的答复');
-  // **不许再用「先锁一次试试」探测支持性**（0.21.3 试过，0.21.5 撤回）：那一下会真的把
-  // 屏幕转过去 —— 用户看到的是「点进编辑，画面先转一下」。探测不许有副作用。
-  ok(!/probeOrient/.test(embedSrc) && !/so\.lock\(orientNow\(\)\)/.test(embedSrc),
-    '方向按钮又在用「锁一次」探测支持性了：那会在用户点进编辑那一瞬把屏幕转过去');
-  // 显示条件：有 API 且本会话没被判死；方向状态必须由 fsOrient 驱动（iframe 里那张
-  // 「当前方向」表不可信，读它会让按钮永远显示同一个方向 = 切不动）。
-  ok(/showOrient\(hasOrientApi && !orientMarkedBad\(\)\)/.test(embedSrc) &&
-     /var cur = fsOrient \|\| orientNow\(\)/.test(embedSrc),
-    '方向按钮的显示条件或翻转依据不对（应「有 API 就露」+「按 fsOrient 翻转」）');
-  // **lock() 被接受 ≠ 屏幕转了**（0.21.6，用户实测）：小米 HyperOS 的浏览器 resolve 了却
-  // 不转，而锁定状态已经生效 —— 表现是「点了没反应」，接着「连转手机也不行」（旋转自由被
-  // 那次锁没收）。所以锁完必须校验，没转就 unlock。
-  ok(/function orientFits\(want\)/.test(embedSrc) && /pr\.then\(verify, *fail\)/.test(embedSrc) &&
-     !/pr\.then\(done/.test(embedSrc) &&
-     /if \(orientFits\(want\)\) \{ done\(\); return; \}/.test(embedSrc) &&
-     /so\.unlock\(\); \} catch \(e\) \{ \/\* 没锁住/.test(embedSrc),
-    '锁定成功后没有校验方向是否真的改变：系统「接受但不转」时会把物理旋转一起锁死');
-  // 注意：曾经想用 allow="screen-orientation" 给 iframe 放行，但 Chromium 把它判为
-  // 未知特性（控制台告警 Unrecognized feature），且转屏根本不受该策略管辖 —— 已撤回。
+  // 嵌入模式**没有**方向按钮（0.22.0 删除）：实测嵌入卡片里 \`.pane.src\` 是 display:none、
+  // \`.is-embed .app\` 永远单列 —— 所以「切横屏」除了让屏幕转一下，没有任何版式收益；而系统锁在
+  // 国产浏览器 / WebView 里普遍不可用，还有把物理旋转一起锁死的副作用（0.21.6 查出的那个）。
+  // 转手机就够了，下面那条锁保证那条路是通的。
+  // 判据咬「这件事还在不在」而不是某个方法名：整个文件不该再提 screen.orientation ——
+  // 只写 /.lock/ 会被`var so=screen.orientation; so.lock(...)` 这种写法绕过（注入验证时就是这样）。
+  ok(!/screen\.orientation/.test(embedSrc) && !/fsorient/.test(embedSrc) &&
+     !/fsorient/.test(read('editor.html')),
+    '嵌入模式又出现方向按钮 / 系统锁了：多数手机浏览器里不可用，还会把物理旋转一起锁死');
+  // 「转手机能切」的两个前提，缺一条就变成「转了没反应」：
+  //   ① resize 必须触发重绘 —— fit 是 JS 算的，不重绘画布还停在旧尺寸（看起来只换了窗口大小）；
+  //   ② 没设过偏好时 data-layout 必须留空、交给 CSS 媒体查询 —— 写死就再也跟不动方向。
+  ok(/addEventListener\('resize', *scheduleRedraw\)/.test(editorSrc) &&
+     /removeAttribute\('data-layout'\)/.test(editorSrc),
+    '旋转 / 改尺寸后不会重排：resize 必须重绘，且 auto 状态下不能把分栏方向写死');
+
+  // 曾经两次想给 iframe 放行转屏：allow="screen-orientation"（0.21.2）与
+  // allow="screen-orientation-lock"（0.21.6 前）—— 实测 Chromium 对两个名字都报
+  // Unrecognized feature、featurePolicy.allowsFeature 均 false，Permissions Policy 里
+  // 根本没有这个开关。方向功能已于 0.22.0 整体移除，这条只防「有人往 allow 里乱加名字」。
   ok(/setAttribute\('allow', *'fullscreen'\)/.test(read('embed.js')),
     '嵌入 iframe 的 allow 被改乱了：转屏不需要额外权限，加了未知特性名只会刷控制台告警');
   // 上报高度必须用**未缩放**的那份，否则读者在只读卡片里捏一下，宿主 iframe 就被撑高一次。
