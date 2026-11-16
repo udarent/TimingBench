@@ -202,6 +202,16 @@ function check() {
   ok(/so\.lock\(want\)/.test(embedSrc) && /so\.unlock/.test(embedSrc) &&
      /layout0 === undefined/.test(embedSrc) && /orientationchange/.test(embedSrc),
     '全屏方向控制不完整：需要 lock / unlock / 进全屏时记住分屏方向 / 跟随系统旋转重绘');
+  // 「点了就报错」的回归（0.21.2）：lock 函数**存在**不等于能锁 —— 桌面 Chromium 与
+  // Obsidian 这类 WebView 都有这个方法、一调必拒。所以失败必须自己收起按钮并记住，
+  // 否则就是一个永远点不动的控件（用户实测报障）。
+  ok(/sessionStorage\.setItem\(ORIENT_BAD/.test(embedSrc) && /showOrient\(false\)/.test(embedSrc) &&
+     /orientMarkedBad\(\)/.test(embedSrc),
+    '锁定失败后没有收起按钮 / 没记住结论：会留下一个「点了就报错」的死控件');
+  // 注意：曾经想用 allow="screen-orientation" 给 iframe 放行，但 Chromium 把它判为
+  // 未知特性（控制台告警 Unrecognized feature），且转屏根本不受该策略管辖 —— 已撤回。
+  ok(/setAttribute\('allow', *'fullscreen'\)/.test(read('embed.js')),
+    '嵌入 iframe 的 allow 被改乱了：转屏不需要额外权限，加了未知特性名只会刷控制台告警');
   // 上报高度必须用**未缩放**的那份，否则读者在只读卡片里捏一下，宿主 iframe 就被撑高一次。
   ok(/state\.contentH=state\.embedCard\?Math\.round\(vbH \* outW0 \/ W\)/.test(shapesSrc),
     '上报高度跟着缩放走了：只读卡片放大后会把宿主 iframe 撑高');

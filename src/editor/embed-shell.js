@@ -140,15 +140,29 @@ export function attachEmbed(ctx, opts) {
 
   // ---- 全屏里的「横屏 / 竖屏」-------------------------------------------
   // 手机上一张 390px 宽的卡片进全屏后仍然竖着，宽图只能横向拖。真要转屏幕只有
-  // `screen.orientation.lock()` 一条路（Android Chrome / Edge 支持；桌面与 iOS 上不可用），
-  // 所以：只在这套 API 存在时把按钮露出来；点了却失败就如实说一句，不装作已经转了。
-  // 不自己用 CSS 旋转 DOM —— 那会让 clientX/clientY 与图元坐标错位，命中、就地编辑、
+  // `screen.orientation.lock()` 一条路。
+  //
+  // ⚠️ 判据不能用「lock 函数在不在」—— 实测桌面 Chromium 也有这个方法，但一调必拒
+  // （NotSupportedError）；Obsidian 这类 WebView 里同样存在、同样必拒。于是「API 在就画
+  // 按钮」等于画了一个一点就报错的死控件（0.21.0 就是这么翻车的）。现在：
+  //   · 有 API 就先露出来（真的能锁的环境：Android Chrome / Edge）；
+  //   · 第一次失败立刻**收起按钮并把结论记进本次会话** —— 用户只看到一次指引，之后
+  //     不会再有一个点了就报错的东西杵在那儿。
+  // 不自己用 CSS 旋转 DOM：那会让 clientX/clientY 与图元坐标错位，命中、就地编辑、
   // 捏合锚点全部要跟着反变换，代价远大于收益。
   var so = (typeof screen !== 'undefined' && screen.orientation) || null;
-  var canOrient = !!(TOUCH && so && typeof so.lock === 'function');
-  if (canOrient) docEl.classList.add('is-orient');
+  var ORIENT_BAD = 'tb-orient-bad';
+  function orientMarkedBad() {
+    try { return sessionStorage.getItem(ORIENT_BAD) === '1'; } catch (e) { return false; }
+  }
+  var canOrient = !!(TOUCH && so && typeof so.lock === 'function') && !orientMarkedBad();
   var orientBtn = opts && opts.orient;
   var fsOrient = null, layout0;   // layout0 未进过全屏时是 undefined，别当成 null 去清用户的偏好
+  function showOrient(on) {
+    if (!docEl.classList) return;
+    if (on) docEl.classList.add('is-orient'); else docEl.classList.remove('is-orient');
+  }
+  showOrient(canOrient);
   function orientNow() {
     var t = (so && so.type) || '';
     if (!t) t = window.innerWidth > window.innerHeight ? 'landscape-primary' : 'portrait-primary';
@@ -180,7 +194,12 @@ export function attachEmbed(ctx, opts) {
       paintOrient();
     };
     var fail = function () {
-      if (ctx.notify) ctx.notify('This browser does not allow locking orientation — rotate the device instead');
+      // 这个环境锁不了（桌面 / WebView / 权限被宿主挡掉）。**收起按钮并记住**：
+      // 留着一个「点了就出错」的控件，比没有更糟。指引换成用户此刻真能用上的两条。
+      canOrient = false;
+      try { sessionStorage.setItem(ORIENT_BAD, '1'); } catch (e) { /* 隐私模式：只在本次页面内生效 */ }
+      showOrient(false);
+      if (ctx.notify) ctx.notify('This container cannot lock the screen orientation — rotate the device, or pinch to zoom');
     };
     if (!so || !so.lock) { fail(); return; }
     try {

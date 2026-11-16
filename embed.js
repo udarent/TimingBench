@@ -43,6 +43,7 @@
     frame.setAttribute('allowtransparency', 'true');
     // 允许卡片在「进入编辑」时请求原生全屏（矮卡片里动作条会挤没画布，全屏是唯一解）
     frame.setAttribute('allowfullscreen', '');
+    // 只放行 fullscreen：转屏不需要额外权限（Chromium 会把未知特性名当告警，别乱加）。
     frame.setAttribute('allow', 'fullscreen');
 
     el.__tbFrame = frame;
