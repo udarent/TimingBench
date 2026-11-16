@@ -183,6 +183,20 @@ export function attachEmbed(ctx, opts) {
     if (!t) t = window.innerWidth > window.innerHeight ? 'landscape-primary' : 'portrait-primary';
     return t.indexOf('landscape') === 0 ? 'landscape' : 'portrait';
   }
+  // 方向**真的**变成 want 了吗？这一问是必需的，不是保险：
+  // 小米 HyperOS 的浏览器会接受 lock()（promise resolve）、屏幕却不转，而**锁定状态已经生效**
+  // —— 用户看到的是「点了没反应」，接着发现「连转手机也不灵了」（旋转自由被那次锁没收）。
+  // 所以锁完必须校验，没转就立刻 unlock。
+  // 两个来源任一命中即算成：orientation.type 会先更新，窗口尺寸要等转屏动画结束才跟上。
+  // 尺寸那一路只在全屏里采信 —— 卡片里的 innerWidth/Height 是卡片尺寸，不代表设备方向。
+  function orientFits(want) {
+    var t = (so && so.type) || '';
+    if (t && t.indexOf(want) === 0) return true;
+    if (!state.fsEdit) return false;
+    var w = window.innerWidth || 0, h = window.innerHeight || 0;
+    if (!w || !h || w === h) return false;
+    return want === 'landscape' ? w > h : h > w;
+  }
   // 按钮显示的是「点一下会切到哪」：现在竖着就画横屏图标，反之亦然。
   function paintOrient() {
     if (!orientBtn) return;
@@ -215,10 +229,24 @@ export function attachEmbed(ctx, opts) {
       markOrientBad();
       showOrient(false);
     };
+    // 锁被接受 ≠ 屏幕转了：校验一轮，没转就把旋转自由还给设备再降级（见 orientFits 的注释）。
+    var verify = function () {
+      var n = 0;
+      (function tick() {
+        if (orientFits(want)) { done(); return; }
+        if (++n > 7) {                        // 约 560ms：够 Android 转屏动画，又不至于让用户干等
+          try { if (so && so.unlock) so.unlock(); } catch (e) { /* 没锁住：无所谓 */ }
+          fsOrient = null;
+          fail();
+          return;
+        }
+        setTimeout(tick, 70);
+      })();
+    };
     if (!so || !so.lock) { fail(); return; }
     try {
       var pr = so.lock(want);
-      if (pr && pr.then) pr.then(done, fail); else done();
+      if (pr && pr.then) pr.then(verify, fail); else verify();
     } catch (e) { fail(); }
   }
   if (orientBtn) {

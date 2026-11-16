@@ -224,6 +224,14 @@ function check() {
   ok(/showOrient\(hasOrientApi && !orientMarkedBad\(\)\)/.test(embedSrc) &&
      /var cur = fsOrient \|\| orientNow\(\)/.test(embedSrc),
     '方向按钮的显示条件或翻转依据不对（应「有 API 就露」+「按 fsOrient 翻转」）');
+  // **lock() 被接受 ≠ 屏幕转了**（0.21.6，用户实测）：小米 HyperOS 的浏览器 resolve 了却
+  // 不转，而锁定状态已经生效 —— 表现是「点了没反应」，接着「连转手机也不行」（旋转自由被
+  // 那次锁没收）。所以锁完必须校验，没转就 unlock。
+  ok(/function orientFits\(want\)/.test(embedSrc) && /pr\.then\(verify, *fail\)/.test(embedSrc) &&
+     !/pr\.then\(done/.test(embedSrc) &&
+     /if \(orientFits\(want\)\) \{ done\(\); return; \}/.test(embedSrc) &&
+     /so\.unlock\(\); \} catch \(e\) \{ \/\* 没锁住/.test(embedSrc),
+    '锁定成功后没有校验方向是否真的改变：系统「接受但不转」时会把物理旋转一起锁死');
   // 注意：曾经想用 allow="screen-orientation" 给 iframe 放行，但 Chromium 把它判为
   // 未知特性（控制台告警 Unrecognized feature），且转屏根本不受该策略管辖 —— 已撤回。
   ok(/setAttribute\('allow', *'fullscreen'\)/.test(read('embed.js')),
