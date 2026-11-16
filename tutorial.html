@@ -6,7 +6,7 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.19.4">
+<meta name="version" content="0.19.5">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
@@ -198,12 +198,12 @@
     shifts it the same way but throws away the leading half&nbsp;bricks; we keep them and clip at the wave origin).
     <code>T</code> is the period: it stretches every character of that row and is edited as a number. The numbered
     ruler above still counts reference periods, so a <code>period: 2</code> row spans two ruler columns per character.
-    On touch the same action lives in the context bar (select the row, tap the phase icon): the <code>&phi;</code> /
-    <code>T</code> glyphs beside a row name are drawn but not tappable there &mdash; after the whole picture is scaled
-    down they are a few pixels wide, and reaching for a row name would start phase mode by accident. A phone also
-    scales the row down, so watch the <code>&phi;</code> badge at the end of the row while you drag (or pinch to zoom
-    first) &mdash; a tenth of a period is only a few pixels wide. A second finger always pans the view (and undoes the
-    phase nudge of that same gesture).</p>
+    On touch the same two entries exist: select the row and tap the phase icon in the context bar to grab the
+    wave, or tap the <code>&phi;</code> / <code>T</code> glyph beside the row name for the numeric box &mdash; since
+    0.17.0 those glyphs carry an enlarged hit rect, so they are tappable on a phone too. What a phone cannot give
+    you is fine resolution: the whole picture is scaled down to fit the screen, so a tenth of a period is only a
+    few pixels wide &mdash; for precise values use the numeric box rather than dragging. A second finger always
+    pans the view (and undoes the phase nudge of that same gesture).</p>
   </section>
 
   <section class="step">
@@ -230,10 +230,12 @@
     <div class="livecard" data-timingbench data-height="200"
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: 'a b c' }, { name: 'Request', wave: '01..0' } ], head: { text: 'WaveDrom example', tick: 0, every: 2 }, foot: { text: 'Figure 100', tock: 9 } }"></div>
     <p class="caveat"><code>config.hscale</code> is applied for real: it widens the whole time axis
-    (cell width &times; hscale, capped at 8) while row height and font size stay put — try
-    <code>hscale: 3</code> in the editor. <code>head</code> and <code>foot</code> are the opposite case:
-    they stay in your source and survive every edit untouched, but their titles and tick / tock rulers
-    are not drawn.</p>
+    (cell width &times; hscale, capped at 8) while row height and font size stay put &mdash; try
+    <code>hscale: 3</code> in the editor. It is a <strong>source-only</strong> field: there is no control on the
+    canvas for <code>config</code>, so you change it in the text and the drawing follows (that direction works).
+    <code>head</code> and <code>foot</code> go one step further: they stay in your source and survive every edit
+    untouched, but their titles and tick / tock rulers are <strong>not drawn</strong> yet &mdash; so there is
+    nothing on the canvas to click and nothing to see.</p>
   </section>
 
   <section class="step">
