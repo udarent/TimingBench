@@ -235,9 +235,22 @@ export function createEditor(dom){
     on=!!on;
     var from=state.selCell, lc=null;
     if(on&&state.ir){
-      var valid=false, N=state.ir.ticks;
-      state.ir.lanes.forEach(function(l){ if(from&&l.id===from.lane&&l.kind==='signal') valid=true; });
-      lc=valid?{lane:from.lane,tick:Math.max(0,Math.min(from.tick,N-1))}:firstCell();
+      var N=state.ir.ticks;
+      var at=function(id,tick){ return id?{lane:id,tick:Math.max(0,Math.min(tick,N-1))}:null; };
+      var isSig=function(id){
+        var hit=false; state.ir.lanes.forEach(function(l){ if(l.id===id&&l.kind==='signal') hit=true; }); return hit;
+      };
+      // 连线光标要**跟着当前选中对象**落位：已选格 → 该格；已选行 → 该行第一格；
+      // 已选列 → 第一行的该列；都没有 → 第一行第一格。
+      // 以前除「已选格」外一律回落 firstCell()，于是「选中第 5 行去连线」光标跳到第 1 行，
+      // 看起来像点错了行（与 ensureSelCell 里同一个教训：别把选中抢回第一行）。
+      if(from && isSig(from.lane)) lc=at(from.lane, from.tick);
+      else if(state.selLane && isSig(state.selLane)) lc=at(state.selLane, 0);
+      else if(state.sel!==null && state.sel!==undefined){
+        var sl=signalLanes();
+        lc=sl.length?at(sl[0].id, state.sel):firstCell();
+      }
+      else lc=firstCell();
     }
     state.linkMode=on; state.connect=null; state.linkCursor=lc;
     // 保留选中：连线按钮已移到底部上下文条（与 label / node 同排），进入连线模式后仍需

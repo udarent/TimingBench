@@ -556,6 +556,22 @@ function check() {
     ok(swaps.length === 0, '桌面与触摸仍有能力差异（swap 标注不一致）：' + swaps.join(' / '));
     ok(!Cap.CAP.cellLabel, 'cellLabel 徽标能力应已删除（改走 ACTS.dock）');
   }
+  // 0.19.0：三组动作清单都必须**经过可用性过滤**才能进渲染 —— 直接原样喂给渲染
+  // 就是「先把按钮画出来、点了才弹错误」，那是本版要消灭的体验。
+  // 判据看「有没有那道 filter」，不锁具体表达式；再单独确认格子判据里真的查了总线字符
+  // （label 只对总线格有意义，这是 openLabelEditor 的守卫条件）。
+  {
+    const t = read('src/editor/touch.js');
+    ok(/COL_ACTS\.filter\(availCol\)/.test(t) && /ROW_ACTS\.filter\(availRow\)/.test(t) &&
+       /DOCK_ACTS\.filter\(availCell\)/.test(t) &&
+       /function availCell/.test(t) && /function availRow/.test(t) && /function availCol/.test(t) &&
+       /Core\.BUS\.test\(sl\.w\)/.test(t) && /\.point/.test(t) && /\.gap/.test(t),
+      '动作没有按可用性过滤（不可用的按钮又会被画出来，点了只能弹错误）');
+    // 缓存键必须带上可用集：同一格把字符从 `0` 改成 `=` 之后 label 由隐藏变可用，
+    // 只看「哪一格」会跳过重建、按钮停在旧状态。
+    ok(/ctxActKey/.test(t) && /acts\.join\(','\)/.test(t),
+      '面板缓存键没带上「可用动作集」（改完字符后按钮不会更新）');
+  }
   ok(/var roW=Math\.max\(ACT_X\+PAD, 360\)/.test(shapesSrc),
     '只读画布宽度仍为幽灵列预留一格（右侧会多一条空白）');
   // 只读态没有字符条，触摸引导 toast 不适用，也不该出现在英文宿主页面里

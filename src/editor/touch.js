@@ -215,7 +215,7 @@ export function attachTouchUI(ctx, dom) {
     })(els[i]);
   }
 
-  var ctxKind = null, ctxKey = null, ctxLinkFlag = '-';
+  var ctxKind = null, ctxKey = null, ctxActKey = '', ctxLinkFlag = '-';
   // 打开面板那一刻的滚动位置（见 renderContext 末尾）：用于把「布局抖动引发的 scroll」
   // 与「用户真的想滑动」区分开。
   var ctxScroll = null;
@@ -224,11 +224,67 @@ export function attachTouchUI(ctx, dom) {
   // CSS 据此把退出按钮抬到面板上方，谁也不压谁。
   function hideContext() {
     if (ctxKind === null) return;
-    ctxKind = null; ctxKey = null;
+    ctxKind = null; ctxKey = null; ctxActKey = '';
     panel.classList.remove('open');
     panel.textContent = '';
   }
   // 上下文条内容跟着「最后选中的对象」走：格子 → 格级动作，列 → 列动作，行 → 行动作。
+  // ---- 动作可用性（0.19.0）--------------------------------------------------
+  // 「把按钮画出来」和「点它有用」是两件事。以前一律画全部动作，点了才发现「这格不是数据块」
+  // 「空行没有这些字段」—— 等于让用户先撞一次墙才知道不行。现在按当前对象**过滤**：不可用的不画。
+  // 判据只收「点了必然无效」的那几种，不猜「可能无效」的，否则按钮会随状态跳来跳去。
+  function laneById(id) {
+    if (!state.ir || !id) return null;
+    for (var i = 0; i < state.ir.lanes.length; i++) {
+      if (state.ir.lanes[i].id === id) return state.ir.lanes[i];
+    }
+    return null;
+  }
+  // 格子级：label 只对**总线格**有意义（普通电平格没有标签可写，`openLabelEditor` 就是这么守的）；
+  // node 只在本行字符范围内有位置（比 slots 还长的「续写格」写不进 node 数组）；
+  // link 任何 signal 格都能起手（没有锚点字符时 `handleAnchor` 会自动分配一个字母）。
+  function availCell(act) {
+    var sc = state.selCell;
+    if (!sc) return false;
+    var l = laneById(sc.lane);
+    if (!l || l.kind !== 'signal') return false;
+    if (act === 'link') return true;
+    if (act === 'node') return sc.tick < l.slots.length;
+    if (act === 'label') {
+      var sl = l.slots[sc.tick];
+      return !!sl && !!sl.point && !sl.gap && Core.BUS.test(sl.w);
+    }
+    return false;
+  }
+  // 行级：空行（spacer）没有 name / wave / data / node / phase / period 这些字段 —— 改它等于
+  // 把它变成信号行，不是「编辑这一行的值」；首行不能上移、末行不能下移（IR 里是静默无效）。
+  function availRow(act) {
+    var l = laneById(state.selLane);
+    if (!l || !state.ir) return false;
+    var li = state.ir.lanes.indexOf(l), n = state.ir.lanes.length;
+    var isSp = l.kind === 'spacer';
+    switch (act) {
+      case 'name': case 'wave': case 'data': case 'nodeStr': case 'phase': case 'period':
+        return !isSp;
+      case 'link':
+        return !isSp;                       // 连线要落到具体格子上，空行没有格子
+      case 'up':
+        return li > 0;
+      case 'down':
+        return li >= 0 && li < n - 1;
+      default:
+        return true;                        // add / spacer / del / group / spanUp / spanDown
+    }
+  }
+  // 列级：末尾那个「幽灵列」只承担追加周期 —— 删除与相位线在它上面没有意义
+  // （doAct 里本来就拦着，现在连按钮也不画）。
+  function availCol(act) {
+    var c = state.sel;
+    if (c === null || c === undefined || !state.ir) return false;
+    if (act === 'insert' || act === 'append' || act === 'link') return true;
+    return c < state.ir.ticks;
+  }
+
   // 三级共用同一个容器与同一段渲染代码，差别只是喂进去的动作清单。
   function renderContext() {
     if (!panel) return;                           // 不跑编辑器的页面（如验收页）没有上下文条容器
@@ -239,15 +295,19 @@ export function attachTouchUI(ctx, dom) {
     // 必须显式 return：选格时 selLane 往往也被设着，漏掉这一句就会落到下面的行分组上，
     // 表现为「点格子却弹出 15 个行动作」。
     if (state.selCell && state.ir) { hideContext(); return; }
-    if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS; key = state.sel; }
-    else if (state.selLane) { kind = 'row'; acts = ROW_ACTS; key = state.selLane; laneOf = state.selLane; }
+    if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS.filter(availCol); key = state.sel; }
+    else if (state.selLane) { kind = 'row'; acts = ROW_ACTS.filter(availRow); key = state.selLane; laneOf = state.selLane; }
     if (!kind) { hideContext(); return; }
     // 同一对象不重绘（避免连点闪烁）—— 但必须确认面板**当前真的是开着的**：
     // 面板可能被 hideContext 清空过而 key 未变（清空路径不止一条），此时若只看 key
     // 就会跳过重建，表现为「点了行、面板却空着」。
+    // 可用集也要进 key：同一个格子把字符从 `0` 改成 `=` 之后 `label` 由隐藏变可用，
+    // 只看对象 key 就会跳过重建、按钮停留在旧状态。
     var linkFlag = state.linkMode ? 'L' : '-';
-    if (ctxKind === kind && ctxKey === key && ctxLinkFlag === linkFlag && panel.classList.contains('open') && panel.childNodes.length) return;
-    ctxKind = kind; ctxKey = key; ctxLinkFlag = linkFlag;
+    var actKey = acts.join(',');
+    if (ctxKind === kind && ctxKey === key && ctxActKey === actKey && ctxLinkFlag === linkFlag &&
+        panel.classList.contains('open') && panel.childNodes.length) return;
+    ctxKind = kind; ctxKey = key; ctxActKey = actKey; ctxLinkFlag = linkFlag;
     panel.textContent = '';
     acts.forEach(function (k) {
       var b = document.createElement('button');
@@ -348,9 +408,12 @@ export function attachTouchUI(ctx, dom) {
     var chipW = TOUCH ? 48 : 30, gap = TOUCH ? 4 : 4;
     var clearW = TOUCH ? 44 : 26, moreW = TOUCH ? 44 : 30;
     var actW = TOUCH ? 44 : 30;
-    // 左侧三个格级动作 + 分隔线是**常驻**的，先把它占掉的宽度从预算里扣掉。
+    // 左侧格级动作 + 分隔线占掉的宽度，从预算里扣掉。**按实际会画出来的数量算** ——
+    // 不可用的动作已被 availCell 过滤（普通电平格没有 label、续写格没有 node），
+    // 按清单长度算就会白白让出宽度、字符被不必要地折叠。
     // 分隔线本身 1px + 两侧 margin 各 6 + 与左右按钮的两个 gap ≈ 17（12 会少算 5px，实测溢出）
-    var actsW = DOCK_ACTS.length * (actW + gap) + (TOUCH ? 17 : 15);
+    var acts = DOCK_ACTS.filter(availCell);
+    var actsW = acts.length * (actW + gap) + (acts.length ? (TOUCH ? 17 : 15) : 0);
     var host = dock.parentElement;
     var budget = (host ? host.clientWidth : dock.clientWidth) - 16 - actsW;
     // 连线模式下不写字（那一段只留左侧三个按钮），字符预算直接清零 ——
@@ -375,15 +438,19 @@ export function attachTouchUI(ctx, dom) {
       fit = Math.min(fit, total);
       hidden = order.slice(fit);
     }
+    // 可用集也要进 key：同一格把字符从 `0` 改成 `=` 之后 label 由隐藏变可用，
+    // 只看「哪一格」会跳过重建、按钮停留在旧状态。
     var key = state.selCell.lane + '@' + state.selCell.tick + '|' + state.ch + '|' + moreOpen +
-      '|' + fit + '|' + (charsOn ? '-' : 'L');
+      '|' + fit + '|' + acts.join(',') + '|' + (charsOn ? '-' : 'L');
     if (key === dockKey) return;                 // 同一状态不重建，避免点一下闪一下
     dockKey = key;
     dock.textContent = '';
-    DOCK_ACTS.forEach(function (a) { dock.appendChild(makeActBtn(a)); });
-    var dp = document.createElement('span');
-    dp.className = 'docksep';
-    dock.appendChild(dp);
+    acts.forEach(function (a) { dock.appendChild(makeActBtn(a)); });
+    if (acts.length) {                           // 一个都不剩时不留光秃秃的分隔线
+      var dp = document.createElement('span');
+      dp.className = 'docksep';
+      dock.appendChild(dp);
+    }
     if (charsOn) order.slice(0, fit).forEach(function (v) { dock.appendChild(makeChip(v)); });
     if (more && hidden.length) {
       var mb = document.createElement('button');
