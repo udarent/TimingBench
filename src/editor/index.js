@@ -164,11 +164,21 @@ export function createEditor(dom){
     else dom.app.removeAttribute('data-layout');
   }
   function toggleLayout(){
-    state.layout = currentLayout()==='cols'?'rows':'cols';
-    try{ localStorage.setItem('tb-layout',state.layout); }catch(e){ /* 隐私模式等忽略 */ }
+    setLayout(currentLayout()==='cols'?'rows':'cols');
+  }
+  // 显式指定分屏方向（null = 交回「跟随宽度」的自动判定）。全屏里选横屏 / 竖屏、
+  // 退出全屏时还原，都对不上「切换一下」这个动作，所以另开一个入口，而不是连点两次。
+  function setLayout(name){
+    if(name==='cols'||name==='rows'){
+      state.layout=name;
+      try{ localStorage.setItem('tb-layout',name); }catch(e){ /* 隐私模式等忽略 */ }
+    }else{
+      state.layout=null;
+      try{ localStorage.removeItem('tb-layout'); }catch(e){ /* 同上 */ }
+    }
     applyLayout(); ctx.redraw();
   }
-  ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout;
+  ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout; ctx.setLayout=setLayout;
 
   // ---- 行范围：分组是「一段连续行」的概念，单选一行表达不了 ------------------
   // `state.selRows` 是行 id 数组（按行序、连续），null 表示「就是 selLane 那一行」。
@@ -305,9 +315,10 @@ export function createEditor(dom){
     on=!!on;
     if(state.readonly===on) return;
     state.readonly=on;
-    // 只读 ↔ 编辑会换掉整条 fit 基数（整图缩进卡片 ↔ 1:1 滚动），捏合缩放叠在上面就会
-    // 变成「刚放大的倍数乘到另一套基数上」，同一个手势忽然放大到 3 倍屏。宁可每次切换归位。
-    state.zoom=1;
+    // 不在这里重置缩放：0.20.1 起只读卡片也能放大，读者放大看清小字、点一下进编辑，
+    // 若这时把倍数打回 1，画面会「啪」地缩回去，手指底下那块内容也跟着跑（实测被点的格子
+    // 会偏 69px，而且画布还没超出容器宽、滚都滚不回来）。基数确实会换，但倍数属于用户的
+    // 意图，跨模式保留更可预期；真正会换掉整条基数的是进出全屏，那里单独归位。
     if(on){
       state.selCell=null; state.sel=null; state.selLane=null;
       state.linkMode=false; state.connect=null; state.linkCursor=null;

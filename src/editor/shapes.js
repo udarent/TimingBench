@@ -352,10 +352,10 @@ export function createShapes(ctx){
             : (state.embedCard && state.readonly) ? Math.min(2, rawFit)
             : (T || state.embedCard) ? Math.min(1, rawFit)
             : 1;
-    // 手势缩放（触摸端捏合）是用户的**乘数**，叠在布局算出的基数上，两件事别混：
-    // 布局回答「装不装得下」（上面四条），手势回答「想放多大看」。所以 fit = baseFit × zoom，
-    // 后续所有「用户坐标 ↔ 像素」的换算依旧只认 state.fit，一处改、全链路跟着对。
-    // 桌面没有捏合通道，zoom 恒为 1；只读卡片也不接管缩放（那里没有编辑，留给宿主滚动）。
+    // 缩放是用户的**乘数**，叠在布局算出的基数上，两件事别混：布局回答「装不装得下」
+    // （上面四条），用户回答「想放多大看」。所以 fit = baseFit × zoom，后续所有
+    // 「用户坐标 ↔ 像素」的换算依旧只认 state.fit，一处改、全链路跟着对。
+    // 四个模式的缩放通道由交互层提供（触摸捏合 / 桌面 Ctrl+滚轮），这里只认倍数。
     var zoom = clampZoom(state.zoom);
     var fit = baseFit * zoom;
     var outW = fit < 1 ? viewW : Math.round(W * fit);
@@ -365,8 +365,10 @@ export function createShapes(ctx){
     // 手势期间要走「只改宽高」的快路（见 applyZoom），它必须能复算出与本帧逐字节相同的
     // outW / outH —— 所以基数与视口宽都留档，别在快路里另写一套取整。
     state.baseFit=baseFit; state.vbH=vbH; state.zoom=zoom;
-    // 高度上报用缩放后的真实像素高，否则宿主会按原始高设 iframe，底部留一片空白。
-    state.contentH=state.embedCard?outH:contentH;
+    // 高度上报用**未缩放**的像素高：宿主按它设 iframe 高度，若跟着放大后的高度上报，
+    // 用户在只读卡片里捏一下，宿主那张卡片就被撑高一次（内容溢出交给画布自己滚）。
+    var outW0 = baseFit < 1 ? viewW : Math.round(W * baseFit);
+    state.contentH=state.embedCard?Math.round(vbH * outW0 / W):contentH;
     state.W=W; state.H=H;
     // xMidYMin：只读卡片把 svg 拉满视口时，比例若略有偏差，多出来的空间留在下方而不是
     // 上下均分 —— 图始终贴顶，进编辑时「把被点的格子钉回手指下」的换算不必再补一层偏移。
@@ -624,9 +626,41 @@ export function createShapes(ctx){
     svg.setAttribute('width',outW);
     svg.setAttribute('height',outH);
     state.zoom=zoom; state.fit=outW/state.W;
-    if(state.embedCard) state.contentH=outH;
+    // 只读卡片默认由 CSS 拉满（`width:100%`），放大时必须让位给上面这两个属性，
+    // 否则「设了 width 也不生效」—— 同一个开关也顺便让其它模式知道「此刻是放大态」。
+    if(wrap.classList) wrap.classList.toggle('is-zoom', zoom>1);
     return true;
   }
-  ctx.applyZoom=applyZoom;
+  // 把「某个用户坐标点」钉回屏幕坐标 (cx,cy)：渲染尺寸变了，滚动位置要补上差值。
+  // 捏合（锚点＝手势开始时两指中点下那一点）与滚轮（锚点＝光标）共用这一份换算 ——
+  // 两处各写一遍，总有一处会忘了 viewBox 偏移或取整。
+  function anchorScroll(ux,uy,cx,cy){
+    var svg=wrap.querySelector('svg'); if(!svg) return false;
+    var vb=svg.viewBox&&svg.viewBox.baseVal, r=svg.getBoundingClientRect();
+    if(!vb||!r.width||!vb.width) return false;
+    var px=r.left+(ux-vb.x)*r.width/vb.width;
+    var py=r.top +(uy-vb.y)*r.height/vb.height;
+    if(px!==cx) wrap.scrollLeft+=px-cx;
+    if(py!==cy) wrap.scrollTop +=py-cy;
+    return true;
+  }
+  // 唯一的「改倍数」入口。触摸捏合走 applyZoom 快路（每帧都要，不能重建），但 clamp 与
+  // 取整只有一份；滚轮、键盘、复位这类离散调用走这里（顺带把锚点钉住）。
+  // cx/cy 只用来定锚点，省略则钉视口中心。
+  function setZoom(z,cx,cy){
+    var svg=wrap.querySelector('svg'); if(!svg||!state.W) return false;
+    var before=state.zoom||1, next=clampZoom(z);
+    if(Math.abs(next-before)<0.001) return false;
+    var r=svg.getBoundingClientRect(), vb=svg.viewBox&&svg.viewBox.baseVal;
+    var ax = (cx===undefined) ? r.left+wrap.clientWidth/2 : cx;
+    var ay = (cy===undefined) ? r.top +wrap.clientHeight/2 : cy;
+    var ux = vb ? (ax-r.left)*vb.width/r.width + vb.x : 0;
+    var uy = vb ? (ay-r.top )*vb.height/r.height + vb.y : 0;
+    state.zoom=next;
+    if(!applyZoom()){ state.zoom=before; return false; }
+    anchorScroll(ux,uy,ax,ay);
+    return true;
+  }
+  ctx.applyZoom=applyZoom; ctx.anchorScroll=anchorScroll; ctx.setZoom=setZoom;
   return { redraw:redraw };
 }

@@ -116,13 +116,83 @@ export function attachEmbed(ctx, opts) {
   function onFsChange() {
     // state.fsEdit 同时是布局开关：全屏里画布按 1:1 画、靠滑动移动（见 shapes.js 的 fit 规则），
     // 回到卡片立即恢复「等比缩进卡片」。两种状态都要重画，否则尺寸会停在旧值上。
+    var wasFs = state.fsEdit;
     state.fsEdit = !!fsCurrent();
-    if (state.fsEdit) { ctx.redraw(); return; }
+    // 进出全屏换掉的是**整条 fit 基数**（卡片等比 ↔ 全屏 1:1），倍数必须归位：
+    // 留着的话「卡片里放大 3 倍」会被乘到全屏基数上，一进去就是 3 倍屏。
+    state.zoom = 1;
+    if (state.fsEdit) {
+      // 记住进全屏前的分屏方向。判据用「还没记过」，**不用 wasFs** —— requestFullscreen 的
+      // promise 可能先于 fullscreenchange 结算（实测就是：事件到时 state.fsEdit 已经 true），
+      // 拿 wasFs 判会一次都记不上，退出时自然还原不了。
+      if (layout0 === undefined) layout0 = state.layout || null;
+      fsOrient = null;
+      paintOrient();
+      ctx.redraw();
+      return;
+    }
+    releaseOrient();
     if (fsForEdit) { fsForEdit = false; if (!state.readonly) setEditing(false, null, true); }
     else ctx.redraw();
   }
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  // ---- 全屏里的「横屏 / 竖屏」-------------------------------------------
+  // 手机上一张 390px 宽的卡片进全屏后仍然竖着，宽图只能横向拖。真要转屏幕只有
+  // `screen.orientation.lock()` 一条路（Android Chrome / Edge 支持；桌面与 iOS 上不可用），
+  // 所以：只在这套 API 存在时把按钮露出来；点了却失败就如实说一句，不装作已经转了。
+  // 不自己用 CSS 旋转 DOM —— 那会让 clientX/clientY 与图元坐标错位，命中、就地编辑、
+  // 捏合锚点全部要跟着反变换，代价远大于收益。
+  var so = (typeof screen !== 'undefined' && screen.orientation) || null;
+  var canOrient = !!(TOUCH && so && typeof so.lock === 'function');
+  if (canOrient) docEl.classList.add('is-orient');
+  var orientBtn = opts && opts.orient;
+  var fsOrient = null, layout0;   // layout0 未进过全屏时是 undefined，别当成 null 去清用户的偏好
+  function orientNow() {
+    var t = (so && so.type) || '';
+    if (!t) t = window.innerWidth > window.innerHeight ? 'landscape-primary' : 'portrait-primary';
+    return t.indexOf('landscape') === 0 ? 'landscape' : 'portrait';
+  }
+  // 按钮显示的是「点一下会切到哪」：现在竖着就画横屏图标，反之亦然。
+  function paintOrient() {
+    if (!orientBtn) return;
+    var cur = fsOrient || orientNow();
+    var want = cur === 'landscape' ? 'portrait' : 'landscape';
+    orientBtn.classList.toggle('want-port', want === 'portrait');
+    var label = 'Switch to ' + want;
+    orientBtn.setAttribute('aria-label', label);
+    orientBtn.title = label;
+  }
+  function releaseOrient() {
+    try { if (so && so.unlock) so.unlock(); } catch (e) { /* 没锁过 / 不支持：忽略 */ }
+    fsOrient = null;
+    if (layout0 !== undefined) { if (ctx.setLayout) ctx.setLayout(layout0 || null); layout0 = undefined; }
+    paintOrient();
+  }
+  function toggleOrient() {
+    var want = (fsOrient || orientNow()) === 'landscape' ? 'portrait' : 'landscape';
+    var done = function () {
+      fsOrient = want;
+      // 版式跟着方向走：横屏左右分栏、竖屏上下。手机转过来后宽度通常仍不到 860px 的自动
+      // 阈值，少了这一句，「横屏」拿到的是横的屏幕 + 竖的版式，等于白转。
+      if (ctx.setLayout) ctx.setLayout(want === 'landscape' ? 'cols' : 'rows');
+      paintOrient();
+    };
+    var fail = function () {
+      if (ctx.notify) ctx.notify('This browser does not allow locking orientation — rotate the device instead');
+    };
+    if (!so || !so.lock) { fail(); return; }
+    try {
+      var pr = so.lock(want);
+      if (pr && pr.then) pr.then(done, fail); else done();
+    } catch (e) { fail(); }
+  }
+  if (orientBtn) {
+    orientBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleOrient(); });
+  }
+  if (so && so.addEventListener) so.addEventListener('change', paintOrient);
+  window.addEventListener('orientationchange', paintOrient);
 
   // 从只读切到编辑，缩放会从「整图缩进卡片」跳成 1:1 —— 如果不管滚动位置，
   // 手指下面那块内容会整体挪走，第二次点按就落到别的格子上（手机端最难受的地方）。
@@ -150,18 +220,25 @@ export function attachEmbed(ctx, opts) {
     var li = -1, lane = null;
     ir.lanes.forEach(function (l, i) { if (l.id === anchor.cell.lane) { li = i; lane = l; } });
     if (li < 0 || !lane) return;
-    var k = st.fit || 1;
+    var svg = wrap.querySelector('svg');
+    var vb = svg && svg.viewBox && svg.viewBox.baseVal, sr = svg && svg.getBoundingClientRect();
+    if (!vb || !sr || !sr.width || !vb.width) return;
     // 格心按行级标尺算（period 行更宽、phase 行整体左移）；period:1 时与 CELL 等价。
-    var cx = cellGeo(lane, anchor.cell.tick).cx * k;
-    var cy = (G.TOP + li * G.ROW_H + G.ROW_H / 2) * k;
-    var r = wrap.getBoundingClientRect();
-    var vx = (anchor.x || 0) - r.left, vy = (anchor.y || 0) - r.top;
+    // 用户坐标 → 屏幕像素一律走**真实渲染矩形**，不用 state.fit：只读卡片的 svg 被 CSS
+    // 拉满（width:100%/height:100% + meet），渲染比与 state.fit 并不相等，用后者会差出
+    // 十几像素（0.20.1 实测：未放大时点进编辑，横向偏 10px）。
+    var px = sr.left + (cellGeo(lane, anchor.cell.tick).cx - vb.x) * sr.width / vb.width;
+    var py = sr.top + (G.TOP + li * G.ROW_H + G.ROW_H / 2 - vb.y) * sr.height / vb.height;
+    // 用**位移**而不是绝对值：滚动 ΔS 会让画布整体平移 ΔS，所以「目标屏幕位置 − 现在位置」
+    // 就是该追加的滚动量。这一式对「滚 wrap 自己」和「滚祖先」同时成立（原来按绝对值写，
+    // 在画布自己已经能滚的情形会多滚一个当前 scrollTop —— 0.20.1 实测纵向偏 456px）。
     var maxL = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
-    wrap.scrollLeft = Math.min(maxL, Math.max(0, cx - vx));
-    // 纵向：位移量在两种滚动容器下是同一个数（内容坐标差），只是要施加到会动的那个上
-    var dy = cy - vy;
+    wrap.scrollLeft = Math.min(maxL, Math.max(0, wrap.scrollLeft + (px - (anchor.x || 0))));
     var vs = verticalScroller(wrap);
-    if (vs) vs.scrollTop = Math.min(vs.scrollHeight - vs.clientHeight, Math.max(0, vs.scrollTop + dy));
+    if (vs) {
+      var want = vs.scrollTop + (py - (anchor.y || 0));
+      vs.scrollTop = Math.min(vs.scrollHeight - vs.clientHeight, Math.max(0, want));
+    }
   }
 
   // 点提示条可来回切换：只读时进编辑，编辑态时回只读。

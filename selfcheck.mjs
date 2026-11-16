@@ -167,6 +167,7 @@ function check() {
   const interSrc = read('src/editor/interactions.js');
   const editorSrc = read('src/editor/index.js');
   const cssSrc = read('src/styles.css');
+  const embedSrc = read('src/editor/embed-shell.js');
   // 捏合缩放（0.20.0）的三条结构前提。都是「删掉之后照样跑得通、功能却静默消失」的那种，
   // 靠断言盯住比靠注释可靠：
   // ① touch-action 必须是 pan-x pan-y —— 改回 manipulation 就等于把 pinch-zoom 让给浏览器，
@@ -184,6 +185,26 @@ function check() {
      /function tStartMulti\(\)\{[^}]*press=null/.test(interSrc) &&
      /if\(tMulti\)\{\s*tEndMulti\(\);\s*return;\s*\}/.test(interSrc),
     '指针层缺少多指手势入口 / 缩放计算 / 候选点按作废（双指轻点会误选中格子）');
+  // 桌面滚轮通道（0.20.1）：必须是 passive:false —— 否则 preventDefault 无效，
+  // Ctrl+滚轮会同时缩放整页；且必须读 ctrlKey/metaKey，否则普通滚动也被吃掉。
+  // 只读卡片的放大要能真的生效：CSS 把 svg 拉成 100%×100%，没有 .is-zoom 让位规则
+  // 就会出现「state.zoom 变了、画面一点没变」。
+  ok(/addEventListener\('wheel'/.test(interSrc) && /\{passive:false\}/.test(interSrc) &&
+     /ctrlKey\|\|e\.metaKey/.test(interSrc) && /ctx\.setZoom/.test(interSrc),
+    '缺少桌面 Ctrl+滚轮缩放通道（或它不是非 passive / 没判修饰键，会连整页一起缩放）');
+  ok(/\.is-embed\.is-readonly \.svgwrap\.is-zoom svg/.test(cssSrc),
+    '只读卡片缺少 is-zoom 让位规则：放大后 CSS 的 width:100% 会盖掉尺寸，看起来没反应');
+  // 全屏方向（0.20.1）：三个可观测动作缺一不可 —— 锁方向、退出时解锁、
+  // 进全屏前记住分屏方向并在退出时还原（判据用「还没记过」，不能依赖 wasFs：
+  // requestFullscreen 的 promise 可能先于 fullscreenchange 结算）。
+  ok(/ctx\.setLayout/.test(editorSrc) && /function setLayout\(name\)/.test(editorSrc),
+    '状态层缺少显式分屏入口 setLayout（全屏方向切换与还原都要用它）');
+  ok(/so\.lock\(want\)/.test(embedSrc) && /so\.unlock/.test(embedSrc) &&
+     /layout0 === undefined/.test(embedSrc) && /orientationchange/.test(embedSrc),
+    '全屏方向控制不完整：需要 lock / unlock / 进全屏时记住分屏方向 / 跟随系统旋转重绘');
+  // 上报高度必须用**未缩放**的那份，否则读者在只读卡片里捏一下，宿主 iframe 就被撑高一次。
+  ok(/state\.contentH=state\.embedCard\?Math\.round\(vbH \* outW0 \/ W\)/.test(shapesSrc),
+    '上报高度跟着缩放走了：只读卡片放大后会把宿主 iframe 撑高');
 
   ok(!/nodeAnchor|<circle|connecting/.test(shapesSrc), '绘制层仍存在锚点小圆圈 / 连线态样式');
   ok(!/\.nodeAnchor|\.connecting/.test(cssSrc), '样式层仍存在锚点规则');

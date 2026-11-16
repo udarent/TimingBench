@@ -755,6 +755,19 @@ export function attachInteractions(ctx){
     state.ch=ctx.painting.v; state.selCell={lane:c.lane,tick:c.tick};
     ctx.commit({t:'setSlot',lanes:[c.lane],tick:c.tick,v:ctx.painting.v},'paint @ t'+c.tick,true,true);
   });
+  // 桌面缩放：Ctrl / ⌘ + 滚轮。**触控板的双指捏合在浏览器里就是 ctrlKey=true 的 wheel**，
+  // 所以这一条同时覆盖鼠标与触控板，不必再写一套手势；不带修饰键的滚轮仍然只是滚动。
+  // passive:false 是必须的 —— 否则 preventDefault 无效，浏览器会顺手把整页缩放一次。
+  // deltaMode 要归一：行模式（Firefox 常见）一次只报 ±3，直接当像素用等于「滚了没反应」。
+  wrap.addEventListener('wheel',function(e){
+    if(!(e.ctrlKey||e.metaKey)) return;
+    e.preventDefault();
+    var unit=e.deltaMode===1?16:(e.deltaMode===2?window.innerHeight:1);
+    // 指数映射：鼠标滚轮与触控板报的 deltaY 量级差一个数量级，取指数后两边都是「每次一点」。
+    var k=Math.exp(-(e.deltaY*unit)*0.0018);
+    if(ctx.setZoom) ctx.setZoom((state.zoom||1)*k, e.clientX, e.clientY);
+  },{passive:false});
+
   // 点到画布之外（源码框 / 顶栏 / 分享面板 / 页面空白）也要结算相位编辑，
   // 否则会留一把悬空的尺子挂在图上。用 capture：先把手势收成一步，再让目标控件自己的处理跑。
   document.addEventListener('mousedown',function(e){
@@ -814,7 +827,9 @@ export function attachInteractions(ctx){
   var tMulti=false;                       // 本次手势用过 ≥2 指 ⇒ 抬手不许变成 tap
   var tZoomed=false;                      // 本次手势改过缩放 ⇒ 抬手补一次完整重绘落定
   function tPinchStart(){
-    if(state.readonly) return false;      // 只读卡片不接管：那里没有编辑，缩放留给宿主页面
+    // 只读卡片也接管（0.20.1）：读者看不清小字时最需要放大，而宿主页面缩放的是整页。
+    // 卡片里放大后会超出卡片宽高、由画布自己滚 —— 上报给宿主的高度用的是**未缩放**的
+    // 那份（见 shapes.js 的 contentH），所以宿主那张卡片不会因为读者揑一下就变高。
     var ks=Object.keys(tPts); if(ks.length<2) return false;
     var a=tPts[ks[0]], b=tPts[ks[1]];
     var c={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
@@ -839,12 +854,8 @@ export function attachInteractions(ctx){
         if(ctx.applyZoom&&!ctx.applyZoom()){ state.zoom=tPinch.z0; }
       }
     }
-    var svg=svgRoot(), vb=svg&&svg.viewBox&&svg.viewBox.baseVal, r=svg&&svg.getBoundingClientRect();
-    if(!vb||!r||!r.width||!vb.width) return true;
-    var px=r.left+(tPinch.ax-vb.x)*r.width/vb.width;
-    var py=r.top +(tPinch.ay-vb.y)*r.height/vb.height;
-    if(px!==c.x) wrap.scrollLeft+=px-c.x;
-    if(py!==c.y) wrap.scrollTop +=py-c.y;
+    // 把锚点钉回当前两指中点（换算只有一份，在 shapes.js 的 anchorScroll）
+    if(ctx.anchorScroll) ctx.anchorScroll(tPinch.ax,tPinch.ay,c.x,c.y);
     return true;
   }
   // 第二根手指落下：这一下从「编辑」改判为「多指手势」。三件事必须立刻做，
