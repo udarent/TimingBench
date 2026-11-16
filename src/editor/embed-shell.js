@@ -166,7 +166,6 @@ export function attachEmbed(ctx, opts) {
     try { sessionStorage.setItem(ORIENT_BAD, '1'); } catch (e) { /* 隐私模式：只在本次页面内生效 */ }
   }
   var hasOrientApi = !!(TOUCH && so && typeof so.lock === 'function');
-  var canOrient = false;            // 探测通过（或「可能是手势问题」）才为 true
   var orientProbed = false;
   var orientBtn = opts && opts.orient;
   var fsOrient = null, layout0;   // layout0 未进过全屏时是 undefined，别当成 null 去清用户的偏好
@@ -184,7 +183,6 @@ export function attachEmbed(ctx, opts) {
     if (orientProbed || !hasOrientApi || !fsCurrent() || orientMarkedBad()) return;
     orientProbed = true;
     var settle = function (ok) {
-      canOrient = ok;
       if (!ok) markOrientBad();
       showOrient(ok);
       if (ok) { try { if (so.unlock) so.unlock(); } catch (e) { /* 忽略 */ } }
@@ -230,7 +228,6 @@ export function attachEmbed(ctx, opts) {
     var fail = function () {
       // 这个环境锁不了（桌面 / WebView / 权限被宿主挡掉）。**收起按钮并记住**：
       // 留着一个「点了就出错」的控件，比没有更糟。指引换成用户此刻真能用上的两条。
-      canOrient = false;
       markOrientBad();
       showOrient(false);
       if (ctx.notify) ctx.notify('This container cannot lock the screen orientation — rotate the device, or pinch to zoom');

@@ -372,9 +372,9 @@ html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
 }
 /* 两态都在右上，位置固定不动 —— 点进编辑时按钮不会跳，读者不用重新找它。 */
 
-/* 全屏里的「横屏 / 竖屏」按钮（0.20.1）：只在「粗指针 + 浏览器支持 orientation.lock」
-   时出现（embed-shell 加 .is-orient），且只在全屏里显示 —— 卡片里转屏幕没有意义，
-   而锁定方向必须处于全屏状态才被 API 接受。
+/* 全屏里的「横屏 / 竖屏」按钮（0.21.0 起）：只有在全屏里、且**探测确认这个环境真能锁方向**
+   （embed-shell 的 probeOrient 探通后才加 .is-orient）才显示 —— 卡片里转屏幕没有意义，
+   而 lock 要求文档处于全屏、且平台真的实现了它（小米 HyperOS + Obsidian 这类不实现）。
    图标表示「点一下会切到哪」：现在竖着就画横屏的机器，反之亦然。 */
 .is-embed .orientbtn{display:none}
 .is-embed .orientbtn .o-port{display:none}
