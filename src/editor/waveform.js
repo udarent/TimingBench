@@ -3,7 +3,6 @@
 import { Core } from '../core/ir.js';
 import { G } from './geometry.js';
 import { esc } from '../core/util.js';
-import { TOUCH } from './mode.js';
 
 var CHIP_W=G.CHIP_W;
   // 参考上游默认皮肤外观规范自行绘制的波形图元
@@ -128,8 +127,10 @@ var CHIP_W=G.CHIP_W;
     return (s.slice(0,i)||s.charAt(0))+'…';
   }
 
-  // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph
-  function chipGlyph(v){ return waveGlyph(v,null,0,TOUCH?7:5,TOUCH?22:13,TOUCH?37:21,CHIP_W,{arrowX:3}); }
+  // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph。
+  // 坐标**不按指针分叉**：两端共用 28×26 画布与同一组 y 轨道（5/13/21），只在按钮盒子上
+  // 缩放（手机 48×44 / 桌面 30×28）。这样同一字符的图案在嵌入卡片与编辑页完全一致。
+  function chipGlyph(v){ return waveGlyph(v,null,0,5,13,21,CHIP_W,{arrowX:3}); }
   // 字符说明只用于 aria-label（视觉上不再出现 tooltip）。英文是首选语言。
   function chipDesc(v){
     if(Core.BUS.test(v)) return (v==='='||v==='2')?'bus data block (white)':'bus data block, colour '+(Number(v)+5);

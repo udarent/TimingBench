@@ -358,10 +358,12 @@ function check() {
      /\.tbpanel\.open\{[^}]*height:var\(--dock-acts\)/.test(cssSrc) &&
      /\.chardock\.open\{[^}]*height:var\(--dock-chars\)/.test(cssSrc),
     '停靠区两条子规则被改坏（只读不预留 / 各自定高）');
-  // 两条都不能换行：停靠区恒高，换行后的按钮会被行高裁掉，只能横向滚动
+  // 两条都不能换行：停靠区恒高，换行后的按钮会被行高裁掉。溢出走「⋯」折叠，
+  // 与字符停靠条一致 —— 不再用横向滚动（触摸端会与「滑动看画布」混淆）。
   ok(/\.tbpanel\.open\{[^}]*flex-wrap:nowrap/.test(cssSrc) &&
-     /\.is-touch \.tbpanel\.open\{[^}]*overflow-x:auto/.test(cssSrc),
-    '上下文条又允许换行了（恒高停靠区里会裁掉按钮；窄屏应改横向滚动）');
+     /\.is-touch \.tbpanel\.open\{[^}]*overflow:hidden/.test(cssSrc) &&
+     /\.tbmore\.open\{display:flex;position:absolute/.test(cssSrc),
+    '上下文条又允许换行了，或溢出未走「⋯」折叠（应 overflow:hidden + .tbmore 弹层）');
 
   // ---- 停靠条左侧三个格级动作的图标：声明顺序是功能性的 ----
   // `inset` 是 top/right/bottom/left 的简写，会覆盖同一块里写在它**前面**的长属性。
@@ -380,19 +382,47 @@ function check() {
   // 光有顺序还不够：`.is-touch .chardock .chipbtn svg{inset:0}` 与动作图标规则**特异性相同**、
   // 但写在文件后面，照样会把 inset 盖回去 —— 触摸端实测偏移 -11,-11，图标被推出 44px 按钮只剩一条缝。
   // 修法不是加 !important，而是让基础规则**别管动作按钮**（`:not(.act)`），两边从此不打架。
-  ok(/\.chardock \.chipbtn:not\(\.act\) svg\{/.test(cssSrc) &&
-     /\.is-touch \.chardock \.chipbtn:not\(\.act\) svg/.test(cssSrc),
-    '基础 .chipbtn svg 规则没有排除 .act（同特异性下写在后面会把 inset:0 盖回来，触摸端图标又被推出按钮）');
+  // 选择器现在与「⋯」弹层共用（`.chardock .chipbtn:not(.act) svg,.charmore .chipbtn svg{…}`），
+  // 允许 `svg` 后接逗号再取块。触摸端不再另写一条同义规则（已并入基础规则），
+  // 因此这里改为要求「基础规则排除 .act」+「动作图标有 absolute 定位」两条。
+  ok(/\.chardock \.chipbtn:not\(\.act\) svg[^{]*\{/.test(cssSrc) &&
+     /\.chardock \.chipbtn\.act svg\{[^}]*position:absolute/.test(cssSrc),
+    '基础 .chipbtn svg 规则没有排除 .act（会把动作图标的 inset:0 盖回来、图标被推出按钮）');
   // 24 单位的线性图标必须按 1:1 渲染、描边 ≥2px：缩到 17px 时 1px 描边变 0.708px 且中心落在
   // 半像素，1 倍屏上线条被摊成两个半透明像素 —— 斜边断口、圆环发灰（0.19.3 用户实测）。
   // 判据只要求「尺寸 = 24」与「描边 ≥2」，不锁具体 px 写法。
   {
     const actSvg = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    const ctxSvg = (/\.tbpanel button\.ctxbtn svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    // 选择器现在与溢出弹层共用（`.tbpanel button.ctxbtn svg,.tbmore button.ctxbtn svg{…}`），
+    // 允许在 `.tbpanel button.ctxbtn svg` 后接逗号，再取第一个 `{…}` 块。
+    const ctxSvg = (/\.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
     ok(/width:24px;height:24px/.test(actSvg) && /stroke-width:2/.test(actSvg) &&
        /width:24px;height:24px/.test(ctxSvg) && /stroke-width:2/.test(ctxSvg),
       '图标没按 1:1 画（24 单位图必须 24px 渲染 + 2px 描边，缩放会让 1 倍屏线条发灰断口）');
   }
+  // 三组动作按钮（格级 / 行级 / 列级）必须是同一套规格：它们共用同一批 24 单位图标，
+  // 尺寸 / 圆角 / 描边 / 端点各写一份就会「看着差不多、放一起对不齐」（用户实测反馈）。
+  // 判据：桌面同尺寸同圆角；两端图标都带圆端点；触摸端描边也是 2（曾用 1.7 细一档）。
+  {
+    const actBox = (/\.chardock \.chipbtn\.act\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const ctxBox = (/\.tbpanel button\.ctxbtn,\.tbmore button\.ctxbtn\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const actSvg2 = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const ctxSvg2 = (/\.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const touchCtxSvg = (/\.is-touch \.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    ok(/width:32px/.test(actBox) && /height:32px/.test(actBox) &&
+       /width:32px/.test(ctxBox) && /height:32px/.test(ctxBox) &&
+       /border-radius:6px/.test(ctxBox),
+      '格级 / 行列动作按钮尺寸或圆角不一致（应同为桌面 32×32、圆角 6）');
+    ok(/stroke-linecap:round/.test(actSvg2) && /stroke-linecap:round/.test(ctxSvg2) &&
+       /stroke-width:2/.test(touchCtxSvg) && !/1\.7/.test(touchCtxSvg),
+      '动作图标画笔不统一（应为 24/2 + 圆端点；触摸端曾用 1.7 细描边、桌面曾漏写端点）');
+  }
+  // 「⋯」弹层（.charmore）里的字符按钮必须与停靠条共用基础样式。桌面窄卡片（如主页 360px
+  // 嵌入卡）里大部分字符都在弹层里 —— 少写这一组，它们会退化成浏览器默认按钮：
+  // 字形按内联流排在按钮上、字母被挤到下面（用户实测「主页的 P 与编辑页的 P 不是一个设计」）。
+  ok(/\.chardock \.chipbtn,\.charmore \.chipbtn\{[^}]*position:relative/.test(cssSrc) &&
+     /\.chardock \.chipbtn:not\(\.act\) svg,\.charmore \.chipbtn svg\{[^}]*position:absolute/.test(cssSrc),
+    '桌面「⋯」弹层里的字符按钮没有基础样式（会退化成默认按钮：字形在上、字母在下）');
 
   // ---- 浅色档的低层级文字要够读 ----
   // --muted 承担时间轴数字、行号、φ/T 徽标、字符按钮里的波形预览。对白底与 --src-bg
@@ -528,6 +558,13 @@ function check() {
      !/Math\.ceil\(p\s*\*\s*2\)\s*\/\s*2/.test(geoSrc) &&
      !/laneLeadTrim/.test(geoSrc),
     '行级时间标尺被改坏（period/phase 只存不画，或 phase 又被量化——0.1 会和 0 / 0.5 重合）');
+  // 字符缩略图两端必须同一套几何：画布固定 28×26、y 轨道固定 5/13/21，不按 TOUCH 分叉。
+  // 旧写法触摸端用 44×44 + 7/22/37，同一字符在手机与桌面高宽比不同（0.57 vs 0.68）——
+  // 用户实测「嵌入卡片里的 3 和编辑页的 3 设计不一样」。命中区大小是另一回事，由按钮盒子给。
+  ok(/CHIP_W:\s*28/.test(geoSrc) && /CHIP_H:\s*26/.test(geoSrc) &&
+     /chipGlyph\(v\)\{ return waveGlyph\(v,null,0,5,13,21,CHIP_W/.test(waveSrc) &&
+     !/TOUCH\?7:5|TOUCH\?22:13|TOUCH\?37:21/.test(waveSrc),
+    '字符缩略图按指针分叉或画布尺寸被改（同一字符会在嵌入卡片与编辑页画出不同形状）');
   // laneShift 必须**原样**返回相位值，两条都重要：
   //   ① 不量化（出现 round / floor / ceil 就又回到「0.1 与 0 重合」的老毛病）；
   //   ② 不把负值抹成 0 —— 负相位是「整行右移」，上游 `render-wave-lane.js` 的 xoffset
@@ -795,6 +832,14 @@ function check() {
   ok(!/data-panel=/.test(html), '触摸操作栏仍保留「对象 / 列」文字面板入口');
   ok(touchSrc.indexOf("className = 'ctxbtn'") >= 0 && /function renderContext/.test(touchSrc),
     '触摸端缺少上下文图标条（renderContext / ctxbtn）');
+  // 底部三排（格 / 行 / 列）展示逻辑必须一致：溢出都用「⋯」折叠。
+  // 行 / 列的上下文条以前靠横向滚动兜底，触摸端会和「滑动看画布」混淆 —— 现在统一成 ⋯。
+  ok(/data-ctxmore/.test(touchSrc) && /\.tbmore\.open/.test(cssSrc) &&
+     /id="tbmore"/.test(html),
+    '行列上下文条的溢出没有走「⋯」折叠（应与字符停靠条一致：data-ctxmore + .tbmore 弹层）');
+  // 都不需要专门的关闭按钮：格级停靠条原先末尾的 ✕ 已删（取消选中走点画布空白 / Esc）。
+  ok(!/data-clear/.test(touchSrc) && !/chipbtn\.clear/.test(cssSrc) && !/chipbtn\.clear/.test(touchSrc),
+    '格级停靠条又长出 ✕ 关闭按钮（三排都不该有专门关闭按钮）');
   ok(/function bindLongName/.test(touchSrc) && /data-name/.test(touchSrc),
     '触摸端缺少「长按出名称」');
 

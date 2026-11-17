@@ -178,31 +178,49 @@ svg{display:block;font-family:var(--sans)}
    规则在下面 .is-touch 段里）。行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头
    按钮都已撤掉，所以画布右侧也不再为它们留位（ACT_W = 0，见 geometry.js）。 */
 /* 上下文条：整行、定高、**绝不换行**。换行会把这一条撑成两三排 —— 停靠区虽然恒高，
-   但按钮会被自己的行高挤掉（44px × 3 排 > 61px），所以窄屏一律横向滚动。 */
+   但按钮会被自己的行高挤掉（44px × 3 排 > 61px）。放不下的动作不再横向滚动（滚动在触摸端
+   会与「滑动看画布」混淆），而是收进「⋯」，与字符停靠条同一套溢出逻辑。 */
 .tbpanel.open{display:flex;flex-wrap:nowrap;gap:4px;padding:6px 8px;height:var(--dock-acts);
-  background:var(--panel);border-top:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
-.tbpanel button.ctxbtn{width:34px;height:34px;min-width:34px;padding:0;border:1px solid var(--line);
-  border-radius:7px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
+  background:var(--panel);border-top:1px solid var(--line);overflow:hidden}
+.tbpanel button.ctxbtn.more span{font:600 15px var(--sans);color:var(--muted);line-height:1}
+.tbpanel button.ctxbtn.more.on{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
+/* 「⋯」溢出弹层：与字符停靠条的「⋯」同一套弹出位置（钉在面板上方、占满宽度） */
+.tbmore{display:none}
+.tbmore.open{display:flex;position:absolute;left:0;right:0;bottom:100%;z-index:23;
+  flex-wrap:wrap;gap:4px;padding:6px 8px;overflow:auto;
+  max-height:max(72px,min(200px,calc(100dvh - 100% - 8px)));
+  background:var(--panel);border-top:1px solid var(--line);
+  box-shadow:0 -4px 14px rgba(0,0,0,.12)}
+/* 动作按钮的统一尺寸：格级（停靠条）/ 行级 / 列级三者必须一致 —— 它们本来就共用同一批
+   24 单位图标，尺寸/圆角/描边各写一份就会像现在这样「看着都差不多、放一起却对不齐」。
+   桌面 32×32（停靠条内容高正好 32，不溢出）、触摸 44×44（触屏最小命中区）。 */
+.tbpanel button.ctxbtn,.tbmore button.ctxbtn{width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--line);
+  border-radius:6px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
   cursor:pointer}
-/* 图标 24px（按钮 34×34 ⇒ 偏移 5px）+ 2px 描边，与停靠条那三个动作按钮同一套参数。
-   早先是 17px：偏移落到 8.5 半像素、1px 描边被缩成 0.708px，1 倍屏上线条发灰带缺口（0.19.3 修）。
-   为什么必须是 24/2：见上面格级动作那段注释 —— 同一批 24 单位图标，只有 1:1 才清晰。 */
-.tbpanel button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2}
-.tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
-.tbpanel button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
+/* 图标 24px（32×32 ⇒ 偏移 4px）+ 2px 描边 + 圆端点。端点必须与触摸端一致：
+   桌面不写就是 butt/miter，同一个图标在两端的拐角形状会不同（用户能看出「风格不统一」）。
+   为什么必须 24/2：见上面格级动作那段注释 —— 同一批 24 单位图标，只有 1:1 才清晰。 */
+.tbpanel button.ctxbtn svg,.tbmore button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tbpanel button.ctxbtn:hover,.tbmore button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
+.tbpanel button.ctxbtn[aria-pressed="true"],.tbmore button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
 .is-touch .tbpanel{display:none}
-.is-touch .tbpanel.open{display:flex;flex-wrap:nowrap;gap:8px;padding:8px;
-  overflow-x:auto;overflow-y:hidden}
+.is-touch .tbpanel.open{display:flex;flex-wrap:nowrap;gap:8px;padding:8px;overflow:hidden}
+.is-touch .tbmore.open{display:flex;position:absolute;left:0;right:0;bottom:100%;z-index:23;
+  flex-wrap:wrap;gap:8px;padding:8px;overflow:auto;
+  max-height:max(72px,min(62dvh,260px,calc(100dvh - 100% - 8px)));
+  background:var(--panel);border-top:1px solid var(--line);
+  box-shadow:0 -6px 18px rgba(0,0,0,.12)}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:13px var(--sans);touch-action:manipulation}
 /* 上下文图标条：44×44 方块 + 居中线条图标；图标画的是「被操作对象的缩略图」 */
-.is-touch .tbpanel button.ctxbtn{min-width:44px;width:44px;height:44px;min-height:44px;padding:0;
+.is-touch .tbpanel button.ctxbtn,.is-touch .tbmore button.ctxbtn{min-width:44px;width:44px;height:44px;min-height:44px;padding:0;
   display:flex;align-items:center;justify-content:center}
-.is-touch .tbpanel button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
-  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.is-touch .tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.is-touch .tbpanel button.ctxbtn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.is-touch .tbpanel button.ctxbtn svg,.is-touch .tbmore button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
+  stroke-width:2}
+.is-touch .tbpanel button.ctxbtn:active,.is-touch .tbmore button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.is-touch .tbpanel button.ctxbtn[aria-pressed="true"],.is-touch .tbmore button.ctxbtn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel button:active{background:var(--accent-bg);border-color:var(--accent)}
 .is-touch .toast{display:none;position:fixed;left:50%;bottom:calc(12px + var(--toast-lift,0px));transform:translateX(-50%);z-index:30;
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
@@ -222,11 +240,15 @@ svg{display:block;font-family:var(--sans)}
   /* 23 颗 × 30px ≈ 690：窄卡片（如 520 的 iframe）放不下时必须横向滚动，
      不能居中溢出 —— 居中会让第一颗跑到负坐标，用户看不到也点不到。 */
   overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
-.chardock .chipbtn{position:relative;flex:0 0 30px;width:30px;height:28px;min-width:30px;padding:0;
+/* 基础样式必须同时覆盖「⋯」弹层（.charmore）：字符被宽度挤进弹层时，按钮仍是同一个组件。
+   此前只写了 .chardock —— 桌面窄卡片（如主页 360px 的嵌入卡）里大部分字符都在 ⋯ 里，
+   于是退化成浏览器默认按钮：字形按内联流排在按钮上、字母被挤到下面（用户实测「主页的 P
+   和编辑页的 P 不是一个设计」）。触摸端早就有 .charmore 版本，桌面端漏了。 */
+.chardock .chipbtn,.charmore .chipbtn{position:relative;flex:0 0 30px;width:30px;height:28px;min-width:30px;padding:0;
   border:1px solid var(--line);border-radius:6px;background:var(--src-bg);color:var(--ink);overflow:hidden}
-.chardock .chipbtn:not(.act) svg{position:absolute;inset:0;width:100%;height:100%;
+.chardock .chipbtn:not(.act) svg,.charmore .chipbtn svg{position:absolute;inset:0;width:100%;height:100%;
   --wave-ink:var(--muted);opacity:.85;pointer-events:none}
-.chardock .chipbtn span{position:relative;font:600 12px var(--mono);
+.chardock .chipbtn span,.charmore .chipbtn span{position:relative;font:600 12px var(--mono);
   text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
 /* 停靠条左侧的三个格级动作（label / node / link）：与字符同尺寸，靠一条竖线分开。
    它们画的是 24×24 网格的 stroke 图，不是波形预览，所以不套字符那套配色与缩放。
@@ -241,18 +263,21 @@ svg{display:block;font-family:var(--sans)}
    ⚠️ 尺寸与描边也是功能性的：24 单位的图标必须 **24px 1:1 渲染 + 2px 描边**。缩成 17px 就是
    0.708 倍，1px 描边变成亚像素、中心还落在半像素上 —— 抗锯齿把线摊到两个像素，1 倍屏上
    斜边断口、圆环发灰（0.19.3 用户实测「头两个按钮图标异常」；2 倍屏和缩略图上都看不出来）。 */
+/* 桌面尺寸与行/列动作按钮对齐（32×32）：三者共用同一批 24 单位图标，按钮也必须同大。
+   停靠条内容高恰好 32（--dock-chars 40 − 上下 padding 4×2），不会溢出。
+   端点同样用 round —— 与上下文条、触摸端保持同一套画笔。 */
+.chardock .chipbtn.act{flex:0 0 32px;width:32px;min-width:32px;height:32px}
 .chardock .chipbtn.act svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2}
+  width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
 /* 触摸端这三个按钮收到 44（不跟字符的 48）：320px 卡片里省下的 12px 正好能多摆一颗字符。
    图标尺寸沿用上面的 24，不另设 —— 多出来的空间留给命中区。 */
 .is-touch .chardock .chipbtn.act{flex:0 0 44px;width:44px;min-width:44px;height:44px}
 .docksep{flex:0 0 1px;align-self:stretch;margin:6px 6px;background:var(--line)}
-.chardock .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
-.chardock .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
-.chardock .chipbtn.on span{color:var(--accent)}
-.chardock .chipbtn:hover{border-color:var(--accent)}
-.chardock .chipbtn.clear{flex:0 0 26px;width:26px;min-width:26px}
-.chardock .chipbtn.clear span{font-size:14px;color:var(--muted)}
+.chardock .chipbtn.on,.charmore .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
+.chardock .chipbtn.on svg,.charmore .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
+.chardock .chipbtn.on span,.charmore .chipbtn.on span{color:var(--accent)}
+.chardock .chipbtn:hover,.charmore .chipbtn:hover{border-color:var(--accent)}
 .is-touch .chardock.open{display:flex;
   align-items:center;gap:6px;padding:6px 8px;
   background:var(--panel);border-top:1px solid var(--line);
@@ -274,19 +299,17 @@ svg{display:block;font-family:var(--sans)}
   max-height:max(72px,min(200px,calc(100dvh - 100% - 8px)));
   background:var(--panel);border-top:1px solid var(--line);
   box-shadow:0 -4px 14px rgba(0,0,0,.12)}
+/* 触摸端只覆盖「与桌面不同」的三项：尺寸（48×44 命中区）、圆角 10、字号 15。
+   叠加定位、配色与选中态由上面的基础规则统一给出，不再重复一遍 —— 之前这里把
+   `.charmore` 也抄了一份，正是「桌面漏写 .charmore」这个坑的另一半。 */
 .is-touch .chardock .chipbtn,.is-touch .charmore .chipbtn{position:relative;flex:0 0 48px;
   width:48px;height:44px;min-width:48px;padding:0;border:1px solid var(--line);border-radius:10px;
   background:var(--src-bg);color:var(--ink);touch-action:manipulation;overflow:hidden}
-.is-touch .chardock .chipbtn:not(.act) svg,.is-touch .charmore .chipbtn svg{position:absolute;inset:0;
-  width:100%;height:100%;--wave-ink:var(--muted);opacity:.85;pointer-events:none}
 .is-touch .chardock .chipbtn span,.is-touch .charmore .chipbtn span{position:relative;
   font:600 15px var(--mono);text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
-.is-touch .chardock .chipbtn.on,.is-touch .charmore .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
-.is-touch .chardock .chipbtn.on svg,.is-touch .charmore .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
-.is-touch .chardock .chipbtn.on span,.is-touch .charmore .chipbtn.on span{color:var(--accent)}
 .is-touch .chardock .chipbtn:active,.is-touch .charmore .chipbtn:active{background:var(--accent-bg);border-color:var(--accent)}
-.is-touch .chardock .chipbtn.more,.is-touch .chardock .chipbtn.clear{flex:0 0 44px;width:44px;min-width:44px}
-.is-touch .chardock .chipbtn.more span,.is-touch .chardock .chipbtn.clear span{font-size:18px;color:var(--muted)}
+.is-touch .chardock .chipbtn.more{flex:0 0 44px;width:44px;min-width:44px}
+.is-touch .chardock .chipbtn.more span{font-size:18px;color:var(--muted)}
 /* 右边缘淡出：提示这排还能横向滑（23 个字符一排放不下） */
 .is-touch .chardock.open::after{content:"";position:sticky;right:0;flex:0 0 18px;
   align-self:stretch;margin-left:-18px;

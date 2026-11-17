@@ -10,7 +10,7 @@ import { chipGlyph, chipDesc } from './waveform.js';
 import { esc } from '../core/util.js';
 
 export function attachTouchUI(ctx, dom) {
-  var topbar = dom.topbar, panel = dom.tbpanel, toast = dom.toast;
+  var topbar = dom.topbar, panel = dom.tbpanel, tbmore = dom.tbmore, toast = dom.toast;
   var dock = dom.chardock, more = dom.charmore;
   // 不再因为「没有底部操作栏 / 上下文条容器」整块退出：字符停靠条（dock）在桌面
   // 与验收页里也要工作，缺哪个节点就跳过哪部分（下面各函数自带空值保护）。
@@ -150,6 +150,11 @@ export function attachTouchUI(ctx, dom) {
     link:   '<circle cx="6.5" cy="12" r="2.6"/><circle cx="17.5" cy="12" r="2.6"/><path d="M9.1 12h5.8"/>'
   };
   var ICON_KEY = { delete: 'delCol' };
+  // 24 单位线性图标的拼装只写一处：格级动作与行/列动作共用同一批路径，
+  // 各写一份就等于同一图标有两处可能漂移的字符串。
+  function iconSvg(name) {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[ICON_KEY[name] || name] || '') + '</svg>';
+  }
   var NAMES = {
     name: 'signal name', wave: 'row wave', data: 'row data', nodeStr: 'row node',
     label: 'cell data label', node: 'cell node marker',
@@ -243,7 +248,7 @@ export function attachTouchUI(ctx, dom) {
     })(els[i]);
   }
 
-  var ctxKind = null, ctxKey = null, ctxActKey = '', ctxLinkFlag = '-';
+  var ctxKind = null, ctxKey = null, ctxActKey = '', ctxLinkFlag = '-', ctxMoreOpen = false;
   // 打开面板那一刻的滚动位置（见 renderContext 末尾）：用于把「布局抖动引发的 scroll」
   // 与「用户真的想滑动」区分开。
   var ctxScroll = null;
@@ -252,9 +257,10 @@ export function attachTouchUI(ctx, dom) {
   // CSS 据此把退出按钮抬到面板上方，谁也不压谁。
   function hideContext() {
     if (ctxKind === null) return;
-    ctxKind = null; ctxKey = null; ctxActKey = '';
+    ctxKind = null; ctxKey = null; ctxActKey = ''; ctxMoreOpen = false;
     panel.classList.remove('open');
     panel.textContent = '';
+    if (tbmore) { tbmore.classList.remove('open'); tbmore.textContent = ''; }
   }
   // 上下文条内容跟着「最后选中的对象」走：格子 → 格级动作，列 → 列动作，行 → 行动作。
   // ---- 动作可用性（0.19.0）--------------------------------------------------
@@ -313,7 +319,24 @@ export function attachTouchUI(ctx, dom) {
     return c < state.ir.ticks;
   }
 
+  // 一个上下文动作按钮：面板本体与「⋯」溢出弹层共用，保证两处的图标 / 语义完全一致。
+  function makeCtxBtn(k) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ctxbtn';
+    b.setAttribute('data-act', k);
+    b.setAttribute('data-name', NAMES[k] || k);
+    b.setAttribute('aria-label', NAMES[k] || k);
+    // 这些按钮只有图标、没有文字，桌面端 mouse 用户能拿到的唯一线索就是 title。
+    b.title = NAMES[k] || k;
+    if (k === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
+    b.innerHTML = iconSvg(k);
+    return b;
+  }
+
   // 三级共用同一个容器与同一段渲染代码，差别只是喂进去的动作清单。
+  // 溢出处理与字符停靠条一致：放不下的收进「⋯」，不再让整条横向滚动 ——
+  // 滚动在触摸端很容易和「滑动看画布」混淆，而「⋯」是单向、明确的。
   function renderContext() {
     if (!panel) return;                           // 不跑编辑器的页面（如验收页）没有上下文条容器
     if (ctx.inlineCtx) { hideContext(); return; }
@@ -326,34 +349,58 @@ export function attachTouchUI(ctx, dom) {
     if (state.sel !== null && state.sel !== undefined) { kind = 'col'; acts = COL_ACTS.filter(availCol); key = state.sel; }
     else if (state.selLane) { kind = 'row'; acts = ROW_ACTS.filter(availRow); key = state.selLane; laneOf = state.selLane; }
     if (!kind) { hideContext(); return; }
+    // 按可用宽度决定「摆几个 + ⋯」：按钮尺寸与面板的 gap / padding 必须跟 CSS 一致
+    // （见 .tbpanel button.ctxbtn：桌面 32 / 触摸 44；gap 4 / 8；左右 padding 各 8）。
+    // ⋯ 按钮本身也占一个按钮宽。数字不同步就会白白多折一个动作。
+    var ctxW = TOUCH ? 44 : 32, ctxGap = TOUCH ? 8 : 4, padX = 16;
+    var host = panel.parentElement;
+    var avail = (host ? host.clientWidth : panel.clientWidth) - padX;
+    var fitAll = Math.floor((avail + ctxGap) / (ctxW + ctxGap));
+    var fit, hiddenActs;
+    if (fitAll >= acts.length) { fit = acts.length; hiddenActs = []; }
+    else {
+      // 给「⋯」留一格（含其后的 gap），剩下的才放动作；宁可少放一个也不横向溢出。
+      fit = Math.max(0, Math.floor((avail - ctxW - ctxGap) / (ctxW + ctxGap)));
+      fit = Math.min(fit, acts.length);
+      hiddenActs = acts.slice(fit);
+    }
     // 同一对象不重绘（避免连点闪烁）—— 但必须确认面板**当前真的是开着的**：
     // 面板可能被 hideContext 清空过而 key 未变（清空路径不止一条），此时若只看 key
     // 就会跳过重建，表现为「点了行、面板却空着」。
-    // 可用集也要进 key：同一个格子把字符从 `0` 改成 `=` 之后 `label` 由隐藏变可用，
-    // 只看对象 key 就会跳过重建、按钮停留在旧状态。
+    // 可用集 / 折分数 / ⋯ 开合也要进 key：否则改了字符让 label 由隐藏变可用，
+    // 或点了 ⋯ 之后，都会因「同一对象」被跳过而不更新。
     var linkFlag = state.linkMode ? 'L' : '-';
-    var actKey = acts.join(',');
+    var actKey = acts.join(',') + '|' + fit + '|' + (ctxMoreOpen ? 'M' : '-');
     if (ctxKind === kind && ctxKey === key && ctxActKey === actKey && ctxLinkFlag === linkFlag &&
         panel.classList.contains('open') && panel.childNodes.length) return;
     ctxKind = kind; ctxKey = key; ctxActKey = actKey; ctxLinkFlag = linkFlag;
     panel.textContent = '';
-    acts.forEach(function (k) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'ctxbtn';
-      b.setAttribute('data-act', k);
-      b.setAttribute('data-name', NAMES[k] || k);
-      b.setAttribute('aria-label', NAMES[k] || k);
-      // 这些按钮只有 17px 图标、没有文字，桌面端 mouse 用户能拿到的唯一线索就是 title。
-      // 之前只写了 aria-label（读屏能读，鼠标悬停什么都没有），等于把「14 个图标靠猜」
-      // 留给了视力正常但没记住含义的人 —— 补 title 是零视觉变化的一条。
-      b.title = NAMES[k] || k;
-      if (k === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
-      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[ICON_KEY[k] || k] || '') + '</svg>';
-      panel.appendChild(b);
-    });
+    acts.slice(0, fit).forEach(function (k) { panel.appendChild(makeCtxBtn(k)); });
+    if (hiddenActs.length) {
+      var mb = document.createElement('button');
+      mb.type = 'button';
+      mb.className = 'ctxbtn more' + (ctxMoreOpen ? ' on' : '');
+      mb.setAttribute('data-ctxmore', '1');
+      mb.setAttribute('data-name', 'more actions');
+      mb.setAttribute('aria-label', 'More actions');
+      mb.setAttribute('aria-expanded', String(ctxMoreOpen));
+      mb.title = 'More actions';
+      mb.innerHTML = '<span>⋯</span>';
+      panel.appendChild(mb);
+      if (tbmore) {
+        tbmore.textContent = '';
+        if (ctxMoreOpen) {
+          hiddenActs.forEach(function (k) { tbmore.appendChild(makeCtxBtn(k)); });
+          tbmore.classList.add('open');
+        } else tbmore.classList.remove('open');
+      }
+    } else if (tbmore) {
+      tbmore.textContent = '';
+      tbmore.classList.remove('open');
+    }
     panel.classList.add('open');
     bindLongName(panel);
+    if (ctxMoreOpen && tbmore) bindLongName(tbmore);
     // 记下「打开面板这一刻的滚动位置」：重绘会换掉 SVG，内容尺寸变化可能让浏览器把
     // scrollTop 夹回去并派发 scroll —— 那不是用户想滑动，不能拿它收面板（否则刚弹就消失）。
     ctxScroll = ctx.wrap ? { left: ctx.wrap.scrollLeft, top: ctx.wrap.scrollTop } : null;
@@ -369,12 +416,16 @@ export function attachTouchUI(ctx, dom) {
         ? { left: ctx.wrap.scrollLeft, top: ctx.wrap.scrollTop } : null;
     }
   }
-  if (panel) panel.addEventListener('click', function (e) {
+  function onCtxClick(e) {
+    var mb = e.target && e.target.closest ? e.target.closest('button[data-ctxmore]') : null;
+    if (mb) { ctxMoreOpen = !ctxMoreOpen; ctxActKey = ''; renderContext(); return; }
     var b = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
     if (!b) return;
     // 不收起面板：多个动作常需连点（如连按上移），重绘后 renderContext 会按新状态更新。
     doAct(b.getAttribute('data-act'));
-  });
+  }
+  if (panel) panel.addEventListener('click', onCtxClick);
+  if (tbmore) tbmore.addEventListener('click', onCtxClick);
 
   // ---- 字符停靠条 ---------------------------------------------------------
   // 触摸端不再把 23 个字符画进 SVG 里（那条东西会钉在画布底部、随着滚动被反复 transform，
@@ -422,8 +473,7 @@ export function attachTouchUI(ctx, dom) {
     b.setAttribute('aria-label', NAMES[act] || act);
     b.title = NAMES[act] || act;
     if (act === 'link') b.setAttribute('aria-pressed', String(!!state.linkMode));
-    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-      (ICONS[ICON_KEY[act] || act] || '') + '</svg>';
+    b.innerHTML = iconSvg(act);
     return b;
   }
   function renderDock() {
@@ -439,8 +489,8 @@ export function attachTouchUI(ctx, dom) {
     // 触摸端 gap 取 4（原 6）：左侧多了三个常驻按钮，320px 卡片里那 2px/个的余量正好决定
     // 「能不能摆下一颗字符」。按钮本身也收到 44（触屏最小可点尺寸），再加就要靠横向滚动。
     var chipW = TOUCH ? 48 : 30, gap = TOUCH ? 4 : 4;
-    var clearW = TOUCH ? 44 : 26, moreW = TOUCH ? 44 : 30;
-    var actW = TOUCH ? 44 : 30;
+    var moreW = TOUCH ? 44 : 30;
+    var actW = TOUCH ? 44 : 32;   // 与 .chipbtn.act 的桌面 32×32 对齐（见 styles.css）
     // 左侧格级动作 + 分隔线占掉的宽度，从预算里扣掉。**按实际会画出来的数量算** ——
     // 不可用的动作已被 availCell 过滤（普通电平格没有 label、续写格没有 node），
     // 按清单长度算就会白白让出宽度、字符被不必要地折叠。
@@ -456,10 +506,10 @@ export function attachTouchUI(ctx, dom) {
     var order = QUICK.concat(Core.ALL.filter(function (v) { return QUICK.indexOf(v) < 0; }));
     if (state.ch && order.indexOf(state.ch) < 0) order.unshift(state.ch); // 当前字符永远可见
     var total = charsOn ? order.length : 0;
-    // 预算的准确口径：n 颗字符 + n 个间隙 + ⋯ 按钮 + ✕ 按钮 + 一个间隙 ≤ budget
-    //   ⇒ n ≤ (budget − moreW − clearW − gap) / (chipW + gap)
+    // 预算的准确口径：n 颗字符 + n 个间隙 ≤ budget（停靠条不再有 ✕ 关闭按钮）
+    //   ⇒ n ≤ budget / (chipW + gap)；放不下时再给「⋯」让出一格。
     // 写成 `+ gap` 会多算一颗的余量，360px 这种宽度就会溢出 8px（实测过）。
-    var fitAll = Math.floor((budget - clearW) / (chipW + gap));
+    var fitAll = Math.floor(budget / (chipW + gap));
     var fit, hidden;
     if (!charsOn) { fit = 0; hidden = []; }
     else if (fitAll >= total) { fit = total; hidden = []; }
@@ -467,7 +517,7 @@ export function attachTouchUI(ctx, dom) {
       // 不再用 `QUICK.length` 兜底：左侧三个按钮吃掉宽度后，320px 卡片只够摆 1 颗，
       // 强留 4 颗就会横向溢出、被裁在卡片外（用户点不到）。宁可全部收进 ⋯ ——
       // 用户的要求正是「显示不下的字符条依然放到 ⋯」，宁可多收不可溢出。
-      fit = Math.max(0, Math.floor((budget - clearW - moreW - gap) / (chipW + gap)));
+      fit = Math.max(0, Math.floor((budget - moreW - gap) / (chipW + gap)));
       fit = Math.min(fit, total);
       hidden = order.slice(fit);
     }
@@ -506,14 +556,6 @@ export function attachTouchUI(ctx, dom) {
       more.textContent = ''; more.classList.remove('open');
       document.documentElement.classList.remove('more-open');
     }
-    var xb = document.createElement('button');
-    xb.type = 'button';
-    xb.className = 'chipbtn clear';
-    xb.setAttribute('data-clear', '1');
-    xb.setAttribute('data-name', 'done');
-    xb.setAttribute('aria-label', 'Done editing this cell');
-    xb.innerHTML = '<span>✕</span>';
-    dock.appendChild(xb);
     dock.classList.add('open');
     bindLongName(dock);
     if (moreOpen && more) bindLongName(more);
@@ -522,7 +564,6 @@ export function attachTouchUI(ctx, dom) {
     var b = e.target && e.target.closest ? e.target.closest('button') : null;
     if (!b) return;
     if (b.getAttribute('data-more')) { moreOpen = !moreOpen; dockKey = null; renderDock(); return; }
-    if (b.getAttribute('data-clear')) { state.selCell = null; moreOpen = false; ctx.redraw(); return; }
     // 左侧三个格级动作：走与上下文条同一个 doAct，执行体只有一份
     var ca = b.getAttribute('data-cellact');
     if (ca) { doAct(ca); return; }

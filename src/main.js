@@ -15,6 +15,7 @@ const ctx = createEditor({
   isEmbed:  EMBED,   // 三视图默认值靠它：嵌入卡=只图形，独立页=双栏
   topbar:   document.getElementById('topbar'),
   tbpanel:  document.getElementById('tbpanel'),
+  tbmore:   document.getElementById('tbmore'),
   chardock: document.getElementById('chardock'),
   charmore: document.getElementById('charmore'),
   toast:    document.getElementById('toast')

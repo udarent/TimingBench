@@ -84,7 +84,7 @@ Don't want to hand-write any of this? Draw the diagram in the editor and click `
 - **No mouse needed.** Every edit has a shortcut; the canvas takes focus with `Tab` or `F6`.
 - **Nothing leaves the page.** No requests, no accounts, no telemetry.
 
-On touch devices the same editor runs in a dedicated layout: 44 px targets, the 23 characters in a dock that slides up from the bottom of the card, and the panes stacked. Two fingers pinch to zoom the canvas (0.2–4×, shrinking at most until the whole diagram fits; anchored between the fingers) and pan the view; one finger still scrolls natively. On desktop and in embed cards it is `Ctrl`/`⌘` + wheel (a trackpad pinch arrives as exactly that). Read-only cards zoom too, and the height reported to the host stays unchanged. `?touch=1` previews that layout on a desktop.
+On touch devices the same editor runs in a dedicated layout: 44 px targets, the 23 characters in a dock that slides up from the bottom of the card, and the panes stacked. Whatever does not fit a bar — characters or row / column actions — collapses behind a `⋯` button instead of scrolling sideways. Two fingers pinch to zoom the canvas (0.2–4×, shrinking at most until the whole diagram fits; anchored between the fingers) and pan the view; one finger still scrolls natively. On desktop and in embed cards it is `Ctrl`/`⌘` + wheel (a trackpad pinch arrives as exactly that). Read-only cards zoom too, and the height reported to the host stays unchanged. `?touch=1` previews that layout on a desktop.
 
 ## Keyboard shortcuts
 
