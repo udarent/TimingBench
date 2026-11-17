@@ -123,6 +123,28 @@ svg{display:block;font-family:var(--sans)}
 .topbar .hudBtn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .topbar .hudBtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
 .topbar .hudBtn.dim,.topbar .hudBtn:disabled{opacity:.4;cursor:default}
+/* 视图分段控件：三个互斥按钮拼成一组，当前态高亮。与 hudBtn 同高，触摸端同样放大到 44px。 */
+.viewSeg{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--src-bg)}
+.topbar .viewBtn{min-width:38px;height:26px;padding:0 8px;border:0;border-right:1px solid var(--line);
+  border-radius:0;background:transparent;color:var(--muted);cursor:pointer;
+  display:grid;place-items:center;font:600 12px/1 var(--sans)}
+.topbar .viewBtn:last-child{border-right:0}
+.topbar .viewBtn:hover{color:var(--accent);background:var(--accent-bg)}
+.topbar .viewBtn.sel{background:var(--accent);color:#fff}
+.is-touch .viewSeg{border-radius:10px}
+.is-touch .topbar .viewBtn{min-width:52px;height:44px;font-size:13px}
+/* 三视图显隐：data-view 由状态层写到 .app 上。both=两个 pane 都在（原布局规则照常生效），
+   diagram/code=只留一个并把 grid 收成单格。用 display:none 而非 visibility，
+   让隐藏的 textarea 不参与 Tab 序列、也不吃焦点。 */
+.app[data-view="diagram"]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.app[data-view="diagram"] .pane.src{display:none}
+.app[data-view="code"]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.app[data-view="code"] .pane.diagram{display:none}
+.app[data-view="code"] .pane.src{border-right:0;border-bottom:0}
+/* 嵌入卡片的 both 视图必须显式给两行：.is-embed .app 只定义了单行 grid，
+   两个 pane 时第二个落进「按内容撑高」的隐式行、第一行（源码）被挤到 2px
+   —— 用户实测「双栏看不到代码区」的根因。提高特异性压过 .is-embed .app 的单行定义。 */
+.is-embed .app[data-view="both"]{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
 /* 只读态没有任何全局动作 → 顶栏整条不占位（否则卡片 iframe 会白白高 40px） */
 .topbar:empty{display:none}
 .is-touch{--dock-acts:61px;--dock-chars:56px}
@@ -310,8 +332,10 @@ svg{display:block;font-family:var(--sans)}
 /* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；安全区由 .dockzone 统一让出
    （0.10.4 起停靠区是一行定高，两条并排，不再各自加 padding-bottom）。
    卡片编辑态的「单行横向滚动」不再是特例 —— 整页与卡片共用同一条单行规则。 */
-.is-embed .pane.src{display:none!important}
-/* 卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
+/* 嵌入卡片的源码 pane 不再无条件隐藏 —— 编辑态可切到代码视图（0.23.0）。
+   只读态仍只显示波形：data-view 默认就是 diagram，且 setReadonly 会强制复位到 diagram，
+   所以这里不再需要 display:none!important（那条会把编辑态的代码视图一起藏掉）。
+   卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
    之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，
    下面几行会被裁掉且没有可滚动容器（纵向根本没有滚动条），手机上等于「看不见也点不到」。
    只读态内容本来就等比缩到卡片宽、不会溢出，所以看不出差别。 */

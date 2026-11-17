@@ -647,6 +647,52 @@ function check() {
   // 顶栏按钮表来自 cap.js（HUD_ITEMS 里有 embed），渲染在 touch.js 的 renderTopbar
   ok(/'embed'/.test(read('src/editor/cap.js')) && /TOP_META/.test(read('src/editor/touch.js')),
     '顶栏未提供嵌入代码入口');
+
+  // ---- 三视图切换（图形 / 代码 / 双栏）：四层缺一不可 -----------------------------
+  // ① 状态层：state.view 只有三种合法值，doCmd 分发 view:*，默认嵌入=diagram、独立=both。
+  // 判据咬 currentView/setView 的实现与 doCmd 的三分支，不咬注释。
+  ok(/function currentView\(\)/.test(editorSrc) && /function setView\(v\)/.test(editorSrc) &&
+     /VIEWS\s*=\s*\{\s*diagram:1,\s*code:1,\s*both:1\s*\}/.test(editorSrc) &&
+     /view:\(dom\.isEmbed\?'diagram':'both'\)/.test(editorSrc),
+    '状态层缺少三视图状态：currentView/setView 或 state.view 默认值');
+  // 默认值依赖 dom.isEmbed —— 必须真的从 main.js 传进来（曾漏传，只读嵌入卡默认成 both、
+  // 露出可编辑代码框）；嵌入壳再显式设一次 diagram 作双保险。
+  ok(/isEmbed:\s*EMBED/.test(read('src/main.js')) &&
+     /ctx\.setView\('diagram'\)/.test(embedSrc),
+    '嵌入卡的「默认只图形」没有落地：main.js 未传 isEmbed，或嵌入壳未显式复位 diagram');
+  ok(/act==='view:diagram'\|\|act==='view:code'\|\|act==='view:both'/.test(editorSrc) &&
+     /setView\(act\.slice\(5\)\)/.test(editorSrc),
+    'doCmd 未分发三个视图命令 view:diagram/code/both');
+  // ② 能力表：view 进 HUD_ITEMS，且嵌入卡片不过滤它（hudCmds 只滤 layout / embed）。
+  var capSrc = read('src/editor/cap.js');
+  ok(/\['undo', *'redo', *'layout', *'view', *'embed'\]/.test(capSrc) &&
+     /if \(c === 'layout'\) return !inCard;/.test(capSrc),
+    '能力表缺少 view 项，或把 view 当成 layout 一起从嵌入卡片里滤掉了');
+  // ③ 顶栏渲染：三段分段控件，三个 data-cmd=view:*，互斥 aria-pressed，切视图触发重建。
+  var touchViewSrc = read('src/editor/touch.js');
+  ok(/VIEW_SEGS\s*=\s*\[/.test(touchViewSrc) &&
+     /'data-cmd', *'view:' *\+ *s\.v/.test(touchViewSrc) &&
+     /aria-pressed', *s\.v === view/.test(touchViewSrc) &&
+     /\|' *\+ *view;/.test(touchViewSrc),
+    '顶栏缺少三视图分段控件，或切视图不触发重建（视图键未进 renderTopbar 的 key）');
+  // ④ CSS：data-view 控制 pane 显隐；嵌入源码 pane 不再无条件 display:none!important。
+  ok(/\.app\[data-view="diagram"\] \.pane\.src\{display:none\}/.test(cssSrc) &&
+     /\.app\[data-view="code"\] \.pane\.diagram\{display:none\}/.test(cssSrc) &&
+     !/\.is-embed \.pane\.src\{display:none!important\}/.test(cssSrc),
+    '三视图显隐 CSS 缺失，或嵌入源码 pane 仍被硬隐藏（代码视图永远显示不出来）');
+  // ⑤ 嵌入退出编辑强制复位 diagram（否则只读卡片露出可编辑代码框）。
+  ok(/!on && ctx\.setView/.test(embedSrc) && /ctx\.setView\('diagram'\)/.test(embedSrc),
+    '嵌入退出编辑未复位到只图形视图：只读卡片会露出可编辑代码框');
+  // ⑥ 代码视图给 iframe 上报最小高度（单行波形切到代码时代码框不能矮到没法写）。
+  ok(/view === 'code'/.test(embedSrc) && /Math\.max\(content, *220\)/.test(embedSrc),
+    '代码视图缺少最小高度上报：单行波形的卡片切到代码后无法编辑');
+  // ⑦ 双栏视图两个坑（用户实测「双栏看不到代码区」）：
+  //    a) .is-embed .app 只定义单行 grid，必须给 both 显式两行，否则源码 pane 被挤到 2px；
+  //    b) 高度上报必须给 both 留两行空间，否则宿主 iframe 只够一行。
+  ok(/\.is-embed \.app\[data-view="both"\]\s*\{\s*grid-template-rows:\s*minmax\(0,1fr\)\s+minmax\(0,1fr\)/.test(cssSrc),
+    '嵌入双栏缺少显式两行 grid：源码 pane 会被挤成 2px（看不到代码区）');
+  ok(/view === 'both'/.test(embedSrc) && /Math\.max\(content, *220\) \* 2/.test(embedSrc),
+    '双栏视图高度上报没留两行空间：宿主 iframe 只够一行、源码被挤没');
   // 嵌入只读卡片必须按容器宽度等比缩小：否则 320/360px 手机上只能看到半张波形，
   // 而读者不会去横向拖一张只读卡片。缩放只改 svg 渲染尺寸，viewBox 保持内部坐标。
   // 缩放规则（2026-11-14 起）：内容比容器宽就等比缩到容器宽，只改 svg 渲染尺寸，
@@ -838,6 +884,21 @@ function check() {
     }
     ok(tricky, '载荷编解码在空串 / 非 ASCII / 长文本上往返不一致');
     ok(/^[A-Za-z0-9_-]*$/.test(encodePayload(EXAMPLE)), '载荷出现需要再转义的字符（不是 base64url）');
+  }
+  // 压缩单行源码进入代码视图前要排成多行（data-wavejson / URL 片段塞进来的都是压缩单行）。
+  // 判据：① 单行变多行且语义等价；② 已分行 / 带注释的源码原样保留（emitIR 会丢注释，不能碰）。
+  {
+    const min = "{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'dat', wave: 'x.3x', data: ['A'] } ] }";
+    const pretty = Core.formatSource(min);
+    ok(pretty.indexOf('\n') >= 3, '压缩单行源码未被格式化成多行');
+    ok(Core.canon(Core.buildIR(pretty)) === Core.canon(Core.buildIR(min)), '格式化后语义不等价');
+    ok(Core.formatSource(EXAMPLE) === EXAMPLE, '已分行且带注释的源码被误格式化（注释会丢）');
+    ok(Core.formatSource("// only comment\n{ signal: [ { name: 'a', wave: '01' } ] }").indexOf('// only comment') === 0,
+      '带注释的源码被误格式化');
+    ok(Core.formatSource('{ bad source') === '{ bad source', '无法解析的源码被改动');
+    // 载入链路两处都要调用 formatSource（setSource 宿主指令 + hashPayload URL 片段）
+    ok(/Core\.formatSource\(d\.wavejson\)/.test(shellSrc) && /Core\.formatSource\(seeded\)/.test(shellSrc),
+      '嵌入载入链路未接入格式化（代码视图仍会挤成一行）');
   }
   // 动作清单已集中到 cap.js（ACTS），touch.js 只引用；两边任一处脱钩都算失败。
   // 行动作 15 个：12 个行编辑 + 分组三件套（group / spanUp / spanDown）。

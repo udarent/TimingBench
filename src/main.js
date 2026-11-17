@@ -12,6 +12,7 @@ const ctx = createEditor({
   gutter:   document.getElementById('gutter'),
   errdot:   document.getElementById('errdot'),
   app:      document.getElementById('app'),
+  isEmbed:  EMBED,   // 三视图默认值靠它：嵌入卡=只图形，独立页=双栏
   topbar:   document.getElementById('topbar'),
   tbpanel:  document.getElementById('tbpanel'),
   chardock: document.getElementById('chardock'),

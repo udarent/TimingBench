@@ -564,7 +564,28 @@ export const Core = (function () {
   }
   function parseObject(src){ var p=new Parser(src); p.ws(); if(p.s[p.i]==='(') p.i++; return materialize(p.value()); }
 
+  // 把「压缩成单行」的源码排成多行易读格式；原本就分行 / 带注释的源码原样返回。
+  // 为什么只处理单行：emitIR 从 IR 重建源码，会丢掉注释与用户手写排版；对已经有自己
+  // 格式的源码做这件事是破坏性的。而 data-wavejson / URL 片段塞进来的都是压缩单行，
+  // 没有注释可丢 —— 这类正是「切到代码视图挤成一行」的来源，安全地格式化它们即可。
+  // 解析失败也原样返回：格式化是显示层的事，绝不能因为格式化报错就挡住编辑。
+  function formatSource(src){
+    src = String(src == null ? '' : src);
+    // 已有换行或含注释 → 视作用户排版，不碰。// 与 /* 都要挡（字符串里的 // 极少见，
+    // 且即便误判也只是「不格式化」，不会损坏内容）。
+    var body = src.replace(/^\s+|\s+$/g, '');
+    if (body.indexOf('\n') >= 0 || body.indexOf('\r') >= 0 || body.indexOf('//') >= 0 || body.indexOf('/*') >= 0) return src;
+    var ir;
+    try { ir = buildIR(src); }
+    catch (e) { return src; }
+    try {
+      var out = emitIR(ir);
+      // 语义兜底：格式化结果必须与原 IR 等价，否则不采用（防御 emitIR 未来的任何偏差）。
+      return canon(buildIR(out)) === canon(ir) ? out : src;
+    } catch (e) { return src; }
+  }
+
   return { buildIR:buildIR, emitIR:emitIR, canon:canon, applyOp:applyOp, patchSource:patchSource, clone:clone,
     laneWave:laneWave, laneLabels:laneLabels, quote:quote, enc:enc, parseObject:parseObject, normalizeSlots:normalizeSlots,
-    BUS:BUS, LEVEL:LEVEL, CLOCK:CLOCK, ALL:ALL };
+    formatSource:formatSource, BUS:BUS, LEVEL:LEVEL, CLOCK:CLOCK, ALL:ALL };
 })();

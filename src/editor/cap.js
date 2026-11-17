@@ -66,14 +66,17 @@ export var CAP = {
 // 「连线」和「嵌入代码」一起摘掉。两张图标的去留其实各有理由，现在分开声明：
 //   · 连线（◇）：0.9.17 从 HUD 移到底部上下文条（与 label / node 同排，见 ACTS），
 //     四场景统一走动作行，不再占顶栏。触摸卡片因此也能连线（旧实现里被顺带摘掉了）。
+//   · 视图（view）：三段分段控件「图形 / 代码 / 双栏」，决定哪几个 pane 在。嵌入卡片里
+//     也要显示 —— 卡片进编辑后能切到代码视图是它的核心用途（0.23.0 加）。
 //   · 嵌入代码（<>）：只在「触摸卡片」里去掉。卡片本身只有三四百像素宽，四个图标
 //     就是 190px 的浮层；而「把这张卡片再嵌一次」在那里确实没有意义。桌面卡片保留
 //     —— 边画边取片段是常见用法（工作台离得远时）。
-var HUD_ITEMS = ['undo', 'redo', 'layout', 'embed'];
+var HUD_ITEMS = ['undo', 'redo', 'layout', 'view', 'embed'];
 
 export function hudCmds(scene, inCard) {
   if (!can('hud', scene)) return [];
   // 嵌入卡片只显示画布一个 pane，「分屏方向」永远没有意义 → 一律去掉。
+  // 「视图切换」反过来：编辑态的卡片必须能用它切到代码，所以保留（scene 是 Edit 时 hud 才开）。
   // 「把这张卡片再嵌一次」只在触摸卡片里没意义（三四百像素宽），桌面卡片保留。
   var touchCard = inCard && scene.indexOf('touch') === 0;
   return HUD_ITEMS.filter(function (c) {

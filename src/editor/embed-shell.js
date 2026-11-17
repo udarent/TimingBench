@@ -6,6 +6,7 @@ import { EMBED, EDIT_ON_START } from './embed.js';
 import { G, cellGeo } from './geometry.js';
 import { TOUCH } from './mode.js';
 import { decodePayload } from './payload.js';
+import { Core } from '../core/ir.js';
 
 // 只有 iframe、没有脚本的宿主（Obsidian 笔记、只能贴 HTML 的编辑器）走 URL 片段带内容：
 //   editor.html?embed=1#wj=<base64url(WaveJSON)>
@@ -29,6 +30,9 @@ export function attachEmbed(ctx, opts) {
 
   docEl.classList.add('is-embed');
   state.embedCard=true;        // 画布高度只按内容算，不留视口空白
+  // 嵌入卡首次加载就是只读，必须是「只图形」视图。这里显式设一次，不依赖 index.js
+  // 的 dom.isEmbed 默认值 —— 那个属性曾漏传，只读卡一度默认 both、露出可编辑代码框。
+  if (ctx.setView) ctx.setView('diagram');
 
   // ---- 全屏编辑：卡片太矮时，动作行 + 字符条会把画布挤到几乎不可见 ------------------
   // 嵌入卡片本质是固定尺寸的 iframe，唯一能真正「变大」的办法是浏览器原生全屏。
@@ -92,6 +96,10 @@ export function attachEmbed(ctx, opts) {
   function setEditing(on, anchor, keepFs) {
     var wasReadonly = state.readonly;
     ctx.setReadonly(!on);
+    // 退出编辑回只读：强制回到「只图形」视图。否则上次停在代码视图，卡片就只剩一坨源码，
+    // 而且 textarea 在只读态没设 readOnly（波形区靠事件不响应、代码区却没有），会露出可编辑框。
+    // 进编辑时保持用户上次选的视图——同一会话里切到代码改几句再回来，不该被反复打回图形。
+    if (!on && ctx.setView) ctx.setView('diagram');
     if (anchor && wasReadonly && on) anchorCell(anchor);
     if (hint) {
       hint.setAttribute('aria-label', on ? 'Finish editing and go back to read-only' : 'Edit this timing diagram');
@@ -249,7 +257,17 @@ export function attachEmbed(ctx, opts) {
     var topH = topEl && topEl.offsetHeight ? topEl.offsetHeight : 0;
     var dockEl = document.getElementById('dockzone');
     var dockH = dockEl && dockEl.offsetHeight ? dockEl.offsetHeight : 0;
-    var h = Math.ceil((state.contentH || state.H || 0) + topH + dockH + 2);
+    var content = state.contentH || state.H || 0;
+    // 代码视图：波形 canvas 不显示，contentH 是波形的高度，跟代码框需要的空间无关。
+    // 一张单行波形的卡片 contentH 可能只有几十像素，代码框会矮到没法编辑 —— 给个最小高度，
+    // 让宿主把 iframe 撑到能舒适写源码（顶栏 + 一个够用的代码区）。
+    var view = ctx.currentView ? ctx.currentView() : 'diagram';
+    if (view === 'code') content = Math.max(content, 220);
+    // 双栏：画布 + 源码上下各占一行，iframe 必须比为「只有图形」时更高，
+    // 否则宿主撑开的高度只够一行，第二行（源码）被 grid 挤到 2px —— 看不到代码区。
+    // 再叠一份 canvas 高度给源码行，保证两行都有可编辑空间。
+    else if (view === 'both') content = Math.max(content, 220) * 2;
+    var h = Math.ceil(content + topH + dockH + 2);
     if (h > 0 && Math.abs(h - lastH) >= 1) { lastH = h; post('height', { height: h }); }
   }
   var baseRedraw = ctx.redraw;
@@ -260,8 +278,10 @@ export function attachEmbed(ctx, opts) {
     var d = e.data;
     if (!d || d.source !== 'host' || typeof d.type !== 'string') return;
     if (d.type === 'setSource' && typeof d.wavejson === 'string') {
-      if (ctx.code) ctx.code.value = d.wavejson;
-      ctx.fromCode(d.wavejson);
+      // 宿主 data-wavejson / mount 传来的常是压缩单行 → 排成多行，代码视图才好看易改。
+      var src = Core.formatSource(d.wavejson);
+      if (ctx.code) ctx.code.value = src;
+      ctx.fromCode(src);
       reportHeight();
       return;
     }
@@ -273,8 +293,9 @@ export function attachEmbed(ctx, opts) {
   // 片段先落地，宿主的 setSource 到了自然会覆盖它。
   var seeded = hashPayload();
   if (seeded) {
-    if (ctx.code) ctx.code.value = seeded;
-    ctx.fromCode(seeded);
+    var src = Core.formatSource(seeded);
+    if (ctx.code) ctx.code.value = src;
+    ctx.fromCode(src);
   }
   setEditing(EDIT_ON_START);
   post('ready', { wavejson: ctx.code ? ctx.code.value : '', editing: EDIT_ON_START });

@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **Timing diagrams you edit directly.** Click a waveform cell and the WaveJSON source is rewritten; change the source and the diagram redraws. Neither side is ever treated as the "real" one.
 
-`0.22.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
+`0.23.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
 
 Your source is not reformatted behind your back: diagram edits are written back as a minimal patch — comments, indentation, key order and quotes survive — and any result that would not round-trip is rolled back.
 
@@ -41,8 +41,9 @@ Readers see the waveform only. A click turns the card into the editor in place; 
 |---|---|
 | Default state | read-only — waveform only, no buttons |
 | Enter / leave editing | click the waveform · `Esc` or the corner button |
+| Three views while editing | a segmented control in the top bar switches between **diagram only**, **code only**, and **both**; entering the card is diagram-only, leaving it resets back |
 | Narrow cards | the diagram scales to the card width, in editing too, so nothing jumps under the cursor |
-| On a phone | a cramped card goes fullscreen when you start editing, then draws at 1:1 with normal scrolling |
+| On a phone | a cramped card goes fullscreen when you start editing, then draws at 1:1 with normal scrolling; fullscreen is where the **both** view gets its full height |
 | Height | the card reports its real height, so there is no blank strip underneath |
 | Events | `timingbench:ready` · `timingbench:change` (the new WaveJSON) · `timingbench:mode` |
 | Commands | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |
@@ -69,6 +70,8 @@ Don't want to hand-write any of this? Draw the diagram in the editor and click `
 ## What you can do
 
 - **Edit either side.** Diagram → source through a minimal patch; source → diagram redraws shortly after you stop typing, and keeps the last good picture while you type something invalid (a red dot shows the error).
+- **Pick your view.** A segmented control in the top bar shows **diagram only**, **code only**, or **both** side by side. Embedded cards start on diagram-only and reset to it when you leave editing, so a reader never lands on a screen of raw source.
+- **Compact sources get tidied.** When a minified one-line `data-wavejson` or `#wj=` payload is loaded, it is pretty-printed across lines before it reaches the code box. Your own multi-line source — comments and layout included — is left untouched; only sources with no line breaks and no comments are reformatted.
 - **Write waveforms fast.** Select a cell and type a character, click it in the character bar, or drag across cells to paint. Each chip in the bar shows the shape it will write.
 - **Edit in place.** Double-click a cell, a signal name, a data label, an arc, or a whole `wave` / `data` / `node` row. `phase` and `period` are editable the same way, and both are applied to the drawing.
 - **Restructure without the source.** Add or remove rows and cycles, toggle a phase line, reorder rows,

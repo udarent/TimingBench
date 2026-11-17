@@ -41,18 +41,46 @@ export function attachTouchUI(ctx, dom) {
     layout: { txt: '⇄', name: 'Split direction' },
     embed:  { txt: '<>', name: 'Embed code' }
   };
+  // 三段分段控件：三个互斥的视图，当前态 aria-pressed=true。
+  // 图标用「波 / 码 / 分屏」的极简字形 + 英文 title（页面英文优先），触摸端靠 aria-pressed 念出状态。
+  var VIEW_SEGS = [
+    { v:'diagram', txt:'▬', name:'Diagram only' },
+    { v:'code',    txt:'{ }', name:'Code only' },
+    { v:'both',    txt:'◫', name:'Code and diagram' }
+  ];
   var topKey = '';
   function renderTopbar() {
     if (!topbar) return;
     var cmds = Cap.hudCmds(Cap.sceneOf(state), EMBED);
     var cols = ctx.currentLayout ? ctx.currentLayout() === 'cols' : true;
-    // 只在「按钮集合 / 可用态 / 模式」变化时重建，避免每次 redraw 都闪一下
+    var view = ctx.currentView ? ctx.currentView() : 'both';
+    // 只在「按钮集合 / 可用态 / 模式 / 视图」变化时重建，避免每次 redraw 都闪一下
     var key = cmds.join(',') + '|' + state.undo.length + '|' + state.redo.length + '|' +
-      (cols ? 'C' : 'R') + '|' + (state.embedCard ? 'E' : '-');
+      (cols ? 'C' : 'R') + '|' + (state.embedCard ? 'E' : '-') + '|' + view;
     if (key === topKey && topbar.childNodes.length) return;
     topKey = key;
     topbar.textContent = '';
     cmds.forEach(function (c) {
+      // view 是分段控件：塞进一个 role=group 的容器里，三个按钮各自 data-cmd。
+      if (c === 'view') {
+        var seg = document.createElement('span');
+        seg.className = 'viewSeg';
+        seg.setAttribute('role', 'group');
+        seg.setAttribute('aria-label', 'View mode');
+        VIEW_SEGS.forEach(function (s) {
+          var vb = document.createElement('button');
+          vb.type = 'button';
+          vb.className = 'viewBtn' + (s.v === view ? ' sel' : '');
+          vb.setAttribute('data-cmd', 'view:' + s.v);
+          vb.setAttribute('aria-pressed', s.v === view ? 'true' : 'false');
+          vb.title = s.name;
+          vb.setAttribute('aria-label', s.name);
+          vb.textContent = s.txt;
+          seg.appendChild(vb);
+        });
+        topbar.appendChild(seg);
+        return;
+      }
       var m = TOP_META[c];
       if (!m) return;
       var b = document.createElement('button');

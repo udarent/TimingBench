@@ -13,7 +13,7 @@ export function createEditor(dom){
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, selRows:null, ratio:1, parseOK:false,
             ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0, phaseEdit:null, zoom:1,
-            W:0, H:0, drag:null, rev:0, readonly:false },
+            W:0, H:0, drag:null, rev:0, readonly:false, view:(dom.isEmbed?'diagram':'both') },
     inlineCtx:null, painting:null
   };
   var state=ctx.state, code=ctx.code, gutter=ctx.gutter, errdot=ctx.errdot;
@@ -173,6 +173,33 @@ export function createEditor(dom){
   }
   ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout;
 
+  // ---- 视图模式：只图形 / 只代码 / 两者都要 ---------------------------------
+  // 与「分屏方向」是两件事：layout 决定「两个 pane 怎么摆」，view 决定「哪几个 pane 在」。
+  // 顶栏的三段分段控件切这个，状态落在 .app[data-view] 上，由 CSS 控制显隐。
+  // 默认由调用方给：独立 editor 是 both（原行为），嵌入卡片是 diagram（原行为，先看波形）。
+  // 不写 localStorage —— 视图是「此刻我在干什么」，不是长期偏好；每次进来都从默认开始，
+  // 全屏 / 退出编辑回到卡片时也不会停在「上次留在代码视图、卡片只显示一堆源码」的怪状态。
+  var VIEWS={ diagram:1, code:1, both:1 };
+  function currentView(){ return VIEWS[state.view] ? state.view : 'both'; }
+  // 老引擎不认 focus({preventScroll})，退化到无参 focus；两者都失败就静默 —— 焦点不是关键路径。
+  function focusEl(el){
+    if(!el) return;
+    try{ el.focus({preventScroll:true}); }catch(e){ try{ el.focus(); }catch(e2){ /* no-op */ } }
+  }
+  function setView(v){
+    if(!VIEWS[v] || v===state.view) return;
+    state.view=v;
+    applyView();
+    // 切到代码 / 双栏让 textarea 拿焦点，切回图形聚焦画布。只读卡片没有顶栏按钮、走不到这里。
+    if(!state.readonly) focusEl(v==='diagram' ? ctx.wrap : code);
+    ctx.redraw();
+  }
+  function applyView(){
+    if(!dom.app) return;
+    dom.app.setAttribute('data-view', currentView());
+  }
+  ctx.currentView=currentView; ctx.setView=setView; ctx.applyView=applyView;
+
   // ---- 行范围：分组是「一段连续行」的概念，单选一行表达不了 ------------------
   // `state.selRows` 是行 id 数组（按行序、连续），null 表示「就是 selLane 那一行」。
   // 为什么要单独一份状态：`selLane` 是「当前对象」（决定面板显示哪组动作），
@@ -287,6 +314,7 @@ export function createEditor(dom){
     if(act==='link'){ setLinkMode(!state.linkMode); return; }
     if(act==='embed'){ if(ctx.openEmbedCode) ctx.openEmbedCode(); return; }
     if(act==='layout'){ toggleLayout(); return; }
+    if(act==='view:diagram'||act==='view:code'||act==='view:both'){ setView(act.slice(5)); return; }
     if(act!=='undo'&&act!=='redo') return;
     // 相位尺开着时先收成一步，否则撤销会拿「被拖改过的 IR」当基准
     if(state.phaseEdit&&ctx.closePhaseEdit) ctx.closePhaseEdit(true);
@@ -339,6 +367,7 @@ export function createEditor(dom){
 
   try{ var saved=localStorage.getItem('tb-layout'); if(saved==='rows'||saved==='cols') state.layout=saved; }catch(e){}
   applyLayout();
+  applyView();
   createShapes(ctx);
   attachInteractions(ctx);
   attachTouchUI(ctx, dom);
