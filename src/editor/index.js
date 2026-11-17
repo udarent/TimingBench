@@ -99,7 +99,10 @@ export function createEditor(dom){
     if(first.t==='addLane') selLaneAfter='@'+first.at;
     else if(first.t==='moveLane'){
       var oi=-1; state.ir.lanes.forEach(function(x,i){ if(x.id===first.lane) oi=i; });
-      selLaneAfter='@'+Math.max(0,Math.min(state.ir.lanes.length-1,oi+(first.v==='up'?-1:1)));
+      // 拖拽（to）直接用目标索引；上下文条的 ↑/↓ 仍按 ±1 推。
+      selLaneAfter='@'+((first.to!==undefined&&first.to!==null)
+        ? Math.max(0,Math.min(state.ir.lanes.length-1,first.to))
+        : Math.max(0,Math.min(state.ir.lanes.length-1,oi+(first.v==='up'?-1:1))));
     } else if(first.t==='deleteLane') selLaneAfter=null;
     var next=state.ir;
     for(var oi2=0;oi2<ops.length;oi2++) next=Core.applyOp(next,ops[oi2]);
@@ -176,13 +179,13 @@ export function createEditor(dom){
   }
   ctx.currentLayout=currentLayout; ctx.toggleLayout=toggleLayout;
 
-  // ---- 视图模式：只图形 / 只代码 / 两者都要 ---------------------------------
-  // 与「分屏方向」是两件事：layout 决定「两个 pane 怎么摆」，view 决定「哪几个 pane 在」。
-  // 顶栏的三段分段控件切这个，状态落在 .app[data-view] 上，由 CSS 控制显隐。
+  // ---- 视图模式：只图形 / 图形+代码双栏（0.25.0 取消「只代码」——没有对应的使用场景）----
+  // 与「分屏方向」是两件事：layout 决定「两个 pane 怎么摆」，view 决定「代码 pane 在不在」。
+  // 顶栏只剩**一个**切换键（波形 ⇄ 双栏），状态落在 .app[data-view] 上，由 CSS 控制显隐。
   // 默认由调用方给：独立 editor 是 both（原行为），嵌入卡片是 diagram（原行为，先看波形）。
   // 不写 localStorage —— 视图是「此刻我在干什么」，不是长期偏好；每次进来都从默认开始，
-  // 全屏 / 退出编辑回到卡片时也不会停在「上次留在代码视图、卡片只显示一堆源码」的怪状态。
-  var VIEWS={ diagram:1, code:1, both:1 };
+  // 全屏 / 退出编辑回到卡片时也不会停在「上次留在双栏、卡片只剩半屏代码」的怪状态。
+  var VIEWS={ diagram:1, both:1 };
   function currentView(){ return VIEWS[state.view] ? state.view : 'both'; }
   // 老引擎不认 focus({preventScroll})，退化到无参 focus；两者都失败就静默 —— 焦点不是关键路径。
   function focusEl(el){
@@ -193,7 +196,7 @@ export function createEditor(dom){
     if(!VIEWS[v] || v===state.view) return;
     state.view=v;
     applyView();
-    // 切到代码 / 双栏让 textarea 拿焦点，切回图形聚焦画布。只读卡片没有顶栏按钮、走不到这里。
+    // 切到双栏让 textarea 拿焦点，切回波形聚焦画布。只读卡片没有顶栏按钮、走不到这里。
     if(!state.readonly) focusEl(v==='diagram' ? ctx.wrap : code);
     ctx.redraw();
   }
@@ -317,7 +320,10 @@ export function createEditor(dom){
     if(act==='link'){ setLinkMode(!state.linkMode); return; }
     if(act==='embed'){ if(ctx.openEmbedCode) ctx.openEmbedCode(); return; }
     if(act==='layout'){ toggleLayout(); return; }
-    if(act==='view:diagram'||act==='view:code'||act==='view:both'){ setView(act.slice(5)); return; }
+    // 一个键来回切：波形 ⇄ 双栏。另外保留 view:diagram / view:both 两条显式命令，
+    // 给「必须落到某个确定视图」的场合（测试、宿主脚本）用。
+    if(act==='view:toggle'){ setView(currentView()==='both' ? 'diagram' : 'both'); return; }
+    if(act==='view:diagram'||act==='view:both'){ setView(act.slice(5)); return; }
     if(act!=='undo'&&act!=='redo') return;
     // 相位尺开着时先收成一步，否则撤销会拿「被拖改过的 IR」当基准
     if(state.phaseEdit&&ctx.closePhaseEdit) ctx.closePhaseEdit(true);

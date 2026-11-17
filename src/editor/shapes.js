@@ -24,6 +24,22 @@ var XS=G.XS;
 // 竖排组名会贴着内层括号，长组名还会顶到行名。
 var GSLOT=T?30:24;
 
+// 六点把手（对齐 Obsidian 表格的行 / 列拖拽指示器）：3×2 或 2×3 的小圆点。
+// 只在「当前格」所在行 / 列出现 —— 没有选中就不画（用户明确要求：不选中时不显示把手）。
+// 用 1.15 圆角的小方块当点：视觉与圆点一致，又不触发「绘制层禁止圆形图元」那条锁
+// （它守的是连线锚点小圆圈，不该为了把手去放宽）。
+function gripDots(x,y,cols,rows){
+  var out='', dx=3.4, dy=3.4, d=2.3, r=1.15;
+  for(var j=0;j<rows;j++){
+    for(var i=0;i<cols;i++){
+      out+='<rect x="'+(x+(i-(cols-1)/2)*dx-d/2).toFixed(1)+
+        '" y="'+(y+(j-(rows-1)/2)*dy-d/2).toFixed(1)+
+        '" width="'+d+'" height="'+d+'" rx="'+r+'"/>';
+    }
+  }
+  return out;
+}
+
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
   // 本帧的行高：只读卡片走紧凑口径（RO_ROW_H），编辑态用 ROW_H。
@@ -264,8 +280,12 @@ export function createShapes(ctx){
     // 行名左界就是内边距：行首拖拽把手已于 0.9.10 撤除，0.9.13 连图元一起删除，
     // 这里不再为它预留 18px。分组括号要占位：每嵌套一层就让出 GSLOT 宽的一条槽
     // （括号与竖排组名都画在行名左侧，先把这段宽度让出来，行名才不会被压住）。
+    // 行把手的固定槽位：编辑态在行名区最左留 14px，分组括号与行名整体右移，两者不再抢同一片
+    // 像素。不这么做的话，最外层括号的竖线落在 `PAD+13`，正好压在把手的命中区上 —— 有分组的
+    // 行点不住、拖不动（用户实测到的就是这个）。只读卡片不画把手，槽位收回，名字区不变窄。
+    var hndSlot=can('hud')?14:0;
     var gDepth=groupDepth(ir.lanes);
-    var leftBound=PAD+gDepth*GSLOT;
+    var leftBound=PAD+hndSlot+gDepth*GSLOT;
     var minW=64, maxW=T?300:260;                 // 上下限：空图 / 超长名字（两态同值）
     // 右留 6 + 安全余量 10：离屏分段测量与画布上「名字 + 9px 的 φ/T」tspan 拼接有
     // 8~10px 的系统性出入（空格折叠与字距），靠固定余量兜住即可；
@@ -340,7 +360,10 @@ export function createShapes(ctx){
     // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
     // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
     // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
-    var contentH=actY+((state.embedCard&&state.readonly)?roTrimBottom:20);
+    // 底部留白：两档都收到 6。原来编辑态留 20，是给「画在 SVG 里的底栏」当落点的 ——
+    // 底栏 0.18.0 起就是画布外的 flex 子项，这 20（×缩放 ≈ 18px）纯粹是波形下面一条死白，
+    // 用户实测「点格子后波形与按钮之间明显一段空白」就是它。
+    var contentH=bottom+((state.embedCard&&state.readonly)?roTrimBottom:6);
     // 画布高度**只由内容决定**（不再抬到视口高）。旧做法是「整页模式下把 SVG 拉到视口高」，
     // 那是给当时「底栏画在 SVG 里、要钉住」用的；底栏早已是画布外的真实 flex 子项。
     // 留在原地就成了另一种抖动源：停靠区一出现，视口变矮 → SVG 跟着变矮 → 又一次重排。
@@ -416,11 +439,29 @@ export function createShapes(ctx){
     if(can('colhead')) for(c=0;c<=N&&!isEmpty;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
       o.push('<g class="colhead'+(selc?' sel':'')+(ghost?' ghost':'')+'" data-c="'+c+'" role="img" aria-label="Column '+c+(ghost?' — append a cycle':'')+'">');
+      // 整列高亮带（表头一直到画布底部）：悬停表头预览整列、选中后整列定住。
+      // 旧实现只有表头那颗小方块会变色，读者看不出「第 3 个周期」到底是哪一条竖带。
+      // 画在这一组最前面 ⇒ 波形图元后画、压在它上面，不影响可读性。
+      o.push('<rect class="colBand" x="'+(XS+c*CELL+1)+'" y="'+TOP+'" width="'+(CELL-2)+
+        '" height="'+Math.max(0,bottom-TOP)+'" rx="2" fill="none" pointer-events="none"/>');
       // 整列列头透明命中区：让悬停 / 点击落在列头上，而不是落到背景矩形
       o.push('<rect x="'+(XS+c*CELL+1)+'" y="'+(COL_Y-2)+'" width="'+(CELL-2)+'" height="'+(TOP-COL_Y-2)+'" fill="transparent"/>');
-      var cw=T?Math.min(CELL-2,44):30, ch=T?28:20;
-      o.push('<rect x="'+(cx-cw/2)+'" y="'+COL_Y+'" width="'+cw+'" height="'+ch+'" rx="4" fill="'+(selc?'var(--accent-bg)':'transparent')+'" stroke="'+(selc?'var(--accent)':'var(--line)')+'" stroke-width="0.5" '+(ghost?'stroke-dasharray="2 2"':'')+'/>');
-      o.push('<text x="'+cx+'" y="'+(COL_Y+ch/2)+'" text-anchor="middle" dominant-baseline="central" font-size="'+(T?13:11)+'" fill="'+(selc?'var(--accent)':'var(--muted)')+'">'+c+'</text>');
+      // 表头不再画任何**数字**：WaveDrom 的图本来就只有行名 + 波形，编号是我们自己加的
+      // 「编辑定位器」。现在列的位置由三条已有信息表达 —— 网格线、悬停时的整列高亮带、
+      // 以及选中后才出现的六点把手，编号反而成了多余的一层（0.25.0 精简）。
+      // 只留末尾那根虚线的「追加列」：它是「点这里加一列」的唯一视觉入口。
+      var gs=T?28:20;
+      if(ghost) o.push('<rect x="'+(cx-gs/2)+'" y="'+COL_Y+'" width="'+gs+'" height="'+gs+'" rx="4" '+
+        'fill="none" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2 2"/>');
+      // 列把手：选中该列的格子（或整列）时才出现，拖动即移动整列。表头没有数字了，
+      // 把手就落在表头正中 —— 这是这一小片区域里唯一的图元。
+      var colHnd=(state.selCell&&state.selCell.tick===c)||state.sel===c;
+      if(colHnd&&!ghost){
+        var gy=COL_Y+gs/2;
+        o.push('<g class="hnd hndCol" data-col="'+c+'" role="button" aria-label="Drag to move this column" fill="var(--muted)">'+
+          gripDots(cx,gy,3,2)+
+          '<rect x="'+(cx-9)+'" y="'+(gy-6)+'" width="18" height="12" fill="transparent" style="cursor:grab"/></g>');
+      }
       o.push('</g>');
     }
     if(isEmpty) o.push(emptyRow(W));
@@ -441,7 +482,12 @@ export function createShapes(ctx){
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*RH;
       var yT=y+Math.round(RH*bandT), yM=y+Math.round(RH*bandM), yB=y+Math.round(RH*bandB);
-      var cellH=Math.max(10,RH-10), i, hi=state.selLane===l.id||!!spanSet[l.id];
+      // 选中语义分三层（与表格一致）：选中**格**只点亮那一格；选中**行**才铺整行底衬；
+      // 行跨度（Shift 选段）另算。旧实现里 `selLane` 是选中格子的副产物，于是「点一个格子
+      // 整行都亮」，行/列/格的层级读不出来。
+      var cellSel = !!(state.selCell && state.selCell.lane === l.id);
+      var rowSel = state.selLane === l.id && !cellSel;
+      var cellH=Math.max(10,RH-10), i, hi=rowSel||!!spanSet[l.id];
       o.push('<g class="laneGrp'+(hi?' sel':'')+'" data-lane="'+l.id+'">');
       // 选中底衬只铺到**内容右缘**（ACT_X，已含负相位补出的宽度）。原先它铺到 W-PAD*2，
       // 而 W 至少被 viewW / 560 撑大 —— 1440 窗口下 918 宽的底衬里 400 多像素盖在什么都
@@ -452,6 +498,24 @@ export function createShapes(ctx){
       if(hi) o.push('<rect class="laneHi" x="'+PAD+'" y="'+(y+1)+'" width="'+hiW+
         '" height="'+(RH-2)+'" rx="3" fill="var(--accent-bg)" pointer-events="none"/>');
       o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(RH-2)+'" rx="3" fill="transparent" style="cursor:pointer"/>');
+      // 行头：行名区单独一条命中带（压在上面的 laneRow 之上），鼠标扫过就有浅底反馈。
+      // 之前整行只是一块透明 rect —— 「这一行能不能点」全靠猜，行与格的边界也看不出来。
+      // 画在 laneName 之前、laneRow 之后：名字字形的 pointer-events 在 CSS 里关掉，
+      // 悬停随整条行头走；φ / T 徽标自己保留命中（见 CSS `.laneMeta{pointer-events:all}`）。
+      // 行头只需要两种态：常态（可 hover）与 `.cur`（这一行里有选中的格子）。
+      // 整行选中由 laneHi 铺满（含行名区），不必再在行头上重复一个 `.sel`。
+      o.push('<rect class="laneHead'+(cellSel?' cur':'')+'" data-lane="'+l.id+
+        '" x="'+PAD+'" y="'+(y+1)+'" width="'+Math.max(12,XS-8-PAD)+'" height="'+(RH-2)+
+        '" rx="3" fill="transparent" style="cursor:pointer"/>');
+      // 行把手：选中该行（或该行的某个格子）时才出现，拖动即移动整行。
+      // 位置固定在最左那条 `hndSlot` 里（见上面的 leftBound）—— 括号与行名都已右移，
+      // 这里永远是空的，和 Obsidian 表格左侧那条行指示器是同一个意思。
+      if(l.kind==='signal'&&(cellSel||state.selLane===l.id)){
+        var hx=PAD+7;
+        o.push('<g class="hnd hndRow" data-lane="'+l.id+'" role="button" aria-label="Drag to move this row" fill="var(--muted)">'+
+          gripDots(hx,yM,2,3)+
+          '<rect x="'+(hx-7)+'" y="'+(yM-9)+'" width="14" height="18" fill="transparent" style="cursor:grab"/></g>');
+      }
       if(l.kind==='spacer'){
         // 只读卡片上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
         // 否则读者会看到一条莫名其妙的「spacer」文字。
@@ -594,7 +658,7 @@ export function createShapes(ctx){
       var y0=TOP+g.from*RH+4, y1=TOP+(g.to+1)*RH-4, h=y1-y0;
       if(h<10) return;
       // bx 是括号的**起点**：钩子向右伸 5px，竖线落在 bx-5；组名放在 bx-10（与上游同值）。
-      var bx=PAD+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-10;
+      var bx=PAD+hndSlot+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-10;
       var brace='M'+bx+','+y0+' c -3,0 -5,2 -5,5 l 0,'+(h-10)+' c 0,3 2,5 5,5';
       // 编辑态的可点区：整条括号高度 × 本层槽位宽（原来只有竖排名字形本身 —— 实测 15×21px，
       // 触摸端 10×14px，手指根本点不中，等于「组只能靠源码改」）。它画在括号之前、

@@ -354,29 +354,63 @@ function check() {
   // 波形层仍按内容撑宽、可横向滚动 / 缩放。禁止退回「按整张画布宽度排字符条」或「不钉住」。
   // 只约束上下文条这类动作按钮：它们必须全部落在可视宽内。
   // 字符停靠条是有意的横向滚动（23 个字符一条排不下，等价于输入法候选条），不在约束范围。
-  // 停靠区是**恒高**的（0.10.4）：动作条 + 字符条两条都算进高度，换选中对象只换内容。
-  // 反过来写会退回「高度随内容变」—— 字符条只在选中格时出现，画布随选中对象长高变矮，
-  // 用户看到的就是「选中元素再移动时画面反复跳动」。三条子规则必须同时在位。
-  // 判据写成「语义」而不是某一种写法：高度必须是**与内容无关的常量**（不能 auto / 100%），
-  // 必须同时引用两条的高度变量，**且不许相加** —— 相加意味着「两条都会出现」，而 0.18.0 起
-  // 上下文条（行 / 列）与字符停靠条（格）已经互斥，相加等于永远空着一整行。
+  // 停靠区高度（0.25.0）分两档：
+  //   · 页面 / 触摸端：恒高 max(动作条, 字符条) —— 换选中对象时版面一动不动；
+  //   · 嵌入卡片（.is-embed）：height:auto —— 卡片贴着内容长，没有按钮时不留空带
+  //     （用户实测「波形和最下排按钮之间一段无用空白」）。两条子条在卡片里同高，选格↔选行不跳。
+  // 子条自身仍必须是定高（否则 auto 没底），下面单独锁。
   {
     const dz = (/\.dockzone\{[^}]*?height:([^;}]+)/.exec(cssSrc) || [null, ''])[1];
     ok(!!dz && /var\(--dock-acts\)/.test(dz) && /var\(--dock-chars\)/.test(dz) &&
-       !/^(auto|100%|fit-content)/.test(dz.trim()) &&
-       !/var\(--dock-acts\)\s*\+\s*var\(--dock-chars\)/.test(dz),
-      '停靠区高度必须是常量且两条取 max（不能 auto 会抖、不能相加会永远空一行）：' + (dz || '未匹配'));
+       !/^auto/.test(dz.trim()) &&
+       !/var\(--dock-acts\)\s*\+\s*var\(--dock-chars\)/.test(dz) &&
+       /\.is-embed \.dockzone\{height:auto/.test(cssSrc) &&
+       /\.is-embed \.chardock\.open\{height:var\(--dock-acts\)\}/.test(cssSrc),
+      '停靠区高度规则被改坏（页面恒高 + 卡片 auto + 卡片内两条同高，缺一不可）：' + (dz || '未匹配'));
   }
   ok(/\.is-readonly \.dockzone\{height:0\}/.test(cssSrc) &&
      /\.tbpanel\.open\{[^}]*height:var\(--dock-acts\)/.test(cssSrc) &&
-     /\.chardock\.open\{[^}]*height:var\(--dock-chars\)/.test(cssSrc),
+     /\.chardock\.open\{[^}]*height:var\(--dock-acts\)/.test(cssSrc),
     '停靠区两条子规则被改坏（只读不预留 / 各自定高）');
-  // 两条都不能换行：停靠区恒高，换行后的按钮会被行高裁掉。溢出走「⋯」折叠，
-  // 与字符停靠条一致 —— 不再用横向滚动（触摸端会与「滑动看画布」混淆）。
+  // 溢出区（0.25.0 定稿）：回到「⋯ 展开」，但展开块必须挂在按钮条**下方**并占位。
+  // 三件事缺一不可，缺哪条都会退化成「浮层盖住波形」：
+  //   ① DOM 顺序：溢出区排在按钮条之后（下挂）；
+  //   ② CSS 没有 bottom:100% / position:absolute 那套上浮定位；
+  //   ③ JS 把它实测高度写进 --more-h，dockzone 的定高公式里含着它，画布才会让位。
+  {
+    const twSrc = read('src/editor/touch.js'), htmlSrc2 = read('editor.html');
+    ok(/id="chardock"[^>]*><\/div>\s*<div class="charmore"/.test(htmlSrc2.replace(/\n\s*/g, '')) ||
+       htmlSrc2.indexOf('id="chardock"') < htmlSrc2.indexOf('id="charmore"'),
+      '字符溢出区不在停靠条之后（应下挂，而不是浮在上方）');
+    // 默认（嵌入卡片）必须是**下挂占位**；只有 .dockzone.more-up（大视图）才允许向上浮出。
+    const moreBase = (/\.charmore\.open,\.tbmore\.open\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    ok(!/position:absolute/.test(moreBase) &&
+       /\.dockzone\.more-up \.charmore\.open,[^{]*\{[^}]*bottom:100%/.test(cssSrc) &&
+       /function isBigView/.test(read('src/editor/touch.js')),
+      '溢出区定位不对：嵌入卡要下挂占位，大视图才向上浮出（.dockzone.more-up）');
+    // 0.25.0 起 dockzone 是 height:auto —— 流内的溢出区自己就把高度撑开，不再需要 --more-h。
+    // 这条锁改成：既不许回到常量高度，也不许留着那套 CSS 变量（会把 auto 算乱）。
+    ok(!/--more-h/.test(cssSrc) && !/--more-h/.test(twSrc) &&
+       /function syncMoreHeight/.test(twSrc),
+      '溢出区高度还在用 --more-h（dockzone 已是 auto，两套算法会互相打架）');
+    // 展开态**不进**重建 key：点「⋯」只准走 paintMore / paintCtxMore，第一行按钮不动。
+    // 进了 key 就会 textContent='' 再重建，中间那一帧空白就是用户看到的「闪一下」。
+    ok(/function paintMore/.test(twSrc) && /function paintCtxMore/.test(twSrc) &&
+       /var actKey = acts\.join\('\,'\) \+ '\|' \+ fit;/.test(twSrc),
+      '点「⋯」又触发整条重建了（应只 paintMore / paintCtxMore）');
+    ok(/data-more/.test(twSrc) && /data-ctxmore/.test(twSrc),
+      '两条按钮条缺少「⋯」入口');
+    // 溢出区是主条的**兄弟**节点，收起时必须显式清空 —— 只清主条会留下一屏孤立按钮
+    // （选中行之后字符还挂在那儿，用户实测过）。
+    ok(/if \(more\) \{ more\.textContent = ''; more\.classList\.remove\('open'\); \}/.test(twSrc) &&
+       /if \(tbmoreEl\) \{ tbmoreEl\.textContent = ''; tbmoreEl\.classList\.remove\('open'\); \}/.test(twSrc),
+      '收起面板时没有一起清空下方溢出区（会留下一屏无关按钮）');
+  }
+  // 两条都不能换行：停靠区恒高，换行后的按钮会被行高裁掉。溢出走**翻页**（0.25.0 起，
+  // 与字符停靠条同一套）—— 不再有浮层，所以这里只守「不换行 + 不溢出」。
   ok(/\.tbpanel\.open\{[^}]*flex-wrap:nowrap/.test(cssSrc) &&
-     /\.is-touch \.tbpanel\.open\{[^}]*overflow:hidden/.test(cssSrc) &&
-     /\.tbmore\.open\{display:flex;position:absolute/.test(cssSrc),
-    '上下文条又允许换行了，或溢出未走「⋯」折叠（应 overflow:hidden + .tbmore 弹层）');
+     /\.is-touch \.tbpanel\.open\{[^}]*overflow:hidden/.test(cssSrc),
+    '上下文条又允许换行了（换行后的按钮会被行高裁掉），或溢出没有被拦住');
 
   // ---- 停靠条左侧三个格级动作的图标：声明顺序是功能性的 ----
   // `inset` 是 top/right/bottom/left 的简写，会覆盖同一块里写在它**前面**的长属性。
@@ -398,17 +432,17 @@ function check() {
   // 选择器现在与「⋯」弹层共用（`.chardock .chipbtn:not(.act) svg,.charmore .chipbtn svg{…}`），
   // 允许 `svg` 后接逗号再取块。触摸端不再另写一条同义规则（已并入基础规则），
   // 因此这里改为要求「基础规则排除 .act」+「动作图标有 absolute 定位」两条。
-  ok(/\.chardock \.chipbtn:not\(\.act\) svg[^{]*\{/.test(cssSrc) &&
-     /\.chardock \.chipbtn\.act svg\{[^}]*position:absolute/.test(cssSrc),
+  ok(/:is\(\.chardock,\.charmore\) \.chipbtn:not\(\.act\) svg[^{]*\{/.test(cssSrc) &&
+     /:is\(\.chardock,\.charmore\) \.chipbtn\.act svg\{[^}]*position:absolute/.test(cssSrc),
     '基础 .chipbtn svg 规则没有排除 .act（会把动作图标的 inset:0 盖回来、图标被推出按钮）');
   // 24 单位的线性图标必须按 1:1 渲染、描边 ≥2px：缩到 17px 时 1px 描边变 0.708px 且中心落在
   // 半像素，1 倍屏上线条被摊成两个半透明像素 —— 斜边断口、圆环发灰（0.19.3 用户实测）。
   // 判据只要求「尺寸 = 24」与「描边 ≥2」，不锁具体 px 写法。
   {
-    const actSvg = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const actSvg = (/:is\(\.chardock,\.charmore\) \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
     // 选择器现在与溢出弹层共用（`.tbpanel button.ctxbtn svg,.tbmore button.ctxbtn svg{…}`），
     // 允许在 `.tbpanel button.ctxbtn svg` 后接逗号，再取第一个 `{…}` 块。
-    const ctxSvg = (/\.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const ctxSvg = (/:is\(\.tbpanel,\.tbmore\) button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
     ok(/width:24px;height:24px/.test(actSvg) && /stroke-width:2/.test(actSvg) &&
        /width:24px;height:24px/.test(ctxSvg) && /stroke-width:2/.test(ctxSvg),
       '图标没按 1:1 画（24 单位图必须 24px 渲染 + 2px 描边，缩放会让 1 倍屏线条发灰断口）');
@@ -417,11 +451,11 @@ function check() {
   // 尺寸 / 圆角 / 描边 / 端点各写一份就会「看着差不多、放一起对不齐」（用户实测反馈）。
   // 判据：桌面同尺寸同圆角；两端图标都带圆端点；触摸端描边也是 2（曾用 1.7 细一档）。
   {
-    const actBox = (/\.chardock \.chipbtn\.act\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    const ctxBox = (/\.tbpanel button\.ctxbtn,\.tbmore button\.ctxbtn\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    const actSvg2 = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    const ctxSvg2 = (/\.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    const touchCtxSvg = (/\.is-touch \.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const actBox = (/:is\(\.chardock,\.charmore\) \.chipbtn\.act\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const ctxBox = (/:is\(\.tbpanel,\.tbmore\) button\.ctxbtn\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const actSvg2 = (/:is\(\.chardock,\.charmore\) \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const ctxSvg2 = (/:is\(\.tbpanel,\.tbmore\) button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const touchCtxSvg = (/\.is-touch :is\(\.tbpanel,\.tbmore\) button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
     ok(/width:32px/.test(actBox) && /height:32px/.test(actBox) &&
        /width:32px/.test(ctxBox) && /height:32px/.test(ctxBox) &&
        /border-radius:6px/.test(ctxBox),
@@ -430,12 +464,18 @@ function check() {
        /stroke-width:2/.test(touchCtxSvg) && !/1\.7/.test(touchCtxSvg),
       '动作图标画笔不统一（应为 24/2 + 圆端点；触摸端曾用 1.7 细描边、桌面曾漏写端点）');
   }
-  // 「⋯」弹层（.charmore）里的字符按钮必须与停靠条共用基础样式。桌面窄卡片（如主页 360px
-  // 嵌入卡）里大部分字符都在弹层里 —— 少写这一组，它们会退化成浏览器默认按钮：
-  // 字形按内联流排在按钮上、字母被挤到下面（用户实测「主页的 P 与编辑页的 P 不是一个设计」）。
-  ok(/\.chardock \.chipbtn,\.charmore \.chipbtn\{[^}]*position:relative/.test(cssSrc) &&
-     /\.chardock \.chipbtn:not\(\.act\) svg,\.charmore \.chipbtn svg\{[^}]*position:absolute/.test(cssSrc),
-    '桌面「⋯」弹层里的字符按钮没有基础样式（会退化成默认按钮：字形在上、字母在下）');
+  // 字符按钮（第一行 + 下方溢出区里的每一颗）必须共用同一套基础样式：字形绝对定位铺满按钮、
+  // 字母压在中间。少写这一组就退化成浏览器默认按钮 —— 字形按内联流排在按钮上、字母被挤到
+  // 下面（用户实测「主页的 P 与编辑页的 P 不是一个设计」，0.19.x 修过一次，0.25.0 改溢出区
+  // 布局时又犯了一次）。现在统一锚在 `:is(.chardock,.charmore)` / `:is(.tbpanel,.tbmore)`，
+  // 所以这里锁的是「两个容器都在选择器里」，而不是某一个具体的类名写法。
+  ok(/:is\(\.chardock,\.charmore\) \.chipbtn\{[^}]*position:relative/.test(cssSrc) &&
+     /:is\(\.chardock,\.charmore\) \.chipbtn:not\(\.act\) svg\{[^}]*position:absolute/.test(cssSrc) &&
+     /:is\(\.chardock,\.charmore\) \.chipbtn span\{/.test(cssSrc),
+    '字符按钮的基础样式漏了溢出区（会退化成默认按钮：字形在上、字母在下）');
+  ok(/:is\(\.tbpanel,\.tbmore\) button\.ctxbtn\{[^}]*width:32px/.test(cssSrc) &&
+     /:is\(\.tbpanel,\.tbmore\) button\.ctxbtn svg\{/.test(cssSrc),
+    '行 / 列动作按钮的基础样式漏了溢出区（同样会退化成默认按钮）');
 
   // ---- 浅色档的低层级文字要够读 ----
   // --muted 承担时间轴数字、行号、φ/T 徽标、字符按钮里的波形预览。对白底与 --src-bg
@@ -499,23 +539,24 @@ function check() {
   // 同类问题的其余出口：凡是「浮在画布上、又不占版式」的东西，都要自己算清账。
   //   ① 轻提示钉在视口底部，触摸端字符停靠条也在那儿 —— 必须按停靠区高度抬起来，
   //      否则每次拦截提示都会盖在最常用的那排字符上。
-  //   ② ⋯ 弹层按 bottom:100% 钉在停靠条上方，高度上限必须扣掉停靠区，否则 200px 高的
-  //      卡片里弹层会顶到视口之外，顶部几颗字符落在负坐标（滚也滚不到）。
+  //   ② 「⋯」浮层与它的高度上限已被翻页取代（0.25.0）：翻页不占画布，也就没有「顶出视口」这回事。
   //   ③ 分享面板不能自己截断（截断会让复制按钮掉到面板外），改由遮罩滚动兜底。
   //   ④ 行号槽要让出横向滚动的空间：textarea 后出现且透明，不给它不透明底色 + 层序，
   //      长行往左滚时字符会压在行号上。
   //   ⑤ 宿主 iframe 的高度上报必须含停靠区，否则卡片进编辑后 chrome 把画布挤成一条缝。
   ok(/--toast-lift/.test(cssSrc) && /setProperty\('--toast-lift'/.test(read('src/editor/touch.js')),
     '轻提示没有按停靠区高度抬升（会压在字符停靠条上）');
-  ok(/\.charmore\.open\{[^}]*max-height:max\(72px,min\(200px,calc\(100dvh - 100% - 8px\)\)\)/.test(cssSrc) &&
-     /\.is-touch \.charmore\.open\{[^}]*calc\(100dvh - 100% - 8px\)/.test(cssSrc),
-    '⋯ 弹层的高度上限没有扣掉停靠区（矮卡片里会顶出视口，顶部字符滚不到）');
   ok(!/\.sharePanel\{[^}]*max-height:calc\(100dvh/.test(cssSrc) &&
      /\.shareMask\{[^}]*overflow:auto/.test(cssSrc) &&
      /\.sharePanel\{[^}]*margin:auto/.test(cssSrc),
     '分享面板仍在按视口截断（复制按钮会掉到面板外），或遮罩没有做成可滚动');
   ok(/\.gutter\{[^}]*background:var\(--src-bg\)[^}]*z-index:2/.test(cssSrc),
     '行号槽没有不透明底色 / 层序（横向滚动后源码会压在行号上）');
+  // 同步改 iframe 高度必须由宿主显式声明（autoHeight）：无条件改会把「写死高度的卡片」撑开。
+  ok(/var fe = hostAutoH \? window\.frameElement : null/.test(read('src/editor/embed-shell.js')) &&
+     /type === 'autoHeight'/.test(read('src/editor/embed-shell.js')) &&
+     /post\('autoHeight'/.test(read('embed.js')),
+    '同源直接改 iframe 高度缺少「宿主声明」这道闸（会把固定尺寸卡片撑开）');
   ok(/dockEl[\s\S]{0,120}dockH[\s\S]{0,200}state\.contentH/.test(read('src/editor/embed-shell.js')),
     '高度上报没算底部两条的高度（宿主卡片进编辑后画布会被挤没）');
   ok(!/revealLane\(laneOf, panel\.offsetHeight\)/.test(read('src/editor/touch.js')) &&
@@ -523,17 +564,19 @@ function check() {
     'revealLane 仍在重复扣面板高度（面板已是 flex 子项，多扣会多滚一截）');
   // 字符停靠条：在停靠区内（随停靠区定高、不随画布滚动）、触摸端命中区 ≥48px
   ok(/\.dockzone\{[^}]*display:flex/.test(cssSrc) &&
-     /\.is-touch \.chardock \.chipbtn[^{]*\{[^}]*flex:0 0 48px/.test(cssSrc),
+     /\.is-touch :is\(\.chardock,\.charmore\) \.chipbtn[^{]*\{[^}]*flex:0 0 48px/.test(cssSrc),
     '字符停靠条未收进 dockzone，或触摸端命中区不足 48px');
-  // 字符输入只剩一套实现（HTML 停靠条 #chardock）：按**可用宽度**折叠 —— 宽屏（含宽屏触摸 /
-  // 宽嵌卡片）一次铺满全部字符，窄屏才把放不下的收进 ⋯。折叠判据必须按实测宽度，不能写死
-  // 数量，也不能退回「触摸 4 颗 + ⋯」的按指针二选一（宽屏触摸会被浪费）。
+  // 字符输入只剩一套实现（HTML 停靠条 #chardock）：按**可用宽度**切片 —— 宽屏（含宽屏触摸 /
+  // 宽嵌卡片）一次铺满，窄屏才把放不下的收进下方的「⋯」区。容量必须按实测宽度算，不能写死
+  // 数量，也不能退回「触摸 4 颗」的按指针二选一（宽屏触摸会被浪费）。
+  // 0.25.0 起「格级动作（label / node / link）」也进同一条流水线，不再常驻占三格宽度。
   const touchSrcEarly = read('src/editor/touch.js');
-  ok(!/TOUCH \? QUICK\.slice\(\) : Core\.ALL\.slice\(\)/.test(touchSrcEarly) &&
+  ok(!/TOUCH ? QUICK\.slice\(\) : Core\.ALL\.slice\(\)/.test(touchSrcEarly) &&
      /var budget = \(host \? host\.clientWidth : dock\.clientWidth\)/.test(touchSrcEarly) &&
-     /if \(more && hidden\.length\)/.test(touchSrcEarly) &&
-     /fitAll >= total/.test(touchSrcEarly),
-    '字符停靠条未按可用宽度折叠（应改为按宽度决定全平铺 / 折叠，而非按 TOUCH 二选一）');
+     /items\.push\(\{ t: 'act'/.test(touchSrcEarly) &&
+     /for \(var fi = 0; fi < items\.length; fi\+\+\)/.test(touchSrcEarly) &&
+     /gap \+ moreW/.test(touchSrcEarly),
+    '字符停靠条未按可用宽度切片，或格级动作仍常驻占位（应与字符同一条流水线）');
   ok(!/charChips|actionBar/.test(shapesSrc),
     'SVG 内字符条（charChips / actionBar）应已删除，字符输入只走 #chardock');
   // 顶栏是页面级 HTML（不在 SVG 里），所以「滚动后按钮跑出视野」这类问题从根上没有了：
@@ -700,25 +743,46 @@ function check() {
      /data-src="1"/.test(shareSrc) && /&src=1/.test(shareSrc) &&
      /SNIPPET_EXPLICIT/.test(shareSrc),
     '分享面板缺少「源码视图 / 嵌入代码」勾选框，或片段没把开关写出去');
+  // 行头 / 列头（0.25.0）：借表格的读法 —— 行名区是独立命中带、列头悬停预览整列、
+  // 选中分层（格 → 只点亮格；行 → 整行底衬）。判据咬结构，不咬具体像素。
+  ok(/class="laneHead/.test(shapesSrc) && /class="colBand/.test(shapesSrc) &&
+     /rowSel = state\.selLane === l\.id && !cellSel/.test(shapesSrc),
+    '行头 / 列高亮带缺失，或选中格又顺带铺满了整行（行/列/格的层次读不出来）');
+  ok(/laneHead/.test(interSrc),
+    '行头没有接进命中判定（点了没反应）');
+  ok(/\.laneHead:hover\{fill:var\(--hover\)\}/.test(cssSrc) &&
+     /\.colhead:hover \.colBand\{fill:var\(--hover\)\}/.test(cssSrc),
+    '行头 / 列头缺少悬停预览（表格式交互的关键反馈）');
+  // 六点把手（0.25.0，对齐 Obsidian 表格）：不选中不显示；拖动 = 移动行 / 列。
+  ok(/class="hnd hndRow"/.test(shapesSrc) && /class="hnd hndCol"/.test(shapesSrc) &&
+     /state\.selCell\.tick===c/.test(shapesSrc),
+    '行 / 列六点把手缺失，或没跟随「当前格」出现');
+  ok(/startHandDrag/.test(interSrc) && /endHandDrag/.test(interSrc) && /dropLine/.test(interSrc),
+    '把手的拖拽链路缺失（按下 / 落点线 / 松手提交）');
+  ok(/case 'moveTick'/.test(read('src/core/ir.js')) &&
+     /op\.to!==undefined/.test(read('src/core/ir.js')),
+    '底层缺少整列移动，或行移动不支持绝对目标（拖拽会退回两两交换）');
+  ok(/\.hnd\{cursor:grab\}/.test(cssSrc) && /\.dropLine\{/.test(cssSrc),
+    '把手缺少 grab 光标或落点指示线样式');
   // 顶栏按钮表来自 cap.js（HUD_ITEMS 里有 embed），渲染在 touch.js 的 renderTopbar
   ok(/'embed'/.test(read('src/editor/cap.js')) && /TOP_META/.test(read('src/editor/touch.js')),
     '顶栏未提供嵌入代码入口');
 
-  // ---- 三视图切换（图形 / 代码 / 双栏）：四层缺一不可 -----------------------------
-  // ① 状态层：state.view 只有三种合法值，doCmd 分发 view:*，默认嵌入=diagram、独立=both。
-  // 判据咬 currentView/setView 的实现与 doCmd 的三分支，不咬注释。
+  // ---- 两视图切换（波形 / 双栏）：0.25.0 取消「只代码」，顶栏三段控件收成一个切换键 ----
+  // ① 状态层：合法值只剩 diagram/both，视图切换走 view:toggle（未发布，不做旧值兼容）。
+  // 判据咬 currentView/setView 的实现与 doCmd 的分支，不咬注释。
   ok(/function currentView\(\)/.test(editorSrc) && /function setView\(v\)/.test(editorSrc) &&
-     /VIEWS\s*=\s*\{\s*diagram:1,\s*code:1,\s*both:1\s*\}/.test(editorSrc) &&
+     /VIEWS\s*=\s*\{\s*diagram:1,\s*both:1\s*\}/.test(editorSrc) &&
      /view:\s*SRC \? \(dom\.isEmbed \? 'diagram' : 'both'\) : 'diagram'/.test(editorSrc),
-    '状态层缺少三视图状态：currentView/setView，或 state.view 默认值没跟着 SRC 开关走');
+    '状态层视图有误：合法值应只有 diagram/both，切换走 view:toggle');
   // 默认值依赖 dom.isEmbed —— 必须真的从 main.js 传进来（曾漏传，只读嵌入卡默认成 both、
   // 露出可编辑代码框）；嵌入壳再显式设一次 diagram 作双保险。
   ok(/isEmbed:\s*EMBED/.test(read('src/main.js')) &&
      /ctx\.setView\('diagram'\)/.test(embedSrc),
     '嵌入卡的「默认只图形」没有落地：main.js 未传 isEmbed，或嵌入壳未显式复位 diagram');
-  ok(/act==='view:diagram'\|\|act==='view:code'\|\|act==='view:both'/.test(editorSrc) &&
-     /setView\(act\.slice\(5\)\)/.test(editorSrc),
-    'doCmd 未分发三个视图命令 view:diagram/code/both');
+  ok(/act==='view:toggle'/.test(editorSrc) && /setView\(act\.slice\(5\)\)/.test(editorSrc) &&
+     !/view:code/.test(editorSrc),
+    'doCmd 未提供视图切换键 view:toggle，或「只代码」命令还在');
   // ② 能力表：view 进 HUD_ITEMS，且嵌入卡片不过滤它（hudCmds 只滤 layout / embed）。
   var capSrc = read('src/editor/cap.js');
   ok(/\['undo', *'redo', *'layout', *'view', *'embed'\]/.test(capSrc) &&
@@ -726,18 +790,21 @@ function check() {
      /if \(c === 'view'\) return SRC;/.test(capSrc) &&
      /if \(c === 'embed'\) return SNIPPET;/.test(capSrc),
     '顶栏重型入口没走开关：layout/view 应受 SRC 控制、embed 应受 SNIPPET 控制');
-  // ③ 顶栏渲染：三段分段控件，三个 data-cmd=view:*，互斥 aria-pressed，切视图触发重建。
+  // ③ 顶栏渲染：**一个**切换键（data-cmd=view:toggle），符号固定 { }、靠颜色表达状态，切视图要触发重建。
   var touchViewSrc = read('src/editor/touch.js');
-  ok(/VIEW_SEGS\s*=\s*\[/.test(touchViewSrc) &&
-     /'data-cmd', *'view:' *\+ *s\.v/.test(touchViewSrc) &&
-     /aria-pressed', *s\.v === view/.test(touchViewSrc) &&
-     /\|' *\+ *view;/.test(touchViewSrc),
-    '顶栏缺少三视图分段控件，或切视图不触发重建（视图键未进 renderTopbar 的 key）');
-  // ④ CSS：data-view 控制 pane 显隐；嵌入源码 pane 不再无条件 display:none!important。
+  ok(/var VIEW_TXT = '\{ \}'/.test(touchViewSrc) && /var VIEW_NAME = \{/.test(touchViewSrc) &&
+     /'data-cmd', *'view:toggle'/.test(touchViewSrc) &&
+     /\.topbar \.viewBtn\{[^}]*color:var\(--muted\)/.test(cssSrc) &&
+     /aria-pressed', *view === 'both'/.test(touchViewSrc) &&
+     /\|' *\+ *view;/.test(touchViewSrc) &&
+     !/VIEW_SEGS/.test(touchViewSrc),
+    '顶栏的视图键不是「{ } + 灰/亮」这一套，或切视图不触发重建（视图键未进 renderTopbar 的 key）');
+  // ④ CSS：data-view 控制 pane 显隐（只剩 diagram）；「只代码」那套规则必须已经下线，
+  //    否则 app 上写着 code 时会只剩源码区、可 state 已经不认这个值了。
   ok(/\.app\[data-view="diagram"\] \.pane\.src\{display:none\}/.test(cssSrc) &&
-     /\.app\[data-view="code"\] \.pane\.diagram\{display:none\}/.test(cssSrc) &&
+     !/data-view="code"/.test(cssSrc) &&
      !/\.is-embed \.pane\.src\{display:none!important\}/.test(cssSrc),
-    '三视图显隐 CSS 缺失，或嵌入源码 pane 仍被硬隐藏（代码视图永远显示不出来）');
+    '视图显隐 CSS 不对：「只代码」规则应已删除，且 diagram 态要藏掉源码 pane');
   // ⑤ 嵌入退出编辑强制复位 diagram（否则只读卡片露出可编辑代码框）。
   ok(/!on && ctx\.setView/.test(embedSrc) && /ctx\.setView\('diagram'\)/.test(embedSrc),
     '嵌入退出编辑未复位到只图形视图：只读卡片会露出可编辑代码框');
@@ -749,9 +816,10 @@ function check() {
     'ui.js 的默认值不对：应以「是否嵌入」为默认（独立页开、卡片关）');
   ok(/data-src/.test(embedJsSrc) && /data-snippet/.test(embedJsSrc) && /&src=1/.test(embedJsSrc),
     'embed.js 没把 data-src / data-snippet 转成 URL 参数（宿主无法打开重型入口）');
-  // ⑥ 代码视图给 iframe 上报最小高度（单行波形切到代码时代码框不能矮到没法写）。
-  ok(/view === 'code'/.test(embedSrc) && /Math\.max\(content, *220\)/.test(embedSrc),
-    '代码视图缺少最小高度上报：单行波形的卡片切到代码后无法编辑');
+  // ⑥ 双栏视图给 iframe 上报最小高度（单行波形的卡片切到双栏时，代码框不能矮到没法写）。
+  ok(/view === 'both'/.test(embedSrc) && /Math\.max\(content, *220\)/.test(embedSrc) &&
+     !/view === 'code'/.test(embedSrc),
+    '双栏视图缺少最小高度上报（或「只代码」分支还留着）：单行波形的卡片切到双栏后没法写代码');
   // ⑦ 双栏视图两个坑（用户实测「双栏看不到代码区」）：
   //    a) .is-embed .app 只定义单行 grid，必须给 both 显式两行，否则源码 pane 被挤到 2px；
   //    b) 高度上报必须给 both 留两行空间，否则宿主 iframe 只够一行。
@@ -861,11 +929,12 @@ function check() {
   ok(!/data-panel=/.test(html), '触摸操作栏仍保留「对象 / 列」文字面板入口');
   ok(touchSrc.indexOf("className = 'ctxbtn'") >= 0 && /function renderContext/.test(touchSrc),
     '触摸端缺少上下文图标条（renderContext / ctxbtn）');
-  // 底部三排（格 / 行 / 列）展示逻辑必须一致：溢出都用「⋯」折叠。
-  // 行 / 列的上下文条以前靠横向滚动兜底，触摸端会和「滑动看画布」混淆 —— 现在统一成 ⋯。
-  ok(/data-ctxmore/.test(touchSrc) && /\.tbmore\.open/.test(cssSrc) &&
-     /id="tbmore"/.test(html),
-    '行列上下文条的溢出没有走「⋯」折叠（应与字符停靠条一致：data-ctxmore + .tbmore 弹层）');
+  // 底部三排（格 / 行 / 列）展示逻辑必须一致：溢出一律进下方的「⋯」区（0.25.0 定稿）。
+  // 格级那排住在字符停靠条里，行 / 列在上下文条里，两处都靠 syncMoreHeight 把高度并进 --more-h。
+  ok(/ctxMoreOpen/.test(touchSrc) && /tbmoreEl/.test(touchSrc) &&
+     /syncMoreHeight\(\);/.test(touchSrc) &&
+     /id="tbmore"/.test(html) && /id="charmore"/.test(html),
+    '行列上下文条的溢出没有走下方「⋯」区（应与字符停靠条同一套：tbmoreEl + syncMoreHeight）');
   // 都不需要专门的关闭按钮：格级停靠条原先末尾的 ✕ 已删（取消选中走点画布空白 / Esc）。
   ok(!/data-clear/.test(touchSrc) && !/chipbtn\.clear/.test(cssSrc) && !/chipbtn\.clear/.test(touchSrc),
     '格级停靠条又长出 ✕ 关闭按钮（三排都不该有专门关闭按钮）');

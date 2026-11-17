@@ -99,8 +99,13 @@ export function attachInteractions(ctx){
         // 组名 / 括号命中区只认「这一层的路径」—— 行 id 在这里没用（行的 groupPath 是它自己的最深层）
         if(g.classList&&(g.classList.contains('laneGroupName')||g.classList.contains('groupHit')))
           return {group:g.getAttribute('data-group')};
+        // 六点把手（行 / 列拖拽指示器）：必须排在 colhead 之前 —— 列把手就在列头组里面。
+        if(g.classList&&g.classList.contains('hnd')) return {
+          hnd: g.classList.contains('hndRow') ? 'row' : 'col',
+          lane: ln, col: g.getAttribute('data-col') === null ? undefined : +g.getAttribute('data-col') };
         if(g.classList&&g.classList.contains('colhead')) return {col:+g.getAttribute('data-c')};
-        if(g.classList&&g.classList.contains('laneName')) return {nameLane:ln};
+        // 行头（行名区的整条命中带）与行名文字走同一分支：单击选行、双击改名字。
+        if(g.classList&&(g.classList.contains('laneName')||g.classList.contains('laneHead'))) return {nameLane:ln};
         if(g.classList&&g.classList.contains('cell')) return {lane:ln,tick:+g.getAttribute('data-tick')};
         if(g.classList&&g.classList.contains('laneRow')) return {rowLane:ln};
       }
@@ -558,6 +563,98 @@ export function attachInteractions(ctx){
     },480);
   }
 
+  // ---- 六点把手拖拽（对齐 Obsidian 表格）----------------------------------
+  // 按下把手 → 记来源；拖动 → 画一条落点线；松手 → 提交 moveLane / moveTick。
+  // 只是点一下没拖 = 选中整行 / 整列（Obsidian 1.5.2 起点指示器就是「选中整行」）。
+  // 目标索引不自己算几何：直接拿 laneRow / colhead 的屏幕矩形找最近的一个，
+  // 这样 hscale、缩放、只读紧凑行高都不用在这里再抄一份。
+  var handDrag=null;
+
+  function laneIndexById(id){ var k=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===id) k=i; }); return k; }
+
+  function handTarget(e){
+    if(!handDrag) return null;
+    if(handDrag.kind==='row'){
+      var rows=[].slice.call(wrap.querySelectorAll('g.laneGrp > rect.laneRow'));
+      if(!rows.length) return null;
+      var best=0, bd=1e9;
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i].getBoundingClientRect();
+        var d=Math.abs((r.top+r.height/2)-e.clientY);
+        if(d<bd){ bd=d; best=i; }
+      }
+      return best;
+    }
+    var hs=[].slice.call(wrap.querySelectorAll('g.colhead[data-c]'));
+    var bt=null, bdx=1e9;
+    for(var j=0;j<hs.length;j++){
+      if(hs[j].classList.contains('ghost')) continue;
+      var b=hs[j].getBoundingClientRect();
+      var dx=Math.abs((b.left+b.width/2)-e.clientX);
+      if(dx<bdx){ bdx=dx; bt=+hs[j].getAttribute('data-c'); }
+    }
+    return bt;
+  }
+
+  function showHandLine(){
+    var svg=svgRoot();
+    if(!svg||!handDrag||handDrag.to===null) return;
+    if(!handDrag.line){
+      var ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+      ln.setAttribute('class','dropLine');
+      svg.appendChild(ln);
+      handDrag.line=ln;
+    }
+    var ln=handDrag.line, t=handDrag.to;
+    if(handDrag.kind==='row'){
+      var rows=[].slice.call(wrap.querySelectorAll('g.laneGrp > rect.laneRow'));
+      if(!rows[t]) return;
+      var r=rows[t].getBoundingClientRect();
+      // 落点在「目标行的哪一侧」：向下拖画在下沿，向上拖画在上沿（插入位置读得出来）
+      var y=r.top+(t>handDrag.from?r.height:0);
+      var a=svgXY(r.left,y), b=svgXY(r.right,y);
+      ln.setAttribute('x1',a.x.toFixed(1)); ln.setAttribute('y1',a.y.toFixed(1));
+      ln.setAttribute('x2',b.x.toFixed(1)); ln.setAttribute('y2',b.y.toFixed(1));
+    } else {
+      var hs=[].slice.call(wrap.querySelectorAll('g.colhead[data-c]'));
+      var el=null;
+      for(var i=0;i<hs.length;i++){ if(+hs[i].getAttribute('data-c')===t){ el=hs[i]; break; } }
+      if(!el) return;
+      var q=el.getBoundingClientRect();
+      var x=q.left+(t>handDrag.from?q.width:0);
+      var c1=svgXY(x,q.top), c2=svgXY(x,q.bottom);
+      ln.setAttribute('x1',c1.x.toFixed(1)); ln.setAttribute('y1',(c1.y+30).toFixed(1));
+      ln.setAttribute('x2',c2.x.toFixed(1)); ln.setAttribute('y2',(c2.y-4).toFixed(1));
+    }
+  }
+
+  function startHandDrag(c,e){
+    var from=c.hnd==='row'?laneIndexById(c.lane):c.col;
+    if(from===null||from===undefined||from<0) return;
+    handDrag={kind:c.hnd, lane:c.lane, from:from, to:from, line:null, moved:false};
+    // 按下即选中：行 → 整行；列 → 整列。这样把手不会因为「选中格被清掉」而消失。
+    if(c.hnd==='row'){ state.selLane=c.lane; state.selCell=null; state.sel=null; }
+    else { state.sel=from; state.selCell=null; state.selLane=null; }
+    if(ctx.clearSpan) ctx.clearSpan();
+    ctx.redraw();
+  }
+
+  function moveHandDrag(e){
+    if(!handDrag) return;
+    var t=handTarget(e);
+    if(t!==null&&t!==handDrag.to){ handDrag.to=t; }
+    if(t!==null&&t!==handDrag.from) handDrag.moved=true;
+    showHandLine();
+  }
+
+  function endHandDrag(){
+    var d=handDrag; handDrag=null;
+    if(d.line&&d.line.parentNode) d.line.parentNode.removeChild(d.line);
+    if(!d.moved||d.from===d.to){ ctx.redraw(); return; }
+    if(d.kind==='row') ctx.commit({t:'moveLane',lane:d.lane,to:d.to},'move row');
+    else ctx.commit({t:'moveTick',from:d.from,to:d.to},'move column');
+  }
+
   // ---- 触摸输入状态机 ---------------------------------------------------
   // 手指按下 ≠ 点了。触摸端把「按下」只当候选：抬手时位移 ≤12px、时长 ≤500ms
   // 才确认是一次 tap，确认之后才改选中 / 执行命令 / 进编辑。画布上滑动（看别的列、
@@ -590,16 +687,14 @@ export function attachInteractions(ctx){
       return;
     }
 
-    // 桌面只读态：点一下进编辑并顺手选中被点的格子，本次点击不产生任何编辑
-    if(state.readonly){
-      e.preventDefault&&e.preventDefault();
-      var rc=cellAt(e);
-      var hit=rc&&rc.lane!==undefined&&rc.tick!==undefined&&!rc.cmd?{lane:rc.lane,tick:rc.tick}:null;
-      if(hit){ state.selCell=hit; state.selLane=hit.lane; state.sel=null; }
-      if(ctx.requestEdit) ctx.requestEdit(hit?{x:e.clientX,y:e.clientY,cell:hit}:null);
-      return;
-    }
-    dispatchTarget(cellAt(e), e, false);
+    // 只读卡片：点画布**不进编辑**。进编辑只有一个入口 —— 右下角那颗笔（#embedhint）。
+    // 点波形进编辑看着方便，实际是「想拖着看一眼」时也被迫跳进编辑态：卡片上最常做的是
+    // 看，不是改。笔图标是明确的「我要改」入口，点它再进，语义才干净。
+    if(state.readonly) return;
+    var hc0=cellAt(e);
+    // 六点把手：按下即进入「拖拽移动」，不再走普通分派（否则会先把它当成点行/点列）。
+    if(hc0&&hc0.hnd){ e.preventDefault&&e.preventDefault(); startHandDrag(hc0,e); return; }
+    dispatchTarget(hc0, e, false);
   }
 
   // 命中目标的分派：桌面在 mousedown 调用，触摸在 tap 确认后调用 —— 两边共用同一份逻辑，
@@ -609,6 +704,15 @@ export function attachInteractions(ctx){
     var dbl=isTouch?touchDetail(c):(e.detail>1?2:1);
     if(ctx.inlineCtx) closeInline(true);
     if(state.phaseEdit) closePhaseEdit(true);
+    // 触摸端点一下把手 = 选中整行 / 整列（桌面走 startHandDrag，这里只覆盖 tap 这条路径）。
+    // 触摸端不做把手拖拽：单指拖动已经被原生滚动占用，硬抢会变成「想滑动却在移行」。
+    if(c&&c.hnd){
+      e.preventDefault&&e.preventDefault();
+      if(c.hnd==='row'){ state.selLane=c.lane; state.selCell=null; state.sel=null; }
+      else { state.sel=c.col; state.selCell=null; state.selLane=null; }
+      if(ctx.clearSpan) ctx.clearSpan();
+      ctx.redraw(); return;
+    }
     if(!c){
       // 点到画布空白 = 清掉选中。四场景一致：桌面本来有 Esc，触摸端没有键盘 ——
       // 这条手势就是触摸端唯一的「取消选中」，让底部动作行（#tbpanel）成为唯一的上下文入口。
@@ -742,6 +846,7 @@ export function attachInteractions(ctx){
     handleDown(e,false);
   });
   wrap.addEventListener('mousemove',function(e){
+    if(handDrag){ e.preventDefault&&e.preventDefault(); moveHandDrag(e); return; }
     if(movePhaseDrag(e)) return;
     var svg=svgRoot();
     if(state.connect&&svg){
@@ -784,6 +889,7 @@ export function attachInteractions(ctx){
   },true);
   document.addEventListener('mouseup',function(e){
     if(e&&syntheticMouse(e)) return;
+    if(handDrag){ endHandDrag(); return; }
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
     if(endPhaseTap(false)) return;
     if(!ctx.painting) return;
@@ -995,13 +1101,9 @@ export function attachInteractions(ctx){
     if(!x&&!y){ x=p.x; y=p.y; }
     if(Math.abs(x-p.x)>12||Math.abs(y-p.y)>12) return;
     if(Date.now()-p.t>500) return;
-    if(state.readonly){
-      var rc=p.c;
-      var hit=rc&&rc.lane!==undefined&&rc.tick!==undefined&&!rc.cmd?{lane:rc.lane,tick:rc.tick}:null;
-      if(hit){ state.selCell=hit; state.selLane=hit.lane; state.sel=null; }
-      if(ctx.requestEdit) ctx.requestEdit({x:p.x,y:p.y,cell:hit});
-      return;
-    }
+    // 只读卡片：点按什么都不做（进编辑只认右下角的笔）。拖动 / 捏合缩放任由后面的
+    // 手势逻辑处理 —— 那是「看」，不该被当成「要改」。
+    if(state.readonly) return;
     // p.c 为 null = 点在画布空白：同样派发，dispatchTarget 用它清选中（触摸端没有 Esc，
     // 这是唯一取消手势）；有命中时是普通的图元点击。
     dispatchTarget(p.c, {clientX:p.x, clientY:p.y, detail:0, preventDefault:function(){}}, true);

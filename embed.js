@@ -83,6 +83,9 @@
 
       if (d.type === 'ready') {
         ready = true;
+        // 告诉编辑器「我可以按你的高度长高」：它据此在同一帧直接改 iframe 高度，
+        // 避免 postMessage 晚一拍导致的「展开/收起时画布闪一下」。
+        post('autoHeight', { on: true });
         if (wavejson) post('setSource', { wavejson: wavejson });
         if (mode === 'edit') post('setMode', { editing: true });
         if (d.height) api.setHeight(d.height);

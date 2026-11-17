@@ -6,7 +6,7 @@
 <title>TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.24.0">
+<meta name="version" content="0.25.0">
 <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
@@ -24,10 +24,11 @@
     <!-- 波形区自己的两条：上排是选中对象的动作，下排是字符输入。
          它们只作用于波形，所以收在波形区里 —— 不再横跨整个页面、也不盖在代码区下面。 -->
     <div class="dockzone" id="dockzone">
-      <div class="tbmore" id="tbmore" role="toolbar" aria-label="More row and column actions"></div>
       <div class="tbpanel" id="tbpanel" role="toolbar" aria-label="Row and column actions"></div>
-      <div class="charmore" id="charmore" role="toolbar" aria-label="All wave characters"></div>
+      <!-- 溢出区放在各自按钮条的下方：展开时占位、把画布顶上去，而不是浮在画布上 -->
+      <div class="tbmore" id="tbmore" role="toolbar" aria-label="More row and column actions"></div>
       <div class="chardock" id="chardock" role="toolbar" aria-label="Wave characters"></div>
+      <div class="charmore" id="charmore" role="toolbar" aria-label="All wave characters"></div>
     </div>
   </div>
 </div>

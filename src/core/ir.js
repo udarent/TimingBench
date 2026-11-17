@@ -365,14 +365,45 @@ export const Core = (function () {
           l.node=out;
         });
         break;
-      case 'moveLane':
+      case 'moveLane': {
+        // 两种目标写法：`v:'up'|'down'`（上下文条一步）与 `to:索引`（拖拽到任意位置）。
+        // 拖拽用 splice 挪动而不是两两交换 —— Obsidian 1.5.2 起也是「移动」而非「交换」，
+        // 交换在跨多行时会把中间行整体推错位。
         var mi=-1; n.lanes.forEach(function(l,i){ if(l.id===op.lane) mi=i; });
-        var mj=mi+(op.v==='up'?-1:1);
-        if(mi>=0&&mj>=0&&mj<n.lanes.length){
-          var mtmp=n.lanes[mi]; n.lanes[mi]=n.lanes[mj]; n.lanes[mj]=mtmp;
+        if(mi<0) break;
+        var mj=(op.to!==undefined&&op.to!==null)
+          ? Math.max(0,Math.min(n.lanes.length-1,op.to))
+          : mi+(op.v==='up'?-1:1);
+        if(mj>=0&&mj<n.lanes.length&&mj!==mi){
+          var mmoved=n.lanes.splice(mi,1)[0];
+          n.lanes.splice(mj,0,mmoved);
           rehomeAfterMove(n.lanes, op.lane);
         }
         break;
+      }
+      // 整列移动：每一行的第 from 个槽位移到 to。槽位带着字符 / 数据标签 / 断点标志一起走，
+      // node 锚点串与 sub-cycle 包的下标同步重映射；continuation 槽的 `w` 由 normalizeSlots 重算。
+      case 'moveTick': {
+        var mf=op.from, mt=op.to;
+        if(mf===mt||mf<0) break;
+        n.lanes.forEach(function(l){
+          if(l.kind!=='signal') return;
+          unraw(l);
+          if(mf>=l.slots.length) return;
+          var mslot=l.slots.splice(mf,1)[0];
+          var mnode=l.node.splice(mf,1)[0];
+          var mat=Math.max(0,Math.min(mt,l.slots.length));
+          l.slots.splice(mat,0,mslot);
+          l.node.splice(mat,0,mnode===undefined?'.':mnode);
+          l.subs.forEach(function(s){
+            if(s.at===mf) s.at=mat;
+            else if(mf<mat&&s.at>mf&&s.at<=mat) s.at--;
+            else if(mf>mat&&s.at>=mat&&s.at<mf) s.at++;
+          });
+          normalizeSlots(l);
+        });
+        break;
+      }
       case 'setPhase': case 'setPeriod':
         n.lanes.forEach(function(l){ if(l.id===op.lane) l[op.t==='setPhase'?'phase':'period']=op.v; });
         break;

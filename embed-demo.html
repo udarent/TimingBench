@@ -22,7 +22,7 @@
 <body>
 <div class="wrap">
   <h1>把 TimingBench 嵌进你的页面</h1>
-  <p class="lead">默认只读，读者点一下波形就能直接改；改动会以事件回传给宿主。</p>
+  <p class="lead">默认只读，读者点右下角的铅笔就能直接改波形；改动会以事件回传给宿主。</p>
 
   <h2>① 一行 script + 一个 div</h2>
 <pre>&lt;script src="https://udarent.github.io/TimingBench/embed.js"&gt;&lt;/script&gt;
@@ -34,7 +34,7 @@
     <div data-timingbench data-height="230" data-title="示例波形"
          data-wavejson='{ signal: [ { name: "clk", wave: "p......" }, { name: "dat", wave: "x.345x.", data: ["head","body","tail","data"] }, { name: "req", wave: "0.1..0", node: "..a..." } ] }'></div>
   </div>
-  <p class="note">点击波形进入编辑；顶栏分段控件可在<strong>只图形 / 只代码 / 双栏</strong>之间切换（压缩成单行的源码会自动排成多行）；按 <code>Esc</code> 或点右下角的铅笔图标回到只读。</p>
+  <p class="note">点铅笔进入编辑；顶栏的 <code>{ }</code> 键在<strong>只看波形</strong>与<strong>波形 + 代码</strong>之间切换（灰 = 代码区关着，亮 = 开着），压缩成单行的源码会自动排成多行；按 <code>Esc</code> 或点对勾回到只读。</p>
   <div class="out" id="log">等待宿主事件…</div>
 
   <h2>③ 宿主不让跑脚本？只用一个 iframe</h2>

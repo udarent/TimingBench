@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **Timing diagrams you edit directly.** Click a waveform cell and the WaveJSON source is rewritten; change the source and the diagram redraws. Neither side is ever treated as the "real" one.
 
-`0.24.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
+`0.25.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
 
 Your source is not reformatted behind your back: diagram edits are written back as a minimal patch — comments, indentation, key order and quotes survive — and any result that would not round-trip is rolled back.
 
@@ -35,13 +35,13 @@ Two lines, no build step and no dependency in your project:
      data-wavejson='{ signal: [ { name: "clk", wave: "p....." }, { name: "dat", wave: "x.345x." } ] }'></div>
 ```
 
-Readers see the waveform only. A click turns the card into the editor in place; `Esc` or the corner check mark goes back to reading. The card lives in its own iframe, so your styles cannot leak in and its styles cannot leak out.
+Readers see the waveform only. The pen in the corner turns the card into the editor in place; `Esc` or the corner check mark goes back to reading. The card lives in its own iframe, so your styles cannot leak in and its styles cannot leak out.
 
 | What you get | Detail |
 |---|---|
 | Default state | read-only — waveform only, no buttons |
-| Enter / leave editing | click the waveform · `Esc` or the corner button |
-| Three views while editing | the standalone editor switches between **diagram only**, **code only**, and **both** from the top bar; a card starts diagram-only and gets the switcher only when it opts in with `data-src="1"` |
+| Enter / leave editing | the pen in the top-right corner · `Esc` or the check mark to leave |
+| Two views while editing | one top-bar toggle — **`{ }` grey** = waveform only, **lit** = waveform + code; a card starts waveform-only and gets the toggle only when it opts in with `data-src="1"` |
 | Narrow cards | the diagram scales to the card width, in editing too, so nothing jumps under the cursor |
 | On a phone | a cramped card goes fullscreen when you start editing, then draws at 1:1 with normal scrolling; fullscreen is where the **both** view gets its full height |
 | Height | the card reports its real height, so there is no blank strip underneath |

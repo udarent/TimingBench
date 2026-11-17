@@ -96,7 +96,7 @@ export function attachEmbed(ctx, opts) {
   function setEditing(on, anchor, keepFs) {
     var wasReadonly = state.readonly;
     ctx.setReadonly(!on);
-    // 退出编辑回只读：强制回到「只图形」视图。否则上次停在代码视图，卡片就只剩一坨源码，
+    // 退出编辑回只读：强制回到「只图形」视图。否则上次停在双栏，卡片就只剩半屏源码，
     // 而且 textarea 在只读态没设 readOnly（波形区靠事件不响应、代码区却没有），会露出可编辑框。
     // 进编辑时保持用户上次选的视图——同一会话里切到代码改几句再回来，不该被反复打回图形。
     if (!on && ctx.setView) ctx.setView('diagram');
@@ -118,7 +118,8 @@ export function attachEmbed(ctx, opts) {
     }
     post('mode', { editing: !!on });
   }
-  ctx.requestEdit = function (anchor) { setEditing(true, anchor); };
+  // 进编辑只有一个入口：右下角的笔（见下面的 hint 监听）。原先还有「点画布进编辑」这条路，
+  // 已按产品要求去掉 —— 卡片上最常做的是看，不是改；一笔点下去就跳进编辑态，滑动看图时很烦。
 
   // 用户按 Esc / 系统手势退出全屏：若这次全屏是为编辑开的，也回到只读卡片。
   function onFsChange() {
@@ -244,7 +245,7 @@ export function attachEmbed(ctx, opts) {
   };
 
   // ---- 高度自适应：把波形真实高度告诉宿主，宿主据此设 iframe 高度 --------
-  var lastH = 0;
+  var lastH = 0, hostAutoH = false;   // 宿主是否声明过「我会按你的高度长高」
   function reportHeight() {
     // 全屏时 contentH 是屏幕高 —— 别把它推给宿主，否则退出全屏瞬间卡片会被撑到整屏高。
     // 退出全屏会触发 resize→redraw→reportHeight，届时已不在全屏，自然会补上正确高度。
@@ -258,18 +259,33 @@ export function attachEmbed(ctx, opts) {
     var dockEl = document.getElementById('dockzone');
     var dockH = dockEl && dockEl.offsetHeight ? dockEl.offsetHeight : 0;
     var content = state.contentH || state.H || 0;
-    // 代码视图：波形 canvas 不显示，contentH 是波形的高度，跟代码框需要的空间无关。
-    // 一张单行波形的卡片 contentH 可能只有几十像素，代码框会矮到没法编辑 —— 给个最小高度，
-    // 让宿主把 iframe 撑到能舒适写源码（顶栏 + 一个够用的代码区）。
+    // 双栏时源码框和画布各占一行：一张单行波形的卡片 contentH 可能只有几十像素，
+    // 源码框会矮到没法编辑 —— 给它一个最小高度，让宿主把 iframe 撑到能舒适写源码。
     var view = ctx.currentView ? ctx.currentView() : 'diagram';
-    if (view === 'code') content = Math.max(content, 220);
-    // 双栏：画布 + 源码上下各占一行，iframe 必须比为「只有图形」时更高，
+    // 双栏（唯一的另一个视图）：画布 + 源码上下各占一行，iframe 必须比为「只有图形」时更高，
     // 否则宿主撑开的高度只够一行，第二行（源码）被 grid 挤到 2px —— 看不到代码区。
     // 再叠一份 canvas 高度给源码行，保证两行都有可编辑空间。
-    else if (view === 'both') content = Math.max(content, 220) * 2;
+    if (view === 'both') content = Math.max(content, 220) * 2;
     var h = Math.ceil(content + topH + dockH + 2);
-    if (h > 0 && Math.abs(h - lastH) >= 1) { lastH = h; post('height', { height: h }); }
+
+    if (h > 0 && Math.abs(h - lastH) >= 1) {
+      lastH = h;
+      // 同源宿主（主页、本站在各处的嵌入）**同步**改 iframe 高度。
+      // postMessage 要到下一个任务才生效，而停靠区高度是同步变化的：收起溢出区时
+      // 画布会先变高、下一帧 iframe 变矮后又缩回去 —— 这一来一回就是用户看到的「闪」。
+      // 同源时这里直接写 style，两件事落在同一帧，画布高度全程不变。
+      // 跨源（别人站点嵌我们的页）访问 frameElement 会抛异常，退回 postMessage，差一帧但可接受。
+      try {
+        var fe = hostAutoH ? window.frameElement : null;
+        if (fe && fe.style) {
+          var want = (h + 2) + 'px';          // 与 embed.js 的 setHeight(h + 2) 同口径
+          if (fe.style.height !== want) fe.style.height = want;
+        }
+      } catch (err) { /* 跨源：忽略，走 postMessage */ }
+      post('height', { height: h });
+    }
   }
+  ctx.reportHeight = reportHeight;   // 溢出区展开/收起后由 touch.js 主动上报新高度
   var baseRedraw = ctx.redraw;
   ctx.redraw = function () { baseRedraw(); reportHeight(); };
 
@@ -277,6 +293,9 @@ export function attachEmbed(ctx, opts) {
   window.addEventListener('message', function (e) {
     var d = e.data;
     if (!d || d.source !== 'host' || typeof d.type !== 'string') return;
+    // 宿主（embed.js）在 ready 之后会声明这一条：只有它才允许我们直接改 iframe 高度。
+    // 固定尺寸的宿主（比如测速页里写死 420px 的 iframe）没有这条，我们不碰它的高度。
+    if (d.type === 'autoHeight') { hostAutoH = !!d.on; return; }
     if (d.type === 'setSource' && typeof d.wavejson === 'string') {
       // 宿主 data-wavejson / mount 传来的常是压缩单行 → 排成多行，代码视图才好看易改。
       var src = Core.formatSource(d.wavejson);
