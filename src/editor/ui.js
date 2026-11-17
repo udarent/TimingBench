@@ -12,12 +12,16 @@
 // 也接受 =0 显式关掉（独立编辑页想极简时用）。
 import { EMBED } from './embed.js';
 
+// 查询串只解析一次，两个开关与「是否显式」共用（无 URLSearchParams 时返回 null，
+// 各处按默认值走）。
+var QS = (function () {
+  try { return new URLSearchParams(window.location.search); } catch (e) { return null; }
+})();
+
 function flag(name, dflt) {
-  try {
-    var v = new URLSearchParams(window.location.search).get(name);
-    if (v === '1') return true;
-    if (v === '0') return false;
-  } catch (e) { /* 无 URLSearchParams：按默认值 */ }
+  var v = QS && QS.get(name);
+  if (v === '1') return true;
+  if (v === '0') return false;
   return dflt;
 }
 
@@ -25,3 +29,10 @@ function flag(name, dflt) {
 export var SRC = flag('src', !EMBED);
 // 「<>」生成嵌入代码：把这张图再嵌一次。
 export var SNIPPET = flag('snippet', !EMBED);
+
+// 「这个开关是不是 URL 里**显式**写的」。分享面板据此决定默认勾选状态：
+// 独立编辑页虽然默认 SRC=true（它自己的界面要），但生成的嵌入片段仍以「最简」为默认，
+// 只有用户在当前地址上真的写了 src=1 才替他勾上。
+function present(name) { return !!(QS && QS.has(name)); }
+export var SRC_EXPLICIT = present('src');
+export var SNIPPET_EXPLICIT = present('snippet');

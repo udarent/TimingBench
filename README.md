@@ -64,6 +64,8 @@ el.addEventListener('timingbench:change', e => console.log(e.detail.wavejson));
 
 `data-src="1"` adds the diagram / code / both switcher, `data-snippet="1"` adds the `<>` button. The standalone editor at `editor.html` turns both on by itself; `?src=0&snippet=0` trims it down to just the waveform.
 
+The `<>` panel writes these for you: it carries the same two toggles (**Source view & split**, **Embed-code button**) above the snippet, both off by default, and adds the matching attributes (or `&src=1` / `&snippet=1` for the iframe form).
+
 **Hosts that never run `<script>`** — an Obsidian note, for instance — can use the `iframe only` tab in the editor's `<>` panel, or this:
 
 ```html

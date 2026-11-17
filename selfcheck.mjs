@@ -694,6 +694,12 @@ function check() {
     '片段未转义 & 或 <（源码含 < > & 时会破坏属性）');
   ok(/data-wavejson="/.test(shareSrc),
     '片段应用双引号包裹 data-wavejson（单引号会让源码里的 &#39; 遍地都是）');
+  // 分享面板的可选入口（0.24.0）：两个勾选框，勾上后**两种形态**都要把开关写出去
+  // （script → data-src / data-snippet，iframe → &src=1 / &snippet=1）。
+  ok(/data-opt="src"/.test(shareSrc) && /data-opt="snippet"/.test(shareSrc) &&
+     /data-src="1"/.test(shareSrc) && /&src=1/.test(shareSrc) &&
+     /SNIPPET_EXPLICIT/.test(shareSrc),
+    '分享面板缺少「源码视图 / 嵌入代码」勾选框，或片段没把开关写出去');
   // 顶栏按钮表来自 cap.js（HUD_ITEMS 里有 embed），渲染在 touch.js 的 renderTopbar
   ok(/'embed'/.test(read('src/editor/cap.js')) && /TOP_META/.test(read('src/editor/touch.js')),
     '顶栏未提供嵌入代码入口');

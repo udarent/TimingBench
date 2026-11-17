@@ -64,6 +64,8 @@ el.addEventListener('timingbench:change', e => console.log(e.detail.wavejson));
 
 `data-src="1"` 加「图形 / 代码 / 双栏」切换，`data-snippet="1"` 加 `<>`。独立编辑页 `editor.html` 默认两项都开；加 `?src=0&snippet=0` 可以把它也收成只剩波形。
 
+`<>` 面板会替你写这些：片段上方有同名两个勾选框（**Source view & split**、**Embed-code button**），默认都不勾，勾上就往片段里补对应属性（iframe 形态则是 `&src=1` / `&snippet=1`）。
+
 **宿主不执行 `<script>`**（例如 Obsidian 笔记）时，用编辑器 `<>` 面板里的 `iframe only` 标签，或直接写：
 
 ```html

@@ -444,6 +444,13 @@ html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
   background:var(--src-bg);color:var(--muted);font:12.5px var(--sans);cursor:pointer}
 .shareTab:hover{color:var(--accent);border-color:var(--accent)}
 .shareTab[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:500}
+/* 可选入口：默认不勾 —— 普通嵌入只要「看 / 改波形」，源码视图与再次嵌入都是噪音。
+   勾上后片段里会多出 data-src / data-snippet（或 &src=1 / &snippet=1）。 */
+.shareOpts{display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 14px 0}
+.shareOpts label{display:inline-flex;align-items:center;gap:6px;
+  font:12.5px var(--sans);color:var(--muted);cursor:pointer;user-select:none}
+.shareOpts label:hover{color:var(--ink)}
+.shareOpts input[type="checkbox"]{width:14px;height:14px;margin:0;accent-color:var(--accent);cursor:pointer}
 .shareHint{margin:0;padding:12px 14px 0;font:12.5px/1.6 var(--sans);color:var(--muted)}
 .shareCode{margin:12px 14px 0;padding:10px 12px;height:calc(9 * 1.55em);resize:vertical;
   border:1px solid var(--line2);border-radius:8px;background:var(--src-bg);color:var(--ink);
