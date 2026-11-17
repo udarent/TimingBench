@@ -6,6 +6,7 @@ import { createShapes } from './shapes.js';
 import { attachInteractions } from './interactions.js';
 import { attachTouchUI } from './touch.js';
 import { attachShare } from './share.js';
+import { SRC } from './ui.js';
 
 export function createEditor(dom){
   var ctx={
@@ -13,7 +14,9 @@ export function createEditor(dom){
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, selRows:null, ratio:1, parseOK:false,
             ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0, phaseEdit:null, zoom:1,
-            W:0, H:0, drag:null, rev:0, readonly:false, view:(dom.isEmbed?'diagram':'both') },
+            // 默认视图：没有源码入口（SRC 关）时只能是图形；否则独立页双栏、嵌入卡片只图形。
+            W:0, H:0, drag:null, rev:0, readonly:false,
+            view: SRC ? (dom.isEmbed ? 'diagram' : 'both') : 'diagram' },
     inlineCtx:null, painting:null
   };
   var state=ctx.state, code=ctx.code, gutter=ctx.gutter, errdot=ctx.errdot;

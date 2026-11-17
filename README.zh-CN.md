@@ -4,7 +4,7 @@
 
 **直接改波形就能改源码的时序图编辑器。** 点一下波形格，WaveJSON 源码就同步改写；改一下源码，波形立刻重画。两边都不是「附属品」。
 
-`0.23.0` · [MIT](LICENSE) · 完全跑在浏览器里 · 不上传任何内容 · [打开编辑器](https://udarent.github.io/TimingBench/editor.html)
+`0.24.0` · [MIT](LICENSE) · 完全跑在浏览器里 · 不上传任何内容 · [打开编辑器](https://udarent.github.io/TimingBench/editor.html)
 
 源码不会被悄悄重排：图形编辑以**最小补丁**写回源码（注释、缩进、键序、引号原样保留），任何无法无损往返的结果都会回滚。
 
@@ -41,13 +41,14 @@
 |---|---|
 | 默认状态 | 只读 —— 只有波形，没有按钮 |
 | 进 / 出编辑 | 点波形进入 · `Esc` 或右下角按钮退出 |
-| 编辑时的三视图 | 顶栏分段控件切换**只图形 / 只代码 / 双栏**；进卡片默认只图形，退出编辑自动复位 |
+| 编辑时的三视图 | 独立编辑页用顶栏分段控件切换**只图形 / 只代码 / 双栏**；嵌入卡片默认只图形，加 `data-src="1"` 才会出现这个控件 |
 | 窄卡片 | 整张图等比缩到卡片宽度，编辑时也一样，光标底下的内容不会跳 |
 | 手机上 | 卡片太小时进编辑会自动全屏，之后按 1:1 画、靠滑动移动；**双栏**的高度在全屏里才够用 |
 | 高度 | 卡片上报真实高度，下方不会留一条空白 |
 | 事件 | `timingbench:ready` · `timingbench:change`（新的 WaveJSON） · `timingbench:mode` |
 | 命令 | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |
 | 地址参数 | `?embed=1`（卡片模式） · `&mode=edit`（一进来就可编辑） |
+| 可选入口 | `&src=1`（源码视图 + 双栏） · `&snippet=1`（顶栏「<>」生成嵌入代码） |
 
 ```js
 const api = TimingBenchEmbed.mount(el, { wavejson, mode: 'view' });
@@ -55,12 +56,20 @@ api.setSource(newSource);
 el.addEventListener('timingbench:change', e => console.log(e.detail.wavejson));
 ```
 
+**卡片默认是极简的。** 顶栏只有 撤销 / 重做 —— 源码视图、双栏、`<>` 生成嵌入代码都要显式打开（三四百像素宽的卡片放不下）：
+
+```html
+<div data-timingbench data-wavejson="…" data-mode="edit" data-src="1" data-snippet="1"></div>
+```
+
+`data-src="1"` 加「图形 / 代码 / 双栏」切换，`data-snippet="1"` 加 `<>`。独立编辑页 `editor.html` 默认两项都开；加 `?src=0&snippet=0` 可以把它也收成只剩波形。
+
 **宿主不执行 `<script>`**（例如 Obsidian 笔记）时，用编辑器 `<>` 面板里的 `iframe only` 标签，或直接写：
 
 ```html
 <iframe src="https://udarent.github.io/TimingBench/editor.html?embed=1#wj=PAYLOAD"
-        style="width:100%;height:auto;aspect-ratio:560 / 376;border:0;border-radius:10px;display:block"
-        height="376" loading="lazy" title="Timing diagram"></iframe>
+        style="width:100%;height:auto;aspect-ratio:360 / 96;border:0;border-radius:10px;display:block"
+        height="96" loading="lazy" title="Timing diagram"></iframe>
 ```
 
 `#wj=` 把 WaveJSON 装在 URL 里（base64url），所以这段片段是自包含的：复制笔记、发文件、发布网页都行，只要能放 iframe 就能画出来。代价是没有 `timingbench:change` 事件。粘进 Obsidian 时请作为**原始 HTML 块**，不要放进代码围栏。
@@ -70,7 +79,7 @@ el.addEventListener('timingbench:change', e => console.log(e.detail.wavejson));
 ## 能做什么
 
 - **两边都能改。** 图形 → 源码走最小补丁；源码 → 图形在你停手后重画，输入到一半写错时保留上一张好图（红点标出错误位置）。
-- **视图随意切。** 顶栏分段控件在**只图形 / 只代码 / 双栏**之间切换；嵌入卡片默认只图形，退出编辑自动复位，读者不会一进来就对着满屏源码。
+- **视图随意切。** 独立编辑页用顶栏分段控件在**只图形 / 只代码 / 双栏**之间切换；嵌入卡片默认只图形（且不显示这个控件，加 `data-src="1"` 才有），退出编辑自动复位，读者不会一进来就对着满屏源码。
 - **压缩源码自动排版。** 载入压缩成单行的 `data-wavejson` 或 `#wj=` 内容时，会先排成多行再放进代码框；你自己写的多行源码（含注释与排版）原样保留 —— 只有没有换行、没有注释的源码才会被重排。
 - **写波形很快。** 选中格子后敲字符、点字符条，或按住横向拖过连写；字符条里每个按钮就画着它会写入的形状。
 - **就地改一切。** 双击格子、信号名、数据标签、弧线，或整行 `wave` / `data` / `node`；`phase` 与 `period` 同样可改，且都会作用到图形上。

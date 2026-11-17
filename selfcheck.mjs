@@ -164,6 +164,19 @@ function check() {
   ok(!/helloyuechen|163\.com/.test(enReadme + zhReadme), 'README 仍把邮箱当反馈渠道');
   // 图形区互斥与渲染口径：禁止锚点小圆圈回归，连线必须由显式模式驱动
   const shapesSrc = read('src/editor/shapes.js');
+  // 只读卡片不画列号（can('colhead') 为假），顶部那条 TOP-12 的头带里什么都没有 ——
+  // 必须从 viewBox 裁掉。旧写法 `Math.max(0, COL_Y-8)` 在 COL_Y=6/8 时**恒为 0**，
+  // 等于从来没裁，读者在教程/笔记里看到的是首行上方 37px 死白（对照 WaveDrom 明显更松）。
+  // 判据只看赋值语句（注释里会引用旧公式的字面量，不能拿全文搜）。
+  ok(/var roTrimTop=Math\.max\(0, TOP-\d+\)/.test(shapesSrc) &&
+     !/roTrimTop=Math\.max\(0, COL_Y/.test(shapesSrc),
+    '只读卡片的顶部死白没被裁掉（roTrimTop 应基于 TOP，而不是恒为 0 的 COL_Y-8）');
+  // 只读卡片的行距/波形带必须走紧凑口径：行高 40（编辑 48）、带 0.10~0.90（编辑 0.25~0.71）。
+  // 编辑态的大行高是给点击命中与弧线留的，只读卡片用不上 —— 留着就是每行上下各 13px 空气。
+  ok(/var RO_ROW_H = 40/.test(shapesSrc) &&
+     /function rowH\(\)\{ return \(state\.readonly && state\.embedCard\) \? RO_ROW_H : ROW_H; \}/.test(shapesSrc) &&
+     /var bandT=tight\?0\.10:0\.25, bandM=tight\?0\.50:0\.48, bandB=tight\?0\.90:0\.71;/.test(shapesSrc),
+    '只读卡片的紧凑行高/波形带被改回编辑态口径（会重新长出每行上下的大段空白）');
   const interSrc = read('src/editor/interactions.js');
   const editorSrc = read('src/editor/index.js');
   const cssSrc = read('src/styles.css');
@@ -690,8 +703,8 @@ function check() {
   // 判据咬 currentView/setView 的实现与 doCmd 的三分支，不咬注释。
   ok(/function currentView\(\)/.test(editorSrc) && /function setView\(v\)/.test(editorSrc) &&
      /VIEWS\s*=\s*\{\s*diagram:1,\s*code:1,\s*both:1\s*\}/.test(editorSrc) &&
-     /view:\(dom\.isEmbed\?'diagram':'both'\)/.test(editorSrc),
-    '状态层缺少三视图状态：currentView/setView 或 state.view 默认值');
+     /view:\s*SRC \? \(dom\.isEmbed \? 'diagram' : 'both'\) : 'diagram'/.test(editorSrc),
+    '状态层缺少三视图状态：currentView/setView，或 state.view 默认值没跟着 SRC 开关走');
   // 默认值依赖 dom.isEmbed —— 必须真的从 main.js 传进来（曾漏传，只读嵌入卡默认成 both、
   // 露出可编辑代码框）；嵌入壳再显式设一次 diagram 作双保险。
   ok(/isEmbed:\s*EMBED/.test(read('src/main.js')) &&
@@ -703,8 +716,10 @@ function check() {
   // ② 能力表：view 进 HUD_ITEMS，且嵌入卡片不过滤它（hudCmds 只滤 layout / embed）。
   var capSrc = read('src/editor/cap.js');
   ok(/\['undo', *'redo', *'layout', *'view', *'embed'\]/.test(capSrc) &&
-     /if \(c === 'layout'\) return !inCard;/.test(capSrc),
-    '能力表缺少 view 项，或把 view 当成 layout 一起从嵌入卡片里滤掉了');
+     /if \(c === 'layout'\) return !inCard && SRC;/.test(capSrc) &&
+     /if \(c === 'view'\) return SRC;/.test(capSrc) &&
+     /if \(c === 'embed'\) return SNIPPET;/.test(capSrc),
+    '顶栏重型入口没走开关：layout/view 应受 SRC 控制、embed 应受 SNIPPET 控制');
   // ③ 顶栏渲染：三段分段控件，三个 data-cmd=view:*，互斥 aria-pressed，切视图触发重建。
   var touchViewSrc = read('src/editor/touch.js');
   ok(/VIEW_SEGS\s*=\s*\[/.test(touchViewSrc) &&
@@ -720,6 +735,14 @@ function check() {
   // ⑤ 嵌入退出编辑强制复位 diagram（否则只读卡片露出可编辑代码框）。
   ok(/!on && ctx\.setView/.test(embedSrc) && /ctx\.setView\('diagram'\)/.test(embedSrc),
     '嵌入退出编辑未复位到只图形视图：只读卡片会露出可编辑代码框');
+  // ⑥ 开关层（ui.js）：重型入口默认「独立页开 / 卡片关」，可被 URL 覆盖，
+  //    并由 embed.js 从 data-src / data-snippet 转发 —— HTML 用法也能打开。
+  var uiSrc = read('src/editor/ui.js'), embedJsSrc = read('embed.js');
+  ok(/export var SRC = flag\('src', !EMBED\)/.test(uiSrc) &&
+     /export var SNIPPET = flag\('snippet', !EMBED\)/.test(uiSrc),
+    'ui.js 的默认值不对：应以「是否嵌入」为默认（独立页开、卡片关）');
+  ok(/data-src/.test(embedJsSrc) && /data-snippet/.test(embedJsSrc) && /&src=1/.test(embedJsSrc),
+    'embed.js 没把 data-src / data-snippet 转成 URL 参数（宿主无法打开重型入口）');
   // ⑥ 代码视图给 iframe 上报最小高度（单行波形切到代码时代码框不能矮到没法写）。
   ok(/view === 'code'/.test(embedSrc) && /Math\.max\(content, *220\)/.test(embedSrc),
     '代码视图缺少最小高度上报：单行波形的卡片切到代码后无法编辑');
@@ -1049,7 +1072,8 @@ function check() {
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',
     'src/editor/touch.js', 'src/editor/index.js', 'src/editor/share.js',
     'src/editor/embed-shell.js', 'src/editor/waveform.js', 'src/editor/mode.js',
-    'src/editor/geometry.js', 'src/editor/payload.js', 'src/main.js', 'src/core/example.js', 'src/core/util.js', 'embed.js'];
+    'src/editor/geometry.js', 'src/editor/payload.js', 'src/editor/ui.js', 'src/main.js',
+    'src/core/example.js', 'src/core/util.js', 'embed.js'];
   const cjk = new RegExp('[\\u4e00-\\u9fa5\\u3040-\\u30ff\\uac00-\\ud7af]');
   for (const f of runtimeFiles) {
     if (!fs.existsSync(path.join(ROOT, f))) continue;

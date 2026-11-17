@@ -12,6 +12,11 @@ var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元
 // **每次 redraw 现算**的：BASE_CELL 是常量，CELL 是这一帧的值。
 var BASE_CELL=G.CELL, CELL=BASE_CELL;
 var NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
+// 行距：**只读卡片**按紧凑口径（40），编辑态仍 48 —— 48 是给点击命中、弧线余量与
+// 分组标签留的空间，只读卡片用不上，留着就是一排排空气。
+// 参考 WaveDrom 的默认皮肤：格 20×20、行距 30、波形带 20（占行高 67%）。
+// 我们只读态取 行距 40 / 带 0.10~0.90（= 32，占 80%），比上游更满，但仍留 4px 呼吸。
+var RO_ROW_H = 40;
 var COL_Y=G.COL_Y;
 var XS=G.XS;
 // 分组每嵌套一层要在行名左侧让出的槽宽（花括号 + 竖排组名占这一条）。
@@ -21,6 +26,9 @@ var GSLOT=T?30:24;
 
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
+  // 本帧的行高：只读卡片走紧凑口径（RO_ROW_H），编辑态用 ROW_H。
+  // 放在闭包里是因为它要读 state；所有取行高的地方都过这一个函数，避免各处写死 48 而漂移。
+  function rowH(){ return (state.readonly && state.embedCard) ? RO_ROW_H : ROW_H; }
   // 当前场景（desk|touch × Edit|Card）。所有「画不画某个控件」的判据一律查 cap.js 的能力表：
   // `can('laneMeta')` 读起来就是「这个场景该不该画 φ/T 徽标」，比 `if(T||state.readonly)` 好审。
   // 仍直接读 T / readonly 的地方都是**布局派生**（因为没画控件而少留的高度 / 少留的边距），
@@ -170,7 +178,7 @@ export function createShapes(ctx){
     var map = {};
     ir.lanes.forEach(function (l, li) {
       if (l.kind !== 'signal') return;
-      l.node.forEach(function (ch, t) { if (ch && ch !== '.' && !map[ch]) map[ch] = { x: cellGeo(l, t).cx, y: TOP + li * ROW_H + 7 }; });
+      l.node.forEach(function (ch, t) { if (ch && ch !== '.' && !map[ch]) map[ch] = { x: cellGeo(l, t).cx, y: TOP + li * rowH() + 7 }; });
     });
     var o = [];
     ir.edges.forEach(function (e, i) {
@@ -210,7 +218,7 @@ export function createShapes(ctx){
   // 点它即新增第一条信号行。图形自己表达「这里能加一行」，画布上仍不出现任何文字，
   // 语义只走 aria-label。这里只画操作层的占位元素，不碰波形层图元与指纹。
   function emptyRow(W){
-    var h=ROW_H, cy=TOP+h/2;
+    var h=rowH(), cy=TOP+h/2;
     var px=XS+Math.round(CELL*0.5), wx=XS+Math.round(CELL*1.6), ww=Math.round(CELL*2.2);
     return '<g class="emptyRow" data-act="addFirst" role="button" aria-label="Add the first signal row">'+
       '<rect x="'+(PAD+2)+'" y="'+(TOP+2)+'" width="'+(W-PAD*2-4)+'" height="'+(h-4)+'" rx="6" '+
@@ -301,12 +309,19 @@ export function createShapes(ctx){
     // 只读卡片不要再背「顶部给 HUD 留位置」这笔账：HUD 只在编辑态画，留着就是一圈死白。
     // 做法是把 viewBox 的 y 前移一段（图元坐标一个都没动，波形层指纹与桌面布局不受影响），
     // 底部与右侧也只留一点呼吸空间 —— 波形图本身尽量贴满卡片。
-    var roTrimTop=Math.max(0, COL_Y-8);      // 裁到列号行上方 8px
-    var roTrimBottom=12;                     // 最后一行下沿到卡片底
+    // 裁到「首行上方 8px」：只读卡片不画列号（can('colhead') 为假，见下面 401 行），
+    // 顶部那条 TOP-12 的头带与它到首行的间隔里**什么都没有** —— 旧公式 max(0, COL_Y-8)
+    // 恒等于 0（COL_Y 只有 6 / 8），等于从来没裁，读者看到的就是一条 37px 的死白。
+    var roTrimTop=Math.max(0, TOP-6);
+    var roTrimBottom=6;                      // 最后一行下沿到卡片底
+    // 行距与波形带：只读卡片用紧凑口径（见文件顶 rowH()），编辑态不变。
+    var RH=rowH();
+    var tight=(state.readonly && state.embedCard);
+    var bandT=tight?0.10:0.25, bandM=tight?0.50:0.48, bandB=tight?0.90:0.71;
     // 只读态不画末尾的追加列，所以右侧只需容下最后一个真实格子的右边缘（= ACT_X - 1）。
     var roW=Math.max(ACT_X+PAD, 360);
     var roBottomY=(function(){
-      return ir.lanes.length===0 ? TOP+ROW_H : TOP+ir.lanes.length*ROW_H;
+      return ir.lanes.length===0 ? TOP+RH : TOP+ir.lanes.length*RH;
     })();
     var roH=roBottomY+4+roTrimBottom-roTrimTop;
     state.roBox={w:roW, h:roH};
@@ -315,10 +330,10 @@ export function createShapes(ctx){
     // 只读卡片 → 顶部那一整条 HUD 区从 viewBox 里裁掉、整张图等比 fit。
     // 换句话说：能力回答「有没有」，布局回答「因此省下多少」。别把两者合并。
     var W=state.readonly ? roW : Math.max(ACT_X+ACT_W+PAD, viewW, 560);
-    var bottom=TOP+ir.lanes.length*ROW_H;
+    var bottom=TOP+ir.lanes.length*RH;
     // 零行时波形区高度为 0，占位行需要占一行高度，否则会被算到画布外
     var isEmpty=ir.lanes.length===0;
-    if(isEmpty) bottom=TOP+ROW_H;
+    if(isEmpty) bottom=TOP+RH;
     var actY=bottom+4;
     // 底部两条（动作 / 字符）现在是 .pane.diagram 里的真实 flex 子项，不再盖在画布上，
     // 所以画布不必为它们预留高度 —— 画布高度由 flex 自动让出，这里不记任何「底栏预留」。
@@ -417,16 +432,16 @@ export function createShapes(ctx){
     ir.lanes.forEach(function(l,li){
       if(l.kind!=='signal'||laneShift(l)<=0) return;
       var w=laneChars(l,N)*lanePeriod(l)*CELL;
-      clips.push('<clipPath id="lclip-'+l.id+'"><rect x="'+XS+'" y="'+(TOP+li*ROW_H)+'" width="'+w+'" height="'+ROW_H+'"/></clipPath>');
+      clips.push('<clipPath id="lclip-'+l.id+'"><rect x="'+XS+'" y="'+(TOP+li*RH)+'" width="'+w+'" height="'+RH+'"/></clipPath>');
     });
     if(clips.length) o.push('<defs>'+clips.join('')+'</defs>');
     // 行范围（分组用）：范围内的行一起高亮，看上去是「一段」而不是单选一行
     var spanSet={};
     (state.selRows||[]).forEach(function(id){ spanSet[id]=1; });
     ir.lanes.forEach(function(l,li){
-      var y=TOP+li*ROW_H;
-      var yT=y+Math.round(ROW_H*0.25), yM=y+Math.round(ROW_H*0.48), yB=y+Math.round(ROW_H*0.71);
-      var cellH=ROW_H-10, i, hi=state.selLane===l.id||!!spanSet[l.id];
+      var y=TOP+li*RH;
+      var yT=y+Math.round(RH*bandT), yM=y+Math.round(RH*bandM), yB=y+Math.round(RH*bandB);
+      var cellH=Math.max(10,RH-10), i, hi=state.selLane===l.id||!!spanSet[l.id];
       o.push('<g class="laneGrp'+(hi?' sel':'')+'" data-lane="'+l.id+'">');
       // 选中底衬只铺到**内容右缘**（ACT_X，已含负相位补出的宽度）。原先它铺到 W-PAD*2，
       // 而 W 至少被 viewW / 560 撑大 —— 1440 窗口下 918 宽的底衬里 400 多像素盖在什么都
@@ -435,8 +450,8 @@ export function createShapes(ctx){
       // 所以底衬单独一个 rect 且 pointer-events:none，不参与命中。
       var hiW=Math.max(24,ACT_X-PAD);
       if(hi) o.push('<rect class="laneHi" x="'+PAD+'" y="'+(y+1)+'" width="'+hiW+
-        '" height="'+(ROW_H-2)+'" rx="3" fill="var(--accent-bg)" pointer-events="none"/>');
-      o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(ROW_H-2)+'" rx="3" fill="transparent" style="cursor:pointer"/>');
+        '" height="'+(RH-2)+'" rx="3" fill="var(--accent-bg)" pointer-events="none"/>');
+      o.push('<rect class="laneRow" data-lane="'+l.id+'" x="'+PAD+'" y="'+(y+1)+'" width="'+(W-PAD*2)+'" height="'+(RH-2)+'" rx="3" fill="transparent" style="cursor:pointer"/>');
       if(l.kind==='spacer'){
         // 只读卡片上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
         // 否则读者会看到一条莫名其妙的「spacer」文字。
@@ -463,10 +478,10 @@ export function createShapes(ctx){
           var mR=NAME_W-6, wPer=measure(' T'+l.period,9), wPhi=measure(' φ'+l.phase,9);
           var mP=mR-wPer, mPL=mP-wPhi-3;
           metaHit='<rect class="laneMetaHit" data-act="phase" data-lane="'+l.id+'" x="'+mPL.toFixed(1)+
-              '" y="'+(y+1)+'" width="'+(mP-mPL).toFixed(1)+'" height="'+(ROW_H-2)+
+              '" y="'+(y+1)+'" width="'+(mP-mPL).toFixed(1)+'" height="'+(RH-2)+
               '" fill="transparent" pointer-events="all" style="cursor:pointer"/>'+
             '<rect class="laneMetaHit" data-act="period" data-lane="'+l.id+'" x="'+(mP-1).toFixed(1)+
-              '" y="'+(y+1)+'" width="'+(mR-mP+1).toFixed(1)+'" height="'+(ROW_H-2)+
+              '" y="'+(y+1)+'" width="'+(mR-mP+1).toFixed(1)+'" height="'+(RH-2)+
               '" fill="transparent" pointer-events="all" style="cursor:pointer"/>';
         }
       }
@@ -532,8 +547,8 @@ export function createShapes(ctx){
         }
         run=runEnd+1;
       }
-      o.push('<line x1="'+XS+'" y1="'+(y+ROW_H)+'" x2="'+ACT_X+'" y2="'+(y+ROW_H)+'" stroke="var(--line)" stroke-width="0.5"/>');
-      o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(ROW_H*0.19))+'" width="'+(chars*P*CELL)+'" height="'+Math.round(ROW_H*0.46)+'" fill="none" stroke="none" pointer-events="none"/>');
+      o.push('<line x1="'+XS+'" y1="'+(y+RH)+'" x2="'+ACT_X+'" y2="'+(y+RH)+'" stroke="var(--line)" stroke-width="0.5"/>');
+      o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(RH*bandT))+'" width="'+(chars*P*CELL)+'" height="'+Math.round(RH*(bandB-bandT))+'" fill="none" stroke="none" pointer-events="none"/>');
       // node 字母：上游会把 `node: '..a...'` 的 a / b 画成小字母标在锚点处，
       // 它是 edge 的可读锚点 —— 不画的话读者只看到一条曲线，不知道连的是哪两点。
       // 这属于「图的内容」，与 data 标签同类，不受零常驻文字约束。
@@ -554,7 +569,7 @@ export function createShapes(ctx){
         var prow=ACT_X-8-XS;
         var pgo=['<g class="phaseTrackG">',
           '<rect class="phaseTrack" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+2)+'" width="'+prow+
-            '" height="'+(ROW_H-4)+'" rx="4" fill="var(--accent)" fill-opacity="0.1" pointer-events="none"/>'];
+            '" height="'+(RH-4)+'" rx="4" fill="var(--accent)" fill-opacity="0.1" pointer-events="none"/>'];
         for(var pk=0; pk*0.5<=PHASE_MAX+1e-9; pk++){
           var ptx=XS+pk*0.5*CELL;
           if(ptx>XS+prow-2) break;
@@ -576,7 +591,7 @@ export function createShapes(ctx){
     // 会让字形以基线为轴上下各伸一半，右半正好压到括号竖线上（实测重叠 2.5px）。
     var gEdit=can('laneMeta');
     groupRuns(ir.lanes, gDepth).forEach(function(g){
-      var y0=TOP+g.from*ROW_H+4, y1=TOP+(g.to+1)*ROW_H-4, h=y1-y0;
+      var y0=TOP+g.from*RH+4, y1=TOP+(g.to+1)*RH-4, h=y1-y0;
       if(h<10) return;
       // bx 是括号的**起点**：钩子向右伸 5px，竖线落在 bx-5；组名放在 bx-10（与上游同值）。
       var bx=PAD+g.depth*GSLOT+GSLOT-6, cy=(y0+y1)/2, lx=bx-10;
@@ -608,14 +623,14 @@ export function createShapes(ctx){
       var lcLane=null, lci=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.linkCursor.lane){ lci=k; lcLane=l; } });
       if(lcLane&&lci>=0&&state.linkCursor.tick<laneChars(lcLane,N)){
         var lb=selBox(lcLane,state.linkCursor.tick);
-        o.push('<rect class="linkCursor" x="'+lb.x+'" y="'+(TOP+lci*ROW_H+3)+'" width="'+lb.w+'" height="'+(ROW_H-10)+'" rx="3" role="img" aria-label="Link endpoint cursor"></rect>');
+        o.push('<rect class="linkCursor" x="'+lb.x+'" y="'+(TOP+lci*RH+3)+'" width="'+lb.w+'" height="'+(RH-10)+'" rx="3" role="img" aria-label="Link endpoint cursor"></rect>');
       }
     }
     if(!state.linkMode&&state.selCell){
       var scLane=null, sli=-1; ir.lanes.forEach(function(l,k){ if(l.id===state.selCell.lane){ sli=k; scLane=l; } });
       if(scLane&&sli>=0&&state.selCell.tick<laneChars(scLane,N)){
         var sb=selBox(scLane,state.selCell.tick);
-        o.push('<rect class="cellSel" x="'+sb.x+'" y="'+(TOP+sli*ROW_H+3)+'" width="'+sb.w+'" height="'+(ROW_H-10)+'" rx="3"/>');
+        o.push('<rect class="cellSel" x="'+sb.x+'" y="'+(TOP+sli*RH+3)+'" width="'+sb.w+'" height="'+(RH-10)+'" rx="3"/>');
       }
     }
     o.push('</svg>');

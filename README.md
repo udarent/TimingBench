@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **Timing diagrams you edit directly.** Click a waveform cell and the WaveJSON source is rewritten; change the source and the diagram redraws. Neither side is ever treated as the "real" one.
 
-`0.23.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
+`0.24.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
 
 Your source is not reformatted behind your back: diagram edits are written back as a minimal patch — comments, indentation, key order and quotes survive — and any result that would not round-trip is rolled back.
 
@@ -41,13 +41,14 @@ Readers see the waveform only. A click turns the card into the editor in place; 
 |---|---|
 | Default state | read-only — waveform only, no buttons |
 | Enter / leave editing | click the waveform · `Esc` or the corner button |
-| Three views while editing | a segmented control in the top bar switches between **diagram only**, **code only**, and **both**; entering the card is diagram-only, leaving it resets back |
+| Three views while editing | the standalone editor switches between **diagram only**, **code only**, and **both** from the top bar; a card starts diagram-only and gets the switcher only when it opts in with `data-src="1"` |
 | Narrow cards | the diagram scales to the card width, in editing too, so nothing jumps under the cursor |
 | On a phone | a cramped card goes fullscreen when you start editing, then draws at 1:1 with normal scrolling; fullscreen is where the **both** view gets its full height |
 | Height | the card reports its real height, so there is no blank strip underneath |
 | Events | `timingbench:ready` · `timingbench:change` (the new WaveJSON) · `timingbench:mode` |
 | Commands | `setSource(wavejson)` · `setMode('view'｜'edit')` · `setHeight(px)` |
 | URL params | `?embed=1` (card mode) · `&mode=edit` (start editable) |
+| Opt-in UI | `&src=1` (source pane + split view) · `&snippet=1` (the `<>` embed-code button) |
 
 ```js
 const api = TimingBenchEmbed.mount(el, { wavejson, mode: 'view' });
@@ -55,12 +56,20 @@ api.setSource(newSource);
 el.addEventListener('timingbench:change', e => console.log(e.detail.wavejson));
 ```
 
+**A card stays minimal by default.** Its top bar only has undo / redo — the source pane, the split view and the `<>` embed-code button are opt-in, because a 350 px card has no room for them:
+
+```html
+<div data-timingbench data-wavejson="…" data-mode="edit" data-src="1" data-snippet="1"></div>
+```
+
+`data-src="1"` adds the diagram / code / both switcher, `data-snippet="1"` adds the `<>` button. The standalone editor at `editor.html` turns both on by itself; `?src=0&snippet=0` trims it down to just the waveform.
+
 **Hosts that never run `<script>`** — an Obsidian note, for instance — can use the `iframe only` tab in the editor's `<>` panel, or this:
 
 ```html
 <iframe src="https://udarent.github.io/TimingBench/editor.html?embed=1#wj=PAYLOAD"
-        style="width:100%;height:auto;aspect-ratio:560 / 376;border:0;border-radius:10px;display:block"
-        height="376" loading="lazy" title="Timing diagram"></iframe>
+        style="width:100%;height:auto;aspect-ratio:360 / 96;border:0;border-radius:10px;display:block"
+        height="96" loading="lazy" title="Timing diagram"></iframe>
 ```
 
 `#wj=` carries the WaveJSON inside the URL (base64url), so the snippet is self-contained: copy the note, send the file, publish it — it renders wherever iframes are allowed. The one thing you give up is the `timingbench:change` event. In Obsidian, paste it as a raw HTML block, **not** inside a code fence.
@@ -70,7 +79,7 @@ Don't want to hand-write any of this? Draw the diagram in the editor and click `
 ## What you can do
 
 - **Edit either side.** Diagram → source through a minimal patch; source → diagram redraws shortly after you stop typing, and keeps the last good picture while you type something invalid (a red dot shows the error).
-- **Pick your view.** A segmented control in the top bar shows **diagram only**, **code only**, or **both** side by side. Embedded cards start on diagram-only and reset to it when you leave editing, so a reader never lands on a screen of raw source.
+- **Pick your view.** In the standalone editor a segmented control in the top bar shows **diagram only**, **code only**, or **both** side by side. Embedded cards start on diagram-only, hide the control unless they opt in with `data-src="1"`, and reset when you leave editing — a reader never lands on a screen of raw source.
 - **Compact sources get tidied.** When a minified one-line `data-wavejson` or `#wj=` payload is loaded, it is pretty-printed across lines before it reaches the code box. Your own multi-line source — comments and layout included — is left untouched; only sources with no line breaks and no comments are reformatted.
 - **Write waveforms fast.** Select a cell and type a character, click it in the character bar, or drag across cells to paint. Each chip in the bar shows the shape it will write.
 - **Edit in place.** Double-click a cell, a signal name, a data label, an arc, or a whole `wave` / `data` / `node` row. `phase` and `period` are editable the same way, and both are applied to the drawing.

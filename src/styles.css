@@ -392,11 +392,13 @@ svg{display:block;font-family:var(--sans)}
    为什么不是右下：卡片比内容高时它会悬在空白带里（旧片段写死 height 时就是这样）。
    右上角是波形末端，压住的是「持续电平」那一角，不丢信息。
    铅笔＝点一下进入编辑，对勾＝编辑中、点一下结束；零常驻文字，语义只在 aria-label。 */
+/* 只读卡片里这颗「编辑」按钮画成**裸图标**：原先它带 1px 边框 + 圆角 + 底色，
+   在去掉卡片边框之后，它自己又成了一个浮在图角上的小圆角方块（对照 WaveDrom 的教程图
+   会显得多余）。命中区仍是 30×30，只是不再画框；编辑态（对勾）才重新上底色。 */
 .is-embed .embedhint{display:flex;position:fixed;right:8px;top:8px;z-index:40;
   align-items:center;justify-content:center;width:30px;height:30px;padding:0;
-  border:1px solid var(--line);border-radius:8px;
-  background:var(--panel);color:var(--muted);
-  cursor:pointer;opacity:.72;transition:opacity .15s,color .15s,border-color .15s,background .15s}
+  border:0;border-radius:8px;background:transparent;color:var(--muted);
+  cursor:pointer;opacity:.35;transition:opacity .15s,color .15s,border-color .15s,background .15s}
 .is-embed .embedhint .hintico{width:16px;height:16px;fill:none;stroke:currentColor;
   stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .is-embed .embedhint .hintico-done{display:none}

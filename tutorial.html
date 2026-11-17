@@ -6,17 +6,20 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.23.0">
+<meta name="version" content="0.24.0">
 <meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
 <style>
   :root{
-    --bg:#fff;--panel:#fff;--src-bg:#f7f8fa;--ink:#22262b;--muted:#8a8f96;
+    --bg:#fff;--src-bg:#f7f8fa;--ink:#22262b;--muted:#8a8f96;
     --line:rgba(0,0,0,.10);--accent:#1a6fb5;
     --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
     --sans:system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
   }
   @media (prefers-color-scheme:dark){
-    :root{--bg:#161719;--panel:#1f2124;--src-bg:#202225;--ink:#e9e9e6;--muted:#9a9a94;
+    /* --bg matches the editor's dark --bg (src/styles.css): the embed card no
+       longer has a border, so both backgrounds must be identical or a lighter
+       rectangle shows through around each diagram. */
+    :root{--bg:#191a1c;--src-bg:#202225;--ink:#e9e9e6;--muted:#9a9a94;
           --line:rgba(255,255,255,.14);--accent:#6cb0ee}
   }
   *{box-sizing:border-box}
@@ -40,7 +43,11 @@
   h2{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:44px 0 6px;padding-top:12px;
      border-top:1px solid var(--line)}
   section.step > p{margin:6px 0 16px;color:var(--ink)}
-  .livecard{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;margin:0 0 8px}
+  /* No border, radius or fill — same as WaveDrom's tutorial, where the diagram
+     sits directly on the page. The diagram is an iframe of the editor, which
+     paints its own body background, so this container stays transparent and the
+     dark --bg below is matched to the editor's so no seam shows. */
+  .livecard{background:transparent;margin:0 0 6px}
   .livecard iframe{display:block;width:100%;border:0}
   .hint{margin:6px 0 4px;font-size:13px;color:var(--muted)}
   .hint code{font-family:var(--mono);font-size:12.5px}

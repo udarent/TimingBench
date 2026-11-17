@@ -34,9 +34,17 @@
     var wavejson = opts.wavejson || el.getAttribute('data-wavejson') || '';
     var mode = opts.mode || el.getAttribute('data-mode') || 'view';
     var height = opts.height || el.getAttribute('data-height') || 240;
+    // 顶栏的重型入口默认关闭（卡片里只需要 看 / 改 波形）。宿主可显式打开：
+    //   data-src="1"      → 视图切换（图形 / 代码 / 双栏）+ 分屏方向
+    //   data-snippet="1"  → 「<>」生成嵌入代码
+    // 直接查属性而不是只查 opts，这样纯 HTML 用法（不写 JS）也能开。
+    var uiSrc = opts.src !== undefined ? opts.src : el.getAttribute('data-src');
+    var uiSnip = opts.snippet !== undefined ? opts.snippet : el.getAttribute('data-snippet');
+    var ui = (uiSrc === '1' || uiSrc === true ? '&src=1' : '') +
+             (uiSnip === '1' || uiSnip === true ? '&snippet=1' : '');
 
     var frame = document.createElement('iframe');
-    frame.src = BASE + 'editor.html?embed=1' + (mode === 'edit' ? '&mode=edit' : '');
+    frame.src = BASE + 'editor.html?embed=1' + (mode === 'edit' ? '&mode=edit' : '') + ui;
     frame.title = opts.title || el.getAttribute('data-title') || 'TimingBench diagram';
     frame.loading = 'lazy';
     frame.style.cssText = 'display:block;width:100%;border:0;height:' + (parseInt(height, 10) || 240) + 'px';
