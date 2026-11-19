@@ -124,10 +124,6 @@ export function attachInteractions(ctx){
         makeOp:function(v){ var n=Number(v); return v!==''&&isFinite(n)&&n>=1?{t:'setPeriod',lane:l.id,v:n}:null; } };
       case 'wave': return { val:Core.laneWave(l), title:'row wave', label:'row wave', wide:true,
         makeOp:function(v){ return {t:'setWave',lane:l.id,v:v}; } };
-      case 'data': return { val:Core.laneLabels(l).join(' '), title:'row data (space separated, empty removes)', label:'row data', wide:true,
-        makeOp:function(v){ return {t:'setLabels',lane:l.id,v:v}; } };
-      case 'node': return { val:l.node.join('').replace(/\.+$/,''), title:'row node', label:'row node', wide:true,
-        makeOp:function(v){ return {t:'setNodeStr',lane:l.id,v:v}; } };
     }
     return null;
   }
@@ -1253,8 +1249,10 @@ export function attachInteractions(ctx){
     switch(k){
       case 'k': ctx.setLinkMode(true); return true;                       // 连线模式开关
       case 'r': if(needSignal()) ctx.openInlineFor({nameLane:sc.lane}); return true;
-      case 'w': case 'a': case 's': case 'f': case 't':                  // 整行 / 相位 / 周期
-        if(needSignal()) ctx.openRowEditor(sc.lane,{w:'wave',a:'data',s:'node',f:'phase',t:'period'}[k]);
+      // 整行 wave / 相位 / 周期。行级的 data / node 已撤（0.27.1）：同一个字段只留格级入口，
+      // 批量改标签仍可用 `b` 逐个改，或直接改源码。
+      case 'w': case 'f': case 't':
+        if(needSignal()) ctx.openRowEditor(sc.lane,{w:'wave',f:'phase',t:'period'}[k]);
         return true;
       case 'b': if(needSignal()) ctx.openLabelEditor(sc.lane,sc.tick); return true;
       case 'e': case 'E': editEdge(k==='E'); return true;                 // 编辑 / 切换弧线

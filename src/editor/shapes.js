@@ -5,7 +5,7 @@ import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, clam
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import * as Cap from './cap.js';
-import { waveGlyph, waveGap, busClassOf, fitLabel } from './waveform.js';
+import { waveGlyph, waveGap, busClassOf, fitLabel, blockEdge } from './waveform.js';
 
 var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元里的 T 是上沿 y 坐标，已移到 waveform.js）
 // 基准格宽（桌面 38 / 触摸 48）。文档里的 config.hscale 会把它乘掉，所以 CELL 是
@@ -566,13 +566,15 @@ export function createShapes(ctx){
         // 那条起沿是不是多余的。只传「最近一个显式状态点」会漏掉 `h...` / `l.` 这种
         // 延续同一电平的情况，于是每个延续格边界都多画一条竖线。
         var prevCh=i>0?wsAt(i-1):null;
-        var gopt={};
-        if(Core.BUS.test(w)){
-          var ljoin=i>0&&!ptAt(i)&&Core.BUS.test(wsAt(i-1));
-          var rjoin=(i+1<chars)&&!ptAt(i+1)&&Core.BUS.test(wsAt(i+1));
-          gopt.seg=ljoin?(rjoin?'mid':'end'):(rjoin?'start':'only');
-          gopt.cls=busClassOf(w);
-        }
+        // 过渡画在**本格**的开头（上游把过渡砖放在新格），所以每格只需要知道上一格是什么：
+        //   pbus   上一格是总线（本格要把它的收口画出来，且带它的配色）
+        //   pblock 上一格是「满高块体」—— 总线或 x（两者共用同一套过渡几何）
+        //   psame  上一格与本格同款且属同一段（`. / =` 延续）→ 齐头拼接，不画任何边
+        var gopt={}, pbus=!!prevCh&&Core.BUS.test(prevCh), pblock=pbus||prevCh==='x';
+        gopt.pbus=pbus; gopt.pblock=pblock;
+        if(pblock) gopt.psame=!ptAt(i);
+        if(pbus) gopt.pcls=busClassOf(prevCh);
+        if(Core.BUS.test(w)) gopt.cls=busClassOf(w);
         var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,cw,gopt);
         o.push(s?glyph:'<g class="tailSlot" role="img" aria-label="Undefined period — tap to extend">'+glyph+'</g>');
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
@@ -600,8 +602,20 @@ export function createShapes(ctx){
           if(sq&&sq.point&&!sq.gap&&sq.label!==null&&sq.label!==undefined&&sq.label!==''){ lb=sq.label; break; }
         }
         if(lb!==null){
-          var lx0=cellGeo(l,run).x0, lx1=cellGeo(l,runEnd).x0+cellGeo(l,runEnd).w;
-          o.push('<text class="waveLabel" x="'+((lx0+lx1)/2).toFixed(1)+'" y="'+(yM+1)+'" text-anchor="middle" dominant-baseline="central">'+
+          var g0=cellGeo(l,run), gE=cellGeo(l,runEnd);
+          var lx0=g0.x0, lx1=gE.x0+gE.w;
+          // 标签要居中在**画出来的那块**上，不是居中的格子上：块体的两端都不在格线上 ——
+          // 左端收进去（接电平 3px / 接另一块 6px），右端伸进下一格 9px。按格算会整条偏左 7px。
+          var lbe=blockEdge(g0.w), lbm=lbe.bm, lbi=lbe.bi, lbr=lbe.br;
+          var lprev=run>0?wsAt(run-1):null, lnext=(runEnd+1<chars)?wsAt(runEnd+1):null;
+          var isBlock=function(c){ return !!c&&(Core.BUS.test(c)||c==='x'); };
+          // 左端：接另一块体时两段收成同一个尖（在格线后 6px），接电平才是 3px 的斜边起点。
+          if(run>0) lx0+=isBlock(lprev)?lbm:lbi;
+          // 右端：收口画在下一格的开头 —— 接块体收到 6px 就与对方对尖，接电平要走到 9px 才落轨。
+          if(runEnd+1<chars) lx1+=isBlock(lnext)?lbm:lbr;
+          // y 用 yM 本身：`central` 基线的落点就是墨迹盒中心，行高 0.25/0.48/0.71 的分带让
+          // yM 正好压在带子中线上 —— 曾经写 `yM+1`（旧版想补偿「字显高」），结果是整体偏低 1px。
+          o.push('<text class="waveLabel" x="'+((lx0+lx1)/2).toFixed(1)+'" y="'+yM+'" text-anchor="middle" dominant-baseline="central">'+
             esc(fitLabel(lb,Math.max(10,lx1-lx0-4),10))+'</text>');
         }
         run=runEnd+1;

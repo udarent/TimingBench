@@ -7,6 +7,7 @@ import { Core } from './src/core/ir.js';
 import { EXAMPLE } from './src/core/example.js';
 import * as Cap from './src/editor/cap.js';
 import { hscaleOf, HSCALE_MAX } from './src/editor/geometry.js';
+import { waveGlyph } from './src/editor/waveform.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => { try { return fs.readFileSync(path.join(ROOT, p), 'utf8'); } catch (e) { return ''; } };
@@ -674,6 +675,24 @@ function check() {
      /chipGlyph\(v\)\{ return waveGlyph\(v,null,0,5,13,21,CHIP_W/.test(waveSrc) &&
      !/TOUCH\?7:5|TOUCH\?22:13|TOUCH\?37:21/.test(waveSrc),
     '字符缩略图按指针分叉或画布尺寸被改（同一字符会在嵌入卡片与编辑页画出不同形状）');
+  // 每个波形字符都必须真的画出图元。0.27.1 曾把时钟分支写成两个连着的 `else if`，
+  // 前一个的分支体是空的 —— `p/P/n/N/h/H/l/L` 整行画不出来；而唯一盯着渲染的断言是
+  // 波形层指纹，它恰好在那次改动之后重算过，等于把 bug 一起写进了基准。这条按字符数图元，
+  // 补上「指纹只能证明没变、不能证明对」的窟窿。
+  {
+    const CHARS = ['0','1','x','z','d','u','=','2','3','4','5','6','7','8','9','p','P','n','N','h','H','l','L'];
+    const none = CHARS.filter((ch) => !/<path|<polygon/.test(waveGlyph(ch, '0', 0, 0, 16, 32, 38, {})));
+    ok(none.length === 0, '有波形字符画不出任何图元（分支被顶掉？）：' + none.join(' '));
+    // 完整时钟 p/P/n/N 的中间那次跳变恒画；半周期 h/H 从低起要画起沿，l/L 本来就在低、不画。
+    const noEdge = ['p','P','n','N'].filter((ch) => !/V/.test(waveGlyph(ch, '0', 0, 0, 16, 32, 38, {})));
+    ok(noEdge.length === 0, '时钟字符没画出竖边（起沿丢失）：' + noEdge.join(' '));
+    const noRise = ['h','H'].filter((ch) => !/V/.test(waveGlyph(ch, '0', 0, 0, 16, 32, 38, {})));
+    ok(noRise.length === 0, '半周期高电平没画出起沿：' + noRise.join(' '));
+    // x 的斜线：行首整条、以及「上一格是总线（交叉过渡）」两种都要有。
+    ok(/waveHair/.test(waveGlyph('x', '0', 0, 0, 16, 32, 38, {})) &&
+       /waveHair/.test(waveGlyph('x', '3', 0, 0, 16, 32, 38, { pbus: true, pblock: true, psame: false, pcls: 'bus3' })),
+      'x 的斜线填充丢失（或交叉过渡处没画）');
+  }
   // laneShift 必须**原样**返回相位值，两条都重要：
   //   ① 不量化（出现 round / floor / ceil 就又回到「0.1 与 0 重合」的老毛病）；
   //   ② 不把负值抹成 0 —— 负相位是「整行右移」，上游 `render-wave-lane.js` 的 xoffset
@@ -857,8 +876,10 @@ function check() {
        Cap.ACTS.dock.indexOf('node') >= 0 && Cap.ACTS.dock.indexOf('link') >= 0,
       '格级动作清单缺失（应为 label / node / link，归在 ACTS.dock）');
     ok(!Cap.ACTS.cell, '格级动作仍留在上下文条（应已挪到停靠条左侧，ACTS.cell 不应存在）');
-    ok(Cap.ACTS.row.indexOf('link') >= 0 && Cap.ACTS.col.indexOf('link') >= 0,
-      '行 / 列动作未带上连线按钮（link 应与 label / node 同排，四套场景都带）');
+    // 连线只在格级（0.27.1 纠正）：它是「连两个节点」，行 / 列动作里出现会误导成
+    // 「选中一行就能连线」。键盘入口（`k`）不受影响，见下面的快捷键断言。
+    ok(Cap.ACTS.row.indexOf('link') < 0 && Cap.ACTS.col.indexOf('link') < 0,
+      '连线又出现在行 / 列动作里了（它连的是两个节点，只属于格级停靠条）');
     const swaps = Object.keys(Cap.CAP).filter((n) =>
       Cap.isSwap(n,'deskEdit') !== Cap.isSwap(n,'touchEdit'));
     ok(swaps.length === 0, '桌面与触摸仍有能力差异（swap 标注不一致）：' + swaps.join(' / '));
@@ -993,14 +1014,20 @@ function check() {
     // 载入链路两处都要调用 formatSource（setSource 宿主指令 + hashPayload URL 片段）
   }
   // 动作清单已集中到 cap.js（ACTS），touch.js 只引用；两边任一处脱钩都算失败。
-  // 行动作 15 个：12 个行编辑 + 分组三件套（group / spanUp / spanDown）。
+  // 行动作 12 个：9 个行编辑 + 分组三件套（group / spanUp / spanDown）。
   // 分组动作必须在行动作里 —— 「从 0 建组」的唯一入口就是它（组名只在组已存在时才可点）。
-  ok(Cap.ACTS.row.length === 15 && Cap.ACTS.row.indexOf('name') >= 0 &&
+  // **连线只在格级**（0.27.1）：它连的是「两个节点」，行 / 列都不是它的作用对象。
+  // **整行 data / node 已撤**（0.27.1）：与格级的 label / node 是同一个字段的两个粒度，
+  // 同一个修改只留一个入口；wave 保留（整行重写 ≠ 逐格绘制）。
+  ok(Cap.ACTS.row.length === 12 && Cap.ACTS.row.indexOf('name') >= 0 &&
+     Cap.ACTS.row.indexOf('data') < 0 && Cap.ACTS.row.indexOf('nodeStr') < 0 &&
+     Cap.ACTS.row.indexOf('wave') >= 0 &&
      ['group', 'spanUp', 'spanDown'].every((k) => Cap.ACTS.row.indexOf(k) >= 0) &&
-     Cap.ACTS.col.length === 5 && Cap.ACTS.col.indexOf('insert') >= 0 &&
-     Cap.ACTS.row.indexOf('link') >= 0 && Cap.ACTS.col.indexOf('link') >= 0 &&
+     Cap.ACTS.col.length === 4 && Cap.ACTS.col.indexOf('insert') >= 0 &&
+     Cap.ACTS.row.indexOf('link') < 0 && Cap.ACTS.col.indexOf('link') < 0 &&
+     Cap.ACTS.dock.indexOf('link') >= 0 &&
      /ROW_ACTS = Cap\.ACTS\.row/.test(touchSrc) && /COL_ACTS = Cap\.ACTS\.col/.test(touchSrc),
-    '上下文动作集缺失或被改成文字面板');
+    '上下文动作集缺失，或连线又混进了行 / 列动作（它只属于格级）');
 
   // 箭头语法（教程 Step 8）：解析 <from><shape><to>，shape 含 < > ~ - | +。
   // 判据看**机制**而不是某一行实现：形状必须是「显式表」（`-|` 与 `|-` 各登记一种，

@@ -5,8 +5,6 @@ import { G } from './geometry.js';
 import { esc } from '../core/util.js';
 
 var CHIP_W=G.CHIP_W;
-  // 参考上游默认皮肤外观规范自行绘制的波形图元
-  // 主画布与候选字符条共用同一个 waveGlyph，保证「图案即写入结果」
   var BUS_CLASS={'=':'bus2','2':'bus2','3':'bus3','4':'bus4','5':'bus5','6':'bus6','7':'bus7','8':'bus8','9':'bus9'};
   function waveLevel(ch,T,M,B){
     if(/[1hHu]/.test(ch)) return T;
@@ -14,11 +12,44 @@ var CHIP_W=G.CHIP_W;
     if(Core.BUS.test(ch)||Core.CLOCK.test(ch)||ch==='x') return null;
     return M;
   }
-  function waveHatch(X,x1,T,B,W){
-    var o=[], dy=B-T, step=Math.max(3,W/7), k, sx, ex, a, b;
-    for(k=-6;k<=10;k++){
-      sx=X+k*step; ex=sx+dy; a=Math.max(X,sx); b=Math.min(x1,ex);
+  // 斜线填充。`left` / `right` 是块体在该侧的可选边界线（[x0,y0,x1,y1]，也可以给一组）：
+  // 填线要停在边界以内，否则会戳进过渡让出来的三角空缺里 —— 上游也是逐条线算交点裁的
+  // （`0mx` / `xm0` 的每条 `s2` 端点都正好落在斜边上）。竖边（x0===x1）当作普通 x 截断；
+  // 给一组时取**最近**的那条（收口是「>」形的两条边，填线该停在哪条取决于它从哪半边过来）。
+  function waveHatch(X,x1,T,B,W,left,right){
+    var o=[], dy=B-T;
+    // 步距：按格宽 W/7 取，但**不许**超过行高的 1/6。上游的砖宽恒为 20px、行高也是 20，
+    // 于是它的斜线间隔恒为 5px —— 不随 hscale 变稀；我们若只按 W 取，hscale 4 时间隔会到
+    // 21px，过渡的收口楔形（只有 6px 宽）里一条线都落不进去，看上去就是一块白。
+    // 再把步距**量化成 W 的整数分之一**：相邻格各按自己的格线起算斜线，W 不是步距的整数倍
+    // 时，跨格会错位出半条线，同一条总线走到格线上会出现一道错缝。
+    var want=Math.max(3,Math.min(W/7,dy/6)), nz=Math.max(1,Math.round(W/want)), step=W/nz, k, sx, a, b;
+    // 交点：填线是 45°（y = sx+B-x），与边界线（x0,y0)-(x1,y1) 求交，解一次一元方程。
+    var cut=function(seg,sx){
+      var vx=seg[2]-seg[0], vy=seg[3]-seg[1];
+      if(!vy) return null;                       // 水平边界不动 x
+      var kk=vx/vy, den=1+kk;
+      if(Math.abs(den)<1e-6) return null;
+      return (seg[0]+kk*((sx+B)-seg[1]))/den;
+    };
+    var bound=function(segs,sx,takeMin){
+      if(!segs) return null;
+      var list=(segs[0]!==undefined&&typeof segs[0]==='number')?[segs]:segs, r=null, i, v;
+      for(i=0;i<list.length;i++){
+        v=cut(list[i],sx); if(v===null) continue;
+        r=(r===null)?v:(takeMin?Math.min(r,v):Math.max(r,v));
+      }
+      return r;
+    };
+    // 起止由几何定，不写死条数：步距变小（宽格 / 高行）时条数要跟着变多，否则右半边会空着。
+    var k0=Math.floor(-dy/step)-1, k1=Math.ceil((x1-X)/step)+1;
+    for(k=k0;k<=k1;k++){
+      sx=X+k*step; a=Math.max(X,sx); b=Math.min(x1,sx+dy);
       if(b<=a) continue;
+      var cl=bound(left,sx,false), cr=bound(right,sx,true);
+      if(cl!==null&&cl>a) a=cl;
+      if(cr!==null&&cr<b) b=cr;
+      if(b<=a+0.5) continue;
       o.push('<path class="waveHair" d="M'+a+','+(B-(a-sx))+' L'+b+','+(B-(b-sx))+'"/>');
     }
     return o.join('');
@@ -37,6 +68,52 @@ var CHIP_W=G.CHIP_W;
     if(/[nNhH]/.test(ch)) return T;      // n / N 收在高；h / H 本身就是高
     return waveLevel(ch,T,null,B);       // 1 / 0 / u / d；M 传 null ⇒ 判不出的字符返回 null
   }
+  // 某个字符**从哪条轨起步**：与 railEnd 恰好相对。总线的收口要落在本格起步的那条轨上，
+  // 所以这里不能用 railEnd —— `p` 收在低、却是从高起的，混用会让斜边朝反方向走。
+  function railStart(ch,T,B){
+    if(!ch) return null;
+    if(/[pPhH]/.test(ch)) return T;      // p / P 从高起；h / H 是抬到高
+    if(/[nNlL]/.test(ch)) return B;      // n / N 从低起；l / L 是落到低
+    return waveLevel(ch,T,null,B);
+  }
+  // 收口尖「>」的两条斜边：从竖带两端收到中高度的尖上。它同时是斜线填充的右边界 ——
+  // 换块时上一段要收成这个尖，下一段再从对面收过来，两段在尖上对触（上游 vmv / vmx-brick）。
+  function capEdges(X,bi,bm,T,M,B){
+    return [[X+bi,T,X+bm,M],[X+bi,B,X+bm,M]];
+  }
+  // 块体两端相对格线的偏移（上游 20px 砖里的 3..9，窄格按比例收）：起点 bi、落点 br、
+  // 两段对尖的中线 bm。绘制、收口、标签居中三处共用这一份 —— 分开算迟早会有一处对不上。
+  function blockEdge(W){
+    var bi=Math.min(3,W*0.12), br=Math.min(9,W*0.34);
+    return {bi:bi, br:br, bm:(bi+br)/2};
+  }
+  // 上一格是**块体**（总线或 x）、本格是电平：把块体那半块的收口画在**本格开头**的头 3..9px
+  // （上游 vm-brick / xm-brick）。总线收口是实心色块、x 收口是斜线填充 —— 形态一样，只是「填什么」
+  // 不同，所以共用一份几何。本格自己的电平线照常从格线铺满：过渡压在线下方向内收。
+  function blockCap(ch,capCls,X,T,M,B,W,bi,br,bm){
+    var r=railStart(ch,T,B), fp, ink, pts=[], k, hair='', seg;
+    if(r===T){
+      fp=[[X,T],[X,B],[X+bi,B],[X+br,T]];
+      ink='M'+X+','+B+' H'+(X+bi)+' L'+(X+br)+','+T;
+      seg=[X+bi,B,X+br,T];
+    } else if(r===B){
+      fp=[[X,T],[X,B],[X+bi,T],[X+br,B]];
+      ink='M'+X+','+T+' H'+(X+bi)+' L'+(X+br)+','+B;
+      seg=[X+bi,T,X+br,B];
+    } else {
+      // 起步轨问不出（z）：收成中高度一个尖（上游 vmz / xmz 的折线近似）
+      fp=[[X,T],[X,B],[X+bi,B],[X+bm,M],[X+bi,T]];
+      ink='M'+(X+bi)+','+B+' L'+(X+bm)+','+M+' L'+(X+bi)+','+T;
+    }
+    // 收口没有色块可填时（x 走近上一格）就是一片斜线：斜线要跟本格同一套步距，
+    // 且停在收口的边上 —— 落轨的那种只有一个斜边，收尖的那种是两条（取最近的）。
+    if(!capCls) hair=(r===T||r===B)
+      ? waveHatch(X,X+br,T,B,W,[X,T,X,B],seg)
+      : waveHatch(X,X+bm,T,B,W,[X,T,X,B],capEdges(X,bi,bm,T,M,B));
+    for(k=0;k<fp.length;k++) pts.push(fp[k][0]+','+fp[k][1]);
+    return (capCls?'<polygon class="waveBus '+capCls+'" points="'+pts.join(',')+'" stroke="none"/>':'')+
+      hair+'<path class="waveBusInk" d="'+ink+'"/>';
+  }
   // 相位线：两条 S 曲线 + 白色遮罩（参考上游默认皮肤的视觉风格，自行绘制）
   function waveGap(X,T,B){
     var t=T-2, b=B+2;
@@ -53,29 +130,69 @@ var CHIP_W=G.CHIP_W;
     // 以前它会落进最后一条分支、按 waveLevel 的兜底画成一条**中位实线** —— 看起来像一条
     // 正常信号，等于把「这里有东西我没懂」伪装成了「这里是合法的零电平」。斜线填充才是诚实的。
     if(!(Core.BUS.test(ch)||Core.CLOCK.test(ch)||/[01xzud]/.test(ch))) ch='x';
-    if(Core.BUS.test(ch)){
-      // 段的左右两侧要不要画斜边，由「相邻格是否延续」决定（`=` 与 `.` 都是延续符）：
-      //   only  独立一段 → 左右都斜
-      //   start 段首（右边延续）→ 左斜右直
-      //   mid   段中 → 矩形，与两侧无缝拼接
-      //   end   段尾（左边延续）→ 左直右斜
-      // 上游 WaveDrom 就是这样合并的；逐格各画一个六边形会在延续处留下「两条斜边相接」
-      // 的接缝，看起来像两个断开的块。命中用的 rect.cell 仍是每格一个，不受影响。
-      var seg=o2.seg||'only';
-      var cls=o2.cls||BUS_CLASS[ch]||'bus2';
-      var lj=(seg==='mid'||seg==='end'), rj=(seg==='mid'||seg==='start');
-      var fp;
-      if(lj&&rj)   fp=[X,T,x1,T,x1,B,X,B];
-      else if(lj)  fp=[X,T,x1-3,T,x1,M,x1-3,B,X,B];
-      else if(rj)  fp=[X,M,X+3,T,x1,T,x1,B,X+3,B];
-      else         fp=[X+3,T,x1-3,T,x1,M,x1-3,B,X+3,B,X,M];
-      // 色块只负责填充（无描边）；轮廓另画一条 path，且**段内不画竖边** ——
-      // 两块各自带描边时，公共边会被描两遍，看上去仍有一条竖线把段切断。
-      o.push('<polygon class="waveBus '+cls+'" points="'+fp.join(',')+'" stroke="none"/>');
-      var bd='M'+X+','+T+' H'+x1+' M'+X+','+B+' H'+x1;
-      if(!lj) bd+=' M'+X+','+M+' L'+(X+3)+','+T+' M'+X+','+M+' L'+(X+3)+','+B;
-      if(!rj) bd+=' M'+(x1-3)+','+T+' L'+x1+','+M+' L'+(x1-3)+','+B;
-      o.push('<path class="waveBusInk" d="'+bd+'"/>');
+    var e=blockEdge(W), bi=e.bi, br=e.br, bm=e.bm;
+    var isBus=Core.BUS.test(ch), isX=(ch==='x');
+    // 上一格是**块体**（总线 / x）时，它的收口要由本格画 —— 过渡属于新格，见下面块体分支。
+    // 块体自己那半块在块体分支里跟自己的起口一起画。
+    if(o2.pblock&&!isBus&&!isX)
+      o.push(blockCap(ch,o2.pbus?(o2.pcls||'bus2'):null,X,T,M,B,W,bi,br,bm));
+    if(isBus||isX){
+      // 总线与 `x` 都是**满高块体**（x 只是把填充换成斜线），过渡规则完全一样，所以合成一支。
+      // 而且「过渡属于新格」：上游把每一笔过渡都画在**新格的头 3..9px** 里（20px 的半格砖内
+      // 3..9），上一格只管铺到自己的右边界就说完了。于是：
+      //   · 每格只回答「我是从上一格怎么进来的」；右端永远齐头，收口由**下一格**负责
+      //     —— 块体因此天然向下一格伸出 9px，和上游一样；
+      //   · 进来有四种：
+      //       edge  行首 → 齐头
+      //       join  上一格是同款块体且属同一段 → 齐头，且不描公共竖边
+      //       enter 上一格是电平 → 一条贯穿全高的斜边，起点落在上一格收盘的那条轨
+      //       cross 上一格是**另一种块体**（换色 / x 与总线互换 / 问不出轨）→ 两条边交叉
+      // 旧实现把边型摊到「左右两侧」，右端收在格线**内** 3..9px，于是同一段比上游短 6px，
+      // 接缝处还得靠补横线遮掩。改成单边模型后这些补丁全部不需要了。
+      var cls=isBus?(o2.cls||BUS_CLASS[ch]||'bus2'):null;
+      var pts=function(a){ var s=[],k; for(k=0;k<a.length;k++) s.push(a[k][0]+','+a[k][1]); return s.join(','); };
+      // 候选字符条的缩略图是**图标**不是波形格子：左右各一个 3px 的尖，保持对称。
+      if(isBus&&o2.icon){
+        o.push('<polygon class="waveBus '+cls+'" points="'+pts([[X+bi,T],[x1-bi,T],[x1,M],[x1-bi,B],[X+bi,B],[X,M]])+'" stroke="none"/>');
+        o.push('<path class="waveBusInk" d="M'+(X+bi)+','+T+' H'+(x1-bi)+' M'+(X+bi)+','+B+' H'+(x1-bi)+
+          ' M'+X+','+M+' L'+(X+bi)+','+T+' M'+X+','+M+' L'+(X+bi)+','+B+
+          ' M'+(x1-bi)+','+T+' L'+x1+','+M+' L'+(x1-bi)+','+B+'"/>');
+        return '<g class="waveGlyph" data-w="'+esc(ch)+'" pointer-events="none">'+o.join('')+'</g>';
+      }
+      var kind=o2.pblock?(o2.psame?'join':'cross'):(prev?'enter':'edge');
+      var ra=(kind==='enter')?railEnd(prev,T,B):null;
+      if(kind==='enter'&&ra!==T&&ra!==B) kind='cross';
+      var fp, bd, left=null;
+      if(kind==='cross'){
+        // 交叉过渡（上游 vmv-brick / xmv-brick）：两段各从自己的格边起一条斜线，交叉处是腰。
+        fp=[[X+br,T],[x1,T],[x1,B],[X+br,B],[X+bm,M]];
+        bd='M'+(X+br)+','+T+' H'+x1+' M'+(X+br)+','+B+' H'+x1+
+           ' M'+(X+bi)+','+T+' L'+(X+br)+','+B+' M'+(X+bi)+','+B+' L'+(X+br)+','+T+
+           ' M'+X+','+T+' H'+(X+bi)+' M'+X+','+B+' H'+(X+bi);
+        // 上一段若是总线，把它的收口（一条竖带 + 尖）补上；若是 x，补的是同一形状的**斜线**。
+        // 缺了这半块，斜线带就会在格线上被平切，与下一块之间留一道白缝（上游两段是收成同一个尖对触的）。
+        if(!o2.psame){
+          if(o2.pbus) o.push('<polygon class="waveBus '+(o2.pcls||'bus2')+'" points="'+
+            pts([[X+bi,T],[X,T],[X,B],[X+bi,B],[X+bm,M]])+'" stroke="none"/>');
+          else o.push(waveHatch(X,X+bm,T,B,W,[X,T,X,B],capEdges(X,bi,bm,T,M,B)));
+        }
+        left=[X+br,T,X+br,B];
+      } else if(kind==='enter'){
+        // 斜边从上一格收盘的轨（ra）斜到另一条轨；那条轨的横线一直铺到格线，接缝才不露。
+        fp=(ra===T)?[[X+bi,T],[x1,T],[x1,B],[X+br,B]]:[[X+br,T],[x1,T],[x1,B],[X+bi,B]];
+        bd=(ra===T)
+          ? 'M'+X+','+T+' H'+x1+' M'+(X+br)+','+B+' H'+x1+' M'+(X+bi)+','+T+' L'+(X+br)+','+B
+          : 'M'+X+','+B+' H'+x1+' M'+(X+br)+','+T+' H'+x1+' M'+(X+bi)+','+B+' L'+(X+br)+','+T;
+        left=(ra===T)?[X+bi,T,X+br,B]:[X+bi,B,X+br,T];
+      } else {
+        fp=[[X,T],[x1,T],[x1,B],[X,B]];
+        bd='M'+X+','+T+' H'+x1+' M'+X+','+B+' H'+x1;
+      }
+      // 总线：色块只负责填充，轮廓另画一条 path；齐头那一侧**不描竖边**，段内才没有分界线。
+      // x：不填充，改用斜线，斜线要在过渡让出来的空缺外面停住（上游是逐条线裁的）。
+      if(isBus) o.push('<polygon class="waveBus '+cls+'" points="'+pts(fp)+'" stroke="none"/>');
+      else o.push(waveHatch(X,x1,T,B,W,left,null));
+      o.push('<path class="'+(isBus?'waveBusInk':'waveInk')+'" d="'+bd+'"/>');
     } else if(Core.CLOCK.test(ch)){
       // 时钟 / 半周期状态的**边沿要不要画**，取决于上一个字符收在哪条轨上（上游 xclude 的语义）：
       // 已经停在目标电平上就只画平段，否则才画那条起沿。少了这一步，`hp` / `pl` 这类连续
@@ -93,9 +210,6 @@ var CHIP_W=G.CHIP_W;
       }
       o.push('<path class="waveInk" d="'+d+'"/>');
       if(/[PHNL]/.test(ch)) o.push(waveArrow(ax,T,B,up));
-    } else if(ch==='x'){
-      o.push('<path class="waveInk" d="M'+X+','+T+' H'+x1+'"/><path class="waveInk" d="M'+X+','+B+' H'+x1+'"/>');
-      o.push(waveHatch(X,x1,T,B,W));
     } else {
       var cy=waveLevel(ch,T,M,B); if(cy===null) cy=M;
       var py=prev?waveLevel(prev,T,M,B):null;
@@ -130,7 +244,7 @@ var CHIP_W=G.CHIP_W;
   // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph。
   // 坐标**不按指针分叉**：两端共用 28×26 画布与同一组 y 轨道（5/13/21），只在按钮盒子上
   // 缩放（触摸端与桌面都是同一套规格）。这样同一字符的图案在只读预览与编辑页完全一致。
-  function chipGlyph(v){ return waveGlyph(v,null,0,5,13,21,CHIP_W,{arrowX:3}); }
+  function chipGlyph(v){ return waveGlyph(v,null,0,5,13,21,CHIP_W,{arrowX:3,icon:true}); }
   // 字符说明只用于 aria-label（视觉上不再出现 tooltip）。英文是首选语言。
   function chipDesc(v){
     if(Core.BUS.test(v)) return (v==='='||v==='2')?'bus data block (white)':'bus data block, colour '+(Number(v)+5);
@@ -143,4 +257,4 @@ var CHIP_W=G.CHIP_W;
       'u':'pull-up (dashed high)','d':'pull-down (dashed low)'}[v]||'wave character';
   }
 
-export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, fitLabel };
+export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, fitLabel, blockEdge };

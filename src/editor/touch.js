@@ -116,24 +116,29 @@ export function attachTouchUI(ctx, dom) {
   // 图标尽量画成「被操作对象的缩略图」（方波 / 色块 / 节点圆点 …），
   // 概念符号（相位、周期）保留社区惯用的 φ / T。辨识兜底是「长按出名称」。
   // 图标重设计（0.9.17）：此前 label / node 用「空心方框 + 小符号」，方框被描边后像「没加载
-  // 出来的空框」，用户误以为是显示 bug。改为清晰的实物化图形：标签=带孔的吊牌、节点=带实心
-  // 点的环、连线=两个节点加连线。其余图标也统一成「描边线条 + 必要处实心」的清晰风格。
+  // 出来的空框」，用户误以为是显示 bug。此后统一成「描边线条 + 必要处实心」的清晰风格。
+  // 0.27.1 再改一次 label / node：吊牌看着像价签、同心圆看着像单选按钮，两轮下来都不够
+  // 「一看就知道干什么」→ 改成「A + 底线」（写一行字）与「图钉」（标一个点），见下面的注释。
   var ICONS = {
     name:   '<path d="M5 7h14M5 12h11M5 17h13"/>',
     wave:   '<path d="M3 15h3v-6h4v6h4V9h4v6h3"/>',
-    data:   '<rect x="4" y="8" width="16" height="8" rx="1"/><path d="M10 8v8M14 8v8"/>',
-    nodeStr:'<path d="M3 12h6M15 12h6"/><circle cx="12" cy="12" r="3.2"/>',
     phase:  '<text x="12" y="17.5" text-anchor="middle" font-size="16" font-family="Georgia,serif" fill="currentColor" stroke="none">φ</text>',
-    period: '<path d="M4 12h16"/><path d="M7.5 8.5L4 12l3.5 3.5M16.5 8.5L20 12l-3.5 3.5"/>',
+    // 周期用字母 T（0.27.1）—— 与相位用 φ 同一套「概念符号」写法。原先画的是左右箭头
+    // 「↔」，看着像「水平拉伸 / 双向移动」，而 period 其实是**一个格子的时间宽度**；
+    // 波形图里 T 就是周期的通用记号，和行名旁那个 `T` 徽标也对得上。
+    period: '<text x="12" y="17.5" text-anchor="middle" font-size="16" font-family="Georgia,serif" fill="currentColor" stroke="none">T</text>',
     up:     '<path d="M12 19V6M7 11l5-5 5 5"/>',
     down:   '<path d="M12 5v13M7 13l5 5 5-5"/>',
     add:    '<path d="M12 5v14M5 12h14"/>',
     spacer: '<path d="M4 9h16M4 15h16"/>',
     del:    '<path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/>',
-    // 格级：标签=带孔的吊牌（清晰可辨的「标注」意象），节点=带实心点的环（锚点标记）。
-    // 与行级的 data / nodeStr（整行）刻意画得不同，免得两个图标看着一样却差一个量级。
-    label:  '<path d="M4 7h9l7 7-7 7H4z"/><circle cx="8.5" cy="11.5" r="1.5"/>',
-    node:   '<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/>',
+    // 格级两个动作的图标（0.27.1 重画）：
+    //   label = 字母 A 落在一条底线上 —— 「在这一格上写一行字」；吊牌那个形状读起来像价签，
+    //           跟「改这一格的数据标签」没什么联想。A 也不和 name 的三条横线、period 的 T 撞。
+    //   node  = 图钉 —— 「在这个位置插一个标记点」。原来是同心圆，读起来像单选按钮 / 靶心，
+    //           和 link 的两个圆点也容易混。
+    label:  '<path d="M7.2 17L12 6.2 16.8 17"/><path d="M9.4 13.1h5.2"/><path d="M4.2 20.4h15.6"/>',
+    node:   '<path d="M12 20.6s5.8-5.2 5.8-9.3a5.8 5.8 0 1 0-11.6 0c0 4.1 5.8 9.3 5.8 9.3z"/><circle cx="12" cy="10.9" r="2.1"/>',
     insert: '<path d="M8.5 5v14M15.5 5v14"/><path d="M12 9.5v5M9.5 12h5"/>',
     delCol: '<path d="M9 5v14"/><path d="M15 9l4.5 6M20 9l-4.5 6"/>',
     gap:    '<path d="M12 5v14" stroke-dasharray="2.4 2.4"/>',
@@ -151,7 +156,7 @@ export function attachTouchUI(ctx, dom) {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[ICON_KEY[name] || name] || '') + '</svg>';
   }
   var NAMES = {
-    name: 'signal name', wave: 'row wave', data: 'row data', nodeStr: 'row node',
+    name: 'signal name', wave: 'row wave',
     label: 'cell data label', node: 'cell node marker',
     phase: 'phase', period: 'period', up: 'move up', down: 'move down', add: 'add row',
     spacer: 'add spacer', del: 'delete row',
@@ -192,9 +197,9 @@ export function attachTouchUI(ctx, dom) {
         l = needLane();
         if (l && ctx.openPhaseEdit) ctx.openPhaseEdit(l);
         return;
-      case 'wave': case 'data': case 'nodeStr': case 'period':
+      case 'wave': case 'period':
         l = needLane();
-        if (l) ctx.openRowEditor(l, { wave: 'wave', data: 'data', nodeStr: 'node', period: 'period' }[k]);
+        if (l) ctx.openRowEditor(l, k === 'wave' ? 'wave' : 'period');
         return;
       case 'up': case 'down':
         l = needLane();
@@ -292,10 +297,9 @@ export function attachTouchUI(ctx, dom) {
     var li = state.ir.lanes.indexOf(l), n = state.ir.lanes.length;
     var isSp = l.kind === 'spacer';
     switch (act) {
-      case 'name': case 'wave': case 'data': case 'nodeStr': case 'phase': case 'period':
+      case 'name': case 'wave': case 'phase': case 'period':
         return !isSp;
-      case 'link':
-        return !isSp;                       // 连线要落到具体格子上，空行没有格子
+      // 连线不在这里：它连的是两个节点，属于格级动作（见 ACTS.dock）。
       case 'up':
         return li > 0;
       case 'down':
@@ -309,7 +313,7 @@ export function attachTouchUI(ctx, dom) {
   function availCol(act) {
     var c = state.sel;
     if (c === null || c === undefined || !state.ir) return false;
-    if (act === 'insert' || act === 'append' || act === 'link') return true;
+    if (act === 'insert' || act === 'append') return true;
     return c < state.ir.ticks;
   }
 
