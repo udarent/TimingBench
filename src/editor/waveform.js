@@ -25,7 +25,7 @@ var CHIP_W=G.CHIP_W;
     // 时，跨格会错位出半条线，同一条总线走到格线上会出现一道错缝。
     var want=Math.max(3,Math.min(W/7,dy/6)), nz=Math.max(1,Math.round(W/want)), step=W/nz, k, sx, a, b;
     // 交点：填线是 45°（y = sx+B-x），与边界线（x0,y0)-(x1,y1) 求交，解一次一元方程。
-    var cut=function(seg,sx){
+    var crossX=function(seg,sx){
       var vx=seg[2]-seg[0], vy=seg[3]-seg[1];
       if(!vy) return null;                       // 水平边界不动 x
       var kk=vx/vy, den=1+kk;
@@ -36,7 +36,7 @@ var CHIP_W=G.CHIP_W;
       if(!segs) return null;
       var list=(segs[0]!==undefined&&typeof segs[0]==='number')?[segs]:segs, r=null, i, v;
       for(i=0;i<list.length;i++){
-        v=cut(list[i],sx); if(v===null) continue;
+        v=crossX(list[i],sx); if(v===null) continue;
         r=(r===null)?v:(takeMin?Math.min(r,v):Math.max(r,v));
       }
       return r;

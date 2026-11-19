@@ -37,8 +37,7 @@ export function attachTouchUI(ctx, dom) {
   var TOP_META = {
     undo:   { txt: '↶', name: 'Undo (Ctrl+Z)' },
     redo:   { txt: '↷', name: 'Redo (Ctrl+Y)' },
-    layout: { txt: '⇄', name: 'Split direction' },
-    embed:  { txt: '<>', name: 'Embed code' }
+    layout: { txt: '⇄', name: 'Split direction' }
   };
   // 视图只剩两态：波形 / 波形+代码（0.25.0 撤掉「只代码」——没有对应的使用场景）。
   // 一个切换键，图标固定是 { }：**灰 = 代码区关着，亮 = 代码区开着**。

@@ -118,7 +118,7 @@ export function cellGeo(l,tick){
 //     state.zoomMin），再兜一个绝对底 0.2 防止极端文档把内容缩成一张邮票。
 //     0.20.x 曾把下限钉死为 1（= 捏回原始大小）—— 那对「手机上的基数本来就是整宽装下」
 //     成立，但桌面基数就是 1:1：宽图只能靠横向滚动，想「缩到一眼看全」做不到。
-export const ZOOM_MAX = 4;
+const ZOOM_MAX = 4;          // 只在本文件的 clampZoom 里用，不外传
 export const ZOOM_MIN = 0.2;
 export function clampZoom(z, min){
   z = Number(z);
