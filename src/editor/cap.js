@@ -1,8 +1,8 @@
 // 场景与能力表：四类界面的差异**只由这张表回答**，不再散落成各处的 if。
 //
 // 一条界面的差异可以拆成两件事，必须分开管：
-//   ① 画不画 / 能不能点 —— 能力（本文件）。回答「触摸卡片里应该有连线吗」这类问题。
-//   ② 画多大、钉在哪  —— 布局（geometry.js + shapes.js 的派生计算）。回答「卡片要不要
+//   ① 画不画 / 能不能点 —— 能力（本文件）。回答「触摸端应该有连线吗」这类问题。
+//   ② 画多大、钉在哪  —— 布局（geometry.js + shapes.js 的派生计算）。回答「只读预览要不要
 //      等比缩放」「只读要不要裁掉顶部 HUD 区」。布局由内容与容器推导，不该进能力表，
 //      否则「不画字符条」和「因此底部留 0 高」会被混成同一条规则。
 //
@@ -26,8 +26,7 @@ export function sceneOf(state) {
 }
 
 export var CAP = {
-  // 画布 HUD：撤销 / 重做 / 分屏方向 / 生成嵌入代码（卡片里去掉）。
-  // 连线按钮在 0.9.17 从 HUD 移到底部上下文条（与 label / node 同排），见 ACTS。
+  // 顶栏（页面级，不是画布内 HUD）：撤销 / 重做 / 分屏方向 / 视图切换。只读预览整条不画。
   hud:        { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
   colhead:    { deskEdit: ON, deskView: OFF, touchEdit: ON, touchView: OFF },
   // 列操作 / 行工具在画布上**没有渲染实现**了（0.15.1 删净：`colBtn` / `rowTools` 连同行内
@@ -36,7 +35,7 @@ export var CAP = {
   // 贴合内容右缘，小视口下不再多出一段能横向滚过去的空白。
   // 这两项仍留在表里，是两个理由：① 记录「画布上不画、改由谁承担」这个去向，后来人不必
   // 从 git 历史里考古；② 让下面 `editEntries` 的「只读不泄漏编辑入口」检查继续覆盖它们 ——
-  // 真有人把行工具加回去，只读卡片那条断言立刻会红。
+  // 真有人把行工具加回去，只读预览那条断言立刻会红。
   colAct:     { deskEdit: SW,  deskView: OFF, touchEdit: SW,  touchView: OFF },
   rowTool:    { deskEdit: SW,  deskView: OFF, touchEdit: SW,  touchView: OFF },
   // 行首拖拽把手（`rowDrag`）已在 0.9.13 删净 —— 图元、命中分支、拖拽结算一起走，
@@ -48,8 +47,8 @@ export var CAP = {
   spacerMark: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },
   // 字符输入只剩一套实现：HTML 停靠条（`#chardock`）。桌面原来在 SVG 里画一条 23 颗的
   // 字符条（旧 `actionBar`），触摸端是固定停靠条 —— 同一件事两套渲染、两套布局、两套点击。
-  // 现在统一为前者，并按**实际可用宽度**折叠：宽屏（含宽屏触摸 / 宽嵌卡片）一次铺满全部
-  // 字符，窄屏才把放不下的收进 `⋯`。这是**布局**差异（宽度决定折叠），不是能力差异。
+  // 现在统一为前者，且**一次铺满全部字符**（0.26.0 起取消 `⋯` 折叠）：放不下就换行，
+  // 这是**布局**差异，不是能力差异。
   // 顺带删掉了 SVG 字符条那段「滚动时反向位移把 chips 钉回可视区」的历史包袱，以及
   // `charChips` 图元。
   dock:       { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF },

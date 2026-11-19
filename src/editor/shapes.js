@@ -12,8 +12,8 @@ var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元
 // **每次 redraw 现算**的：BASE_CELL 是常量，CELL 是这一帧的值。
 var BASE_CELL=G.CELL, CELL=BASE_CELL;
 var NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
-// 行距：**只读卡片**按紧凑口径（40），编辑态仍 48 —— 48 是给点击命中、弧线余量与
-// 分组标签留的空间，只读卡片用不上，留着就是一排排空气。
+// 行距：**只读预览**按紧凑口径（40），编辑态仍 48 —— 48 是给点击命中、弧线余量与
+// 分组标签留的空间，只读预览用不上，留着就是一排排空气。
 // 参考 WaveDrom 的默认皮肤：格 20×20、行距 30、波形带 20（占行高 67%）。
 // 我们只读态取 行距 40 / 带 0.10~0.90（= 32，占 80%），比上游更满，但仍留 4px 呼吸。
 var RO_ROW_H = 40;
@@ -119,7 +119,7 @@ export function createShapes(ctx){
   }
 
   // 行首拖拽把手：行位置调整的唯一交互
-  // 只读卡片不画：没有拖拽这回事，画出来只是个不能用的点心。
+  // 只读预览不画：没有拖拽这回事，画出来只是个不能用的点心。
 
   // 一次解析 edge 字符串：<from><shape><to> [label]
   // shape 是一段**字面 token**，不是「数一数几个竖线」：`-|` 与 `|-` 是两种不同的折线
@@ -261,7 +261,7 @@ export function createShapes(ctx){
     // 格线每 hscale 个砖一条）。只改格宽，行高 / 字号 / 行名区一律不动 —— 这就是
     // 「把图拉宽」而不是「把图放大」。所有几何都从 CELL 派生，所以只在这里赋值一次。
     CELL=G.CELL=BASE_CELL*hscaleOf(ir);
-    // 只读态与编辑态共用同一套排版（格子、行高、字号、网格都不变）：只读卡片只是
+    // 只读态与编辑态共用同一套排版（格子、行高、字号、网格都不变）：只读预览只是
     // 「少画编辑控件」，不是另一套版式。行名区宽度在这里按内容重算（两态同一算法），
     // 避免任何调用方改动过后残留旧值。
     // 行名左界：桌面被行首拖拽把手顶到 PAD+18，触摸端不画把手、左界只有 PAD。
@@ -283,7 +283,7 @@ export function createShapes(ctx){
     // （括号与竖排组名都画在行名左侧，先把这段宽度让出来，行名才不会被压住）。
     // 行把手的固定槽位：编辑态在行名区最左留 14px，分组括号与行名整体右移，两者不再抢同一片
     // 像素。不这么做的话，最外层括号的竖线落在 `PAD+13`，正好压在把手的命中区上 —— 有分组的
-    // 行点不住、拖不动（用户实测到的就是这个）。只读卡片不画把手，槽位收回，名字区不变窄。
+    // 行点不住、拖不动（用户实测到的就是这个）。只读预览不画把手，槽位收回，名字区不变窄。
     var hndSlot=can('hud')?14:0;
     var gDepth=groupDepth(ir.lanes);
     var leftBound=PAD+hndSlot+gDepth*GSLOT;
@@ -318,24 +318,22 @@ export function createShapes(ctx){
     });
     // negExtent 是周期数（可能含小数），乘 CELL 后作为右侧补宽；不参与列号循环（不新增列）。
     var ACT_X=XS+(COLS+negExtent)*CELL;
-    // 卡片可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
+    // 画布可视宽度：操作层按它排布，保证所有按钮不用横向滚动就能点到。
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
     var viewW=Math.max(240, Math.round(wrap.clientWidth||0)||360);
-    // 波形层仍按内容撑宽并允许横向滚动；但至少铺满卡片，便于钉住的顶栏 / 底栏有落脚宽度。
+    // 波形层按内容撑宽并允许横向滚动；但至少铺满容器，便于钉住的顶栏 / 底栏有落脚宽度。
     // 只读预览两项都不需要：既没有行工具（不预留 ACT_W），也没有钉住的顶栏 / 底栏
     // （不需要铺满 viewW）。所以只按「内容宽」算，宽了就交给下面的 fit 等比缩小，
     // 比容器窄就保持 1:1 并靠 .svgwrap svg 的 margin-inline:auto 居中 —— 右侧不会空出一条。
-    // 只读卡片的「内部尺寸」：嵌入片段按 W/H 算 aspect-ratio，让 iframe 高度随宽度自适应，
-    // 卡片底部不会再留一片空白（旧片段写死 height，窄卡片里就空出上百像素）。
-    // 只读卡片不要再背「顶部给 HUD 留位置」这笔账：HUD 只在编辑态画，留着就是一圈死白。
+    // 只读预览不要再背「顶部给 HUD 留位置」这笔账：HUD 只在编辑态画，留着就是一圈死白。
     // 做法是把 viewBox 的 y 前移一段（图元坐标一个都没动，波形层指纹与桌面布局不受影响），
-    // 底部与右侧也只留一点呼吸空间 —— 波形图本身尽量贴满卡片。
-    // 裁到「首行上方 8px」：只读卡片不画列号（can('colhead') 为假，见下面 401 行），
+    // 底部与右侧也只留一点呼吸空间 —— 波形图本身尽量贴满容器。
+    // 裁到「首行上方 8px」：只读预览不画列号（can('colhead') 为假，见下面 401 行），
     // 顶部那条 TOP-12 的头带与它到首行的间隔里**什么都没有** —— 旧公式 max(0, COL_Y-8)
     // 恒等于 0（COL_Y 只有 6 / 8），等于从来没裁，读者看到的就是一条 37px 的死白。
     var roTrimTop=Math.max(0, TOP-6);
-    var roTrimBottom=6;                      // 最后一行下沿到卡片底
-    // 行距与波形带：只读卡片用紧凑口径（见文件顶 rowH()），编辑态不变。
+    var roTrimBottom=6;                      // 最后一行下沿到容器底
+    // 行距与波形带：只读预览用紧凑口径（见文件顶 rowH()），编辑态不变。
     var RH=rowH();
     var tight=!!state.readonly;
     var bandT=tight?0.10:0.25, bandM=tight?0.50:0.48, bandB=tight?0.90:0.71;
@@ -367,19 +365,19 @@ export function createShapes(ctx){
     // 那是给当时「底栏画在 SVG 里、要钉住」用的；底栏早已是画布外的真实 flex 子项。
     // 留在原地就成了另一种抖动源：停靠区一出现，视口变矮 → SVG 跟着变矮 → 又一次重排。
     var H=contentH, c, x;
-    // 只读卡片把顶部那段「HUD 区」从 viewBox 里裁掉：渲染高度同步变矮，卡片不再顶着一条死白。
+    // 只读预览把顶部那段「HUD 区」从 viewBox 里裁掉：渲染高度同步变矮，容器不再顶着一条死白。
     var vbTop=state.readonly?roTrimTop:0;
     var vbH=H-vbTop;
-    // 嵌入只读卡片：整张图按卡片宽度等比缩小，让波形一次全显示 —— 读者不会去横向拖一张
-    // 只读卡片。进入编辑后 fit=1，恢复 1:1 + 滚动，保证点选精度。
+    // 只读预览：整张图按容器宽度等比缩小，让波形一次全显示 —— 读者不会去横向拖一张
+    // 只读预览。进入编辑后 fit=1，恢复 1:1 + 滚动，保证点选精度。
     // 只改 svg 的渲染尺寸，viewBox 仍是内部坐标 ⇒ 所有图元几何、getBBox 与就地编辑的
     // 坐标换算都不受影响，波形层指纹也不受影响。
-    // 只读卡片：按卡片宽度等比缩放，整张图一次全显示。上限 2 倍 —— 比卡片窄时也放大铺满
+    // 只读预览：按容器宽度等比缩放，整张图一次全显示。上限 2 倍 —— 比容器窄时也放大铺满
     // （SVG 是矢量，放大不糊），否则宽笔记里会左右各留一条；超过 2 倍才保持比例居中。
     // 进入编辑态回到 1:1 + 滚动，保证点选精度。
     // fit 规则（2026-11-14 起）：
-    //   只读卡片 —— 等比缩到卡片宽，窄图最多放大 2 倍铺满（矢量不糊）；
-    //   触摸端 / 卡片编辑态 —— 内容比容器宽就缩到容器宽，只缩不放大（手机上不必横向拖）；
+    //   只读预览 —— 等比缩到容器宽，窄图最多放大 2 倍铺满（矢量不糊）；
+    //   触摸端 —— 内容比容器宽就缩到容器宽，只缩不放大（手机上不必横向拖）；
     //   全屏编辑 —— 比屏幕宽按 1:1（靠滑动移动，格子回到可点尺寸），比屏幕窄最多放大 2 倍；
     //   桌面整页 —— 保持 1:1 + 横向滚动（宽屏装得下，缩了反而费眼）。
     // 纵向不参与 fit：行数随图变化，硬塞进一屏只会把字压糊。
@@ -413,16 +411,16 @@ export function createShapes(ctx){
     state.baseFit=baseFit; state.vbH=vbH; state.zoom=zoom;
     state.zoomMin=zoomMin; state.baseOutW=baseOutW;
     // 高度上报用**未缩放**的像素高：宿主按它设 iframe 高度，若跟着放大后的高度上报，
-    // 用户在只读卡片里捏一下，宿主那张卡片就被撑高一次（内容溢出交给画布自己滚）。
+    // 用户在只读预览里捏一下，预览根元素就被撑高一次（内容溢出交给画布自己滚）。
     var outW0 = baseOutW;
     state.contentH = state.readonly ? Math.round(vbH * outW0 / W) : contentH;
     state.W=W; state.H=H;
-    // xMidYMin：只读卡片把 svg 拉满视口时，比例若略有偏差，多出来的空间留在下方而不是
+    // xMidYMin：只读预览把 svg 拉满视口时，比例若略有偏差，多出来的空间留在下方而不是
     // 上下均分 —— 图始终贴顶，进编辑时「把被点的格子钉回手指下」的换算不必再补一层偏移。
-    // 尺寸精确时（桌面编辑态、比例匹配的只读卡片）meet 不产生任何缩放。
+    // 尺寸精确时（桌面编辑态、比例匹配的只读预览）meet 不产生任何缩放。
     var o=['<svg width="'+outW+'" height="'+outH+'" viewBox="0 '+vbTop+' '+W+' '+vbH+'" preserveAspectRatio="xMidYMin meet" class="'+(state.linkMode?'linkMode':'')+'" role="img" aria-label="Timing diagram editor">'];
     o.push('<rect x="0" y="0" width="'+W+'" height="'+(TOP-12)+'" fill="var(--bg)"/>');
-    // 只读（嵌入卡片默认态）：不画 HUD、不画字符条，只留波形本身。
+    // 只读预览：不画顶栏、不画字符条，只留波形本身。
     // 列网格：只读态没有列号行，所以从画面顶起；线型与编辑态一致（同一条竖线，不加虚线）。
     var gridTop=state.readonly?vbTop+4:(TOP-10);
     // 网格按**参考周期**铺满整张图（period≠1 的行更宽，网格必须跟到最右）；列号仍按字符序号
@@ -431,7 +429,7 @@ export function createShapes(ctx){
       x=XS+c*CELL;
       o.push('<line class="colGrid" x1="'+x+'" y1="'+gridTop+'" x2="'+x+'" y2="'+bottom+'" stroke="var(--line)" stroke-width="0.5"/>');
     }
-    // 列号 + 列操作按钮是「编辑定位器」：只读卡片不需要（上游 WaveDrom 也从不画列号），
+    // 列号 + 列操作按钮是「编辑定位器」：只读预览不需要（上游 WaveDrom 也从不画列号），
     // 整组不画。零行空态同样不画：0 个周期时列号与「末尾追加」都没有意义。
     if(can('colhead')) for(c=0;c<=N&&!isEmpty;c++){
       var cx=XS+c*CELL+CELL/2, selc=state.sel===c, ghost=c===N;
@@ -514,7 +512,7 @@ export function createShapes(ctx){
           '<rect x="'+(hx-7)+'" y="'+(yM-9)+'" width="14" height="18" fill="transparent" style="cursor:grab"/></g>');
       }
       if(l.kind==='spacer'){
-        // 只读卡片上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
+        // 只读预览上这是一段纯留白（上游同样不画任何东西）；只有编辑态才给虚线 + 字样，
         // 否则读者会看到一条莫名其妙的「spacer」文字。
         if(can('spacerMark')){
           o.push('<line x1="'+XS+'" y1="'+yM+'" x2="'+ACT_X+'" y2="'+yM+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2 5"/>');
@@ -523,7 +521,7 @@ export function createShapes(ctx){
         o.push('</g>');
         return;
       }
-      // 相位 / 周期是「可点改」的编辑入口，只读卡片上撤掉。
+      // 相位 / 周期是「可点改」的编辑入口，只读预览上撤掉。
       // 分组名不再挂在行名后面：它画在左侧括号旁（竖排，见下面的 groupRuns 渲染）。
       // φ / T 徽标：四场景都是「点一下就能改」的入口（0.17.0 起触摸端也接线）。
       // 0.14.2 曾把触摸端这两个字形断掉，理由是「点行名想选中、一偏就进了**相位尺**，紧接着的
@@ -716,7 +714,7 @@ export function createShapes(ctx){
     svg.setAttribute('width',outW);
     svg.setAttribute('height',outH);
     state.zoom=zoom; state.fit=outW/state.W;
-    // 只读卡片默认由 CSS 拉满（`width:100%`），放大时必须让位给上面这两个属性，
+    // 只读预览默认由 CSS 拉满（`width:100%`），放大时必须让位给上面这两个属性，
     // 否则「设了 width 也不生效」—— 同一个开关也顺便让其它模式知道「此刻是放大态」。
     if(wrap.classList) wrap.classList.toggle('is-zoom', Math.abs(zoom-1)>0.001);
     return true;

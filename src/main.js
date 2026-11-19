@@ -13,6 +13,7 @@ const ctx = createEditor({
   gutter:   document.getElementById('gutter'),
   errdot:   document.getElementById('errdot'),
   app:      document.getElementById('app'),
+  splitter: document.getElementById('splitter'),
   topbar:   document.getElementById('topbar'),
   tbpanel:  document.getElementById('tbpanel'),
   chardock: document.getElementById('chardock'),

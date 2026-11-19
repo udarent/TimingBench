@@ -240,6 +240,35 @@ function check() {
      /removeAttribute\('data-layout'\)/.test(editorSrc),
     '旋转 / 改尺寸后不会重排：resize 必须重绘，且 auto 状态下不能把分栏方向写死');
 
+  // 分屏比例可拖（0.27.0）：两栏之间那条线是**可拖动的分隔条**，默认各占 50%。
+  // 四条一起锁，缺任何一条这个能力就退化：
+  //   ① .app 必须是三轨网格、比例走 --split（写死 34% 就又回到「比例不能改」）；
+  //   ② 分隔条得是真实轨道里的一颗元素，且可聚焦（键盘也要能调）；
+  //   ③ 只图形视图里要收起 —— 否则中间留一条 7px 的空缝；
+  //   ④ 拖动得夹住两边最小宽度，否则一次误拖就把源码区拖没了。
+  {
+    const splitSrc = read('src/editor/splitter.js');
+    const htmlSrc3 = read('editor.html');
+    const appRule = (/\.app\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    ok(/--split:50%/.test(appRule) &&
+       /minmax\(0,var\(--split\)\)/.test(appRule) &&
+       /var\(--split-w\)/.test(appRule) &&
+       !/minmax\(320px,34%\)/.test(cssSrc),
+      '分屏默认不是 50/50，或列宽还是写死的 34%（用户要求默认各半、可拖动调）');
+    ok(/id="splitter"/.test(htmlSrc3) && /role="separator"/.test(htmlSrc3) &&
+       /tabindex="0"/.test(htmlSrc3) && /aria-orientation="vertical"/.test(htmlSrc3),
+      '分隔条元素缺失或不可聚焦（键盘用户就调不了比例）');
+    ok(read('src/main.js').indexOf("splitter: document.getElementById('splitter')") >= 0,
+      'main.js 没有把分隔条交给编辑器装配 —— 它不会响应任何拖动');
+    ok(/\.app\[data-view="diagram"\] \.splitter\{display:none\}/.test(cssSrc),
+      '只图形视图没有收起分隔条（会留一条 7px 的空缝）');
+    ok(/MIN_PX/.test(splitSrc) && /function clamp\(/.test(splitSrc) &&
+       /'pointerdown'/.test(splitSrc) && /'pointermove'/.test(splitSrc) &&
+       /'dblclick'/.test(splitSrc) && /'keydown'/.test(splitSrc) &&
+       /tb-split-cols/.test(splitSrc) && /tb-split-rows/.test(splitSrc),
+      '分隔条的拖动 / 夹取 / 复位 / 键盘 / 记忆有一项缺失（比例会拖出可用范围或下次进来就丢）');
+  }
+
   // ctx.on 是全局监听登记簿（插件要能 destroy 掉），interactions 一注册就在用它。
   // 赋值若晚于 attachInteractions，初值就是 undefined ⇒ createEditor 直接抛错 ⇒ 整页空白。
   const onAssign = editorSrc.indexOf('ctx.on=runtime.on');
@@ -393,7 +422,7 @@ function check() {
   // 画布是 flex 兄弟，按钮多占几行它就少几行，绝不会被按钮盖住。
   {
     const dz = (/\.dockzone\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    ok(/min-height:calc\(max\(var\(--dock-acts\), var\(--dock-chars\)\)/.test(dz) &&
+    ok(/min-height:calc\(var\(--dock-row\)/.test(dz) &&
        !/(^|[;{\s])height:/.test(dz),
       '停靠区回到了固定高度（按钮换行后会被裁掉，必须用 min-height 跟着内容长）');
     ok(/\.is-readonly \.dockzone\{min-height:0\}/.test(cssSrc),
@@ -411,12 +440,30 @@ function check() {
       '「⋯」折叠逻辑又回来了（要求是一次显示全部按钮）');
     ok(!/dockHidden|ctxHiddenActs|isBigView|syncMoreHeight/.test(twSrc),
       '仍留着按宽度切片的溢出状态（应整条铺开、交给 CSS 换行）');
-    ok(/\.chardock\.open\{[^}]*flex-wrap:wrap/.test(cssSrc) &&
-       /\.tbpanel\.open\{[^}]*flex-wrap:wrap/.test(cssSrc) &&
-       /\.is-touch \.tbpanel\.open\{[^}]*flex-wrap:wrap/.test(cssSrc),
-      '按钮条不再换行：窄屏下按钮会横向溢出或被裁掉');
+    // 两条按钮条都必须是 `auto-fill` 网格：列数按可用宽度算、每列 1fr 均分 ——
+    // 既保证换行（不会横向溢出），又让整排**正好铺满**（右侧不留「不足一个按钮」的空白）。
+    ok(/\.chardock\.open\{[^}]*display:grid/.test(cssSrc) &&
+       /\.tbpanel\.open\{[^}]*display:grid/.test(cssSrc) &&
+       /\.chardock\.open\{[^}]*repeat\(auto-fill,minmax\(var\(--btn\),1fr\)\)/.test(cssSrc) &&
+       /\.tbpanel\.open\{[^}]*repeat\(auto-fill,minmax\(var\(--btn\),1fr\)\)/.test(cssSrc) &&
+       !/\.is-touch [^{]*\.(chardock|tbpanel)\.open\{[^}]*(overflow-x:auto|flex-wrap:nowrap)/.test(cssSrc),
+      '按钮条不是 auto-fill 网格：要么会横向溢出，要么右侧留下不足一个按钮的空白');
     ok(!/bottom:100%/.test(cssSrc), '又出现向上浮出的溢层（会盖住波形）');
-    ok(/\.chardock\.open\{[^}]*min-height:var\(--dock-chars\)/.test(cssSrc) &&
+    // 触摸端的上下文条曾被一条遗留的 `.is-touch .tbpanel{display:none}` 盖掉：
+    // 按钮还在 DOM 里、还能被脚本点到，但**整条不显示**（改写网格时删掉了 `.open` 覆盖，
+    // 基础规则的同特异性就叫它赢了）。判据直接咬「不许再有这条隐藏规则」。
+    ok(cssSrc.indexOf('.is-touch .tbpanel{display:none}') < 0 &&
+       cssSrc.indexOf('.tbpanel.open{display:grid') >= 0,
+      '触摸端上下文条被隐藏规则盖掉了（按钮存在但整条不显示）');
+    // 每排必须**正好铺满**：只有 auto-fill 时最后一排常常只剩 1~2 颗（320px 时是 6,6,6,6,1），
+    // 所以 JS 会二次挑列数（行数最少优先，其次最后一排最满），并写成 repeat(c,1fr)。
+    ok(/function pickCols\(/.test(twSrc) && /function syncCols\(/.test(twSrc) &&
+       /el\.style\.gridTemplateColumns = 'repeat\(/.test(twSrc) &&
+       /syncCols\(panel\);/.test(twSrc) && /syncCols\(dock\);/.test(twSrc),
+      '按钮条没有按内容挑列数（右侧会留下「不足一个按钮」的空白）');
+    ok(/ctx\.on\(window, 'resize', function \(\) \{ syncCols\(panel\); syncCols\(dock\); \}/.test(twSrc),
+      '窗口尺寸变化后没有重挑列数（转过手机按钮就不再铺满）');
+    ok(/\.chardock\.open\{[^}]*min-height:var\(--dock-row\)/.test(cssSrc) &&
        !/\.chardock\.open\{[^}]*overflow-x:auto/.test(cssSrc),
       '字符条回到了定高 + 横向滚动（换行后两者都不该存在）');
   }
@@ -456,22 +503,33 @@ function check() {
        /width:24px;height:24px/.test(ctxSvg) && /stroke-width:2/.test(ctxSvg),
       '图标没按 1:1 画（24 单位图必须 24px 渲染 + 2px 描边，缩放会让 1 倍屏线条发灰断口）');
   }
-  // 三组动作按钮（格级 / 行级 / 列级）必须是同一套规格：它们共用同一批 24 单位图标，
-  // 尺寸 / 圆角 / 描边 / 端点各写一份就会「看着差不多、放一起对不齐」（用户实测反馈）。
-  // 判据：桌面同尺寸同圆角；两端图标都带圆端点；触摸端描边也是 2（曾用 1.7 细一档）。
+  // 三组按钮（格级动作 / 行·列动作 / 字符）必须是**同一尺寸、同一间距、同一圆角**（0.26.0）。
+  // 以前三套数字并存（动作 32×32、字符 30×28、触摸 48×44），并排看就是「有大有小」；
+  // 组间还插了一条带外边距的分隔线，凭空造出 20 多像素空白。现在全部取 --btn / --btn-gap /
+  // --btn-radius 三个令牌，两档取值只按指针区分。
   {
-    const actBox = (/\.chardock \.chipbtn\.act\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
+    const chipBox = (/\.chardock \.chipbtn\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
     const ctxBox = (/\.tbpanel button\.ctxbtn\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
     const actSvg2 = (/\.chardock \.chipbtn\.act svg\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
     const ctxSvg2 = (/\.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    const touchCtxSvg = (/\.is-touch \.tbpanel button\.ctxbtn svg[^{]*\{([^}]*)\}/.exec(cssSrc) || [null, ''])[1];
-    ok(/width:32px/.test(actBox) && /height:32px/.test(actBox) &&
-       /width:32px/.test(ctxBox) && /height:32px/.test(ctxBox) &&
-       /border-radius:6px/.test(ctxBox),
-      '格级 / 行列动作按钮尺寸或圆角不一致（应同为桌面 32×32、圆角 6）');
+    // 高度固定 `--btn`、宽度由网格均分（0.27.0）。曾经用 `aspect-ratio:1/1` 求正方形，
+    // 结果按钮越宽越高：「14 个行动作」的条 48px、「5 个列动作」的条 43px，
+    // 选中对象一换整条就跳 7px。定高之后停靠区高度只跟排数有关。
+    ok(/height:var\(--btn\)/.test(chipBox) && /border-radius:var\(--btn-radius\)/.test(chipBox) &&
+       /height:var\(--btn\)/.test(ctxBox) && /border-radius:var\(--btn-radius\)/.test(ctxBox) &&
+       !/(^|[;{]) *width:[0-9]+px/.test(chipBox) && !/(^|[;{]) *width:[0-9]+px/.test(ctxBox) &&
+       !/aspect-ratio/.test(chipBox + ctxBox),
+      '字符按钮与动作按钮没有共用同一套规格（高度应固定为 --btn、宽度由网格均分）');
+    ok(/:root\{[^}]*--btn:32px[^}]*--btn-gap:4px/.test(cssSrc) &&
+       /\.is-touch\{[^}]*--btn:44px[^}]*--btn-gap:6px/.test(cssSrc) &&
+       !/--dock-acts|--dock-chars/.test(cssSrc),
+      '按钮规格令牌不对：桌面 32 / 触摸 44（触屏最小命中区），且不应再留旧的 --dock-acts / --dock-chars');
     ok(/stroke-linecap:round/.test(actSvg2) && /stroke-linecap:round/.test(ctxSvg2) &&
-       /stroke-width:2/.test(touchCtxSvg) && !/1\.7/.test(touchCtxSvg),
+       /stroke-width:2/.test(ctxSvg2) && !/1\.7/.test(ctxSvg2),
       '动作图标画笔不统一（应为 24/2 + 圆端点；触摸端曾用 1.7 细描边、桌面曾漏写端点）');
+    // 组与组之间不许再插分隔线：它是「相邻按钮之间那条空白」的来源。
+    ok(!/\.docksep/.test(cssSrc) && !/docksep/.test(read('src/editor/touch.js')),
+      '停靠条又出现了组间分隔线（两侧外边距会造出 20 多像素空白）');
   }
   // 字符按钮（第一行 + 下方溢出区里的每一颗）必须共用同一套基础样式：字形绝对定位铺满按钮、
   // 字母压在中间。少写这一组就退化成浏览器默认按钮 —— 字形按内联流排在按钮上、字母被挤到
@@ -482,9 +540,9 @@ function check() {
      /\.chardock \.chipbtn:not\(\.act\) svg\{[^}]*position:absolute/.test(cssSrc) &&
      /\.chardock \.chipbtn span\{/.test(cssSrc),
     '字符按钮的基础样式漏了溢出区（会退化成默认按钮：字形在上、字母在下）');
-  ok(/\.tbpanel button\.ctxbtn\{[^}]*width:32px/.test(cssSrc) &&
+  ok(/\.tbpanel button\.ctxbtn\{[^}]*height:var\(--btn\)/.test(cssSrc) &&
      /\.tbpanel button\.ctxbtn svg\{/.test(cssSrc),
-    '行 / 列动作按钮的基础样式漏了溢出区（同样会退化成默认按钮）');
+    '行 / 列动作按钮的基础样式缺尺寸或图标（会退化成浏览器默认按钮）');
 
   // ---- 浅色档的低层级文字要够读 ----
   // --muted 承担时间轴数字、行号、φ/T 徽标、字符按钮里的波形预览。对白底与 --src-bg
@@ -558,10 +616,10 @@ function check() {
   ok(!/revealLane\(laneOf, panel\.offsetHeight\)/.test(read('src/editor/touch.js')) &&
      !/state\.barH/.test(read('src/editor/interactions.js')),
     'revealLane 仍在重复扣面板高度（面板已是 flex 子项，多扣会多滚一截）');
-  // 字符停靠条：在停靠区内（随停靠区定高、不随画布滚动）、触摸端命中区 ≥48px
+  // 字符停靠条：在停靠区内（随停靠区定高、不随画布滚动）、触摸端命中区 = 44px（--btn）
   ok(/\.dockzone\{[^}]*display:flex/.test(cssSrc) &&
-     /\.is-touch \.chardock \.chipbtn[^{]*\{[^}]*flex:0 0 48px/.test(cssSrc),
-    '字符停靠条未收进 dockzone，或触摸端命中区不足 48px');
+     /\.is-touch\{[^}]*--btn:44px/.test(cssSrc),
+    '字符停靠条未收进 dockzone，或触摸端命中区不是 44px');
   // 字符输入只剩一套实现（HTML 停靠条 #chardock）：0.26.0 起**不再切片**，23 颗一次全铺，
   // 格级动作与字符走同一条流水线（先动作、后分隔线、后字符）。
   // 旧的 `budget / moreW / fit` 那套切片代码必须删净 —— 留着就还会有人把「⋯」加回来。
@@ -859,8 +917,8 @@ function check() {
   // 「收起后还挂着一排无关按钮」；现在连容器都不存在，只剩同一个 wrap 规则。
   ok(!/tbmore|charmore/.test(html) && !/tbmoreEl/.test(touchSrc),
     '又出现了行列溢出容器（0.26.0 已取消折叠）');
-  ok(/\.tbpanel\.open\{[^}]*flex-wrap:wrap/.test(cssSrc) &&
-     /\.chardock\.open\{[^}]*flex-wrap:wrap/.test(cssSrc),
+  ok(/\.tbpanel\.open\{[^}]*repeat\(auto-fill,minmax\(var\(--btn\),1fr\)\)/.test(cssSrc) &&
+     /\.chardock\.open\{[^}]*repeat\(auto-fill,minmax\(var\(--btn\),1fr\)\)/.test(cssSrc),
     '两排按钮的换行规则不一致（格级与行 / 列级必须同一套）');
   // 都不需要专门的关闭按钮：格级停靠条原先末尾的 ✕ 已删（取消选中走点画布空白 / Esc）。
   ok(!/data-clear/.test(touchSrc) && !/chipbtn\.clear/.test(cssSrc) && !/chipbtn\.clear/.test(touchSrc),
@@ -1037,7 +1095,7 @@ function check() {
   // ---- 英文优先：运行时字符串不得出现中日韩字符（注释不算） ----
   const runtimeFiles = ['src/editor/shapes.js', 'src/editor/interactions.js',
     'src/editor/touch.js', 'src/editor/index.js', 'src/editor/waveform.js', 'src/editor/mode.js',
-    'src/editor/geometry.js', 'src/editor/cap.js', 'src/editor/shapes.js',
+    'src/editor/geometry.js', 'src/editor/cap.js', 'src/editor/shapes.js', 'src/editor/splitter.js',
     'src/main.js', 'src/demo.js', 'src/core/example.js', 'src/core/util.js', 'src/core/ir.js'];
   const cjk = new RegExp('[\\u4e00-\\u9fa5\\u3040-\\u30ff\\uac00-\\ud7af]');
   for (const f of runtimeFiles) {

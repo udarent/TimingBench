@@ -30,7 +30,7 @@ export function attachTouchUI(ctx, dom) {
   ctx.say = say;
 
   // ---- 全局顶栏 -----------------------------------------------------------
-  // 撤销 / 重做改的是源码历史，分屏方向改的是页面版式，生成嵌入代码读的是当前源码 ——
+  // 撤销 / 重做改的是源码历史，分屏方向改的是页面版式，视图切换决定代码区在不在 ——
   // 三者都与「画布内容」无关，所以不该只画在波形区里（左右分栏时尤其明显）。
   // 连线开关也放这里：它只是切换画布的输入语义，按钮本身不需要贴着波形。
   // 画布内因此不再画 HUD，sticky 顶栏的 translate 补偿（旧 syncPinned）一并消失。
@@ -328,6 +328,40 @@ export function attachTouchUI(ctx, dom) {
     return b;
   }
 
+  // ---- 每排摆几颗：让按钮正好铺满宽度 ----------------------------------
+  // CSS 用 `auto-fill` 只会取「能放下最多的列数」，于是最后一排常常只剩 1~2 颗
+  // （320px 宽时是 6,6,6,6,1）。这里在 JS 里二次挑选：**先让行数最少，再让最后一排最满**，
+  // 并把列数写成 `repeat(c,1fr)` —— 整排均分，右侧不留「不足一个按钮」的空白。
+  // 约束：单个按钮不得被拉到 `--btn` 的 1.5 倍以上（否则「5 颗按钮各 70px」比留白更难看）。
+  function pickCols(el, n) {
+    if (!el || !n) return 0;
+    var cs = getComputedStyle(el);
+    var pad = parseFloat(cs.paddingLeft) || 0;
+    var gap = parseFloat(cs.columnGap || cs.gap) || 0;
+    var minW = parseFloat(cs.getPropertyValue('--btn')) || 32;
+    var avail = (el.clientWidth || 0) - pad * 2;
+    if (avail <= 0) return 0;
+    var maxCols = Math.max(1, Math.floor((avail + gap) / (minW + gap)));
+    var maxBtn = minW * 1.5;
+    var rowsMin = Math.ceil(n / maxCols);
+    var lo = Math.max(1, Math.ceil(n / rowsMin));
+    var best = maxCols;
+    var bestRest = n % maxCols;
+    for (var c = lo; c < maxCols; c++) {
+      if ((avail - (c - 1) * gap) / c > maxBtn) continue;   // 会拉得太宽，跳过
+      var rest = n % c;
+      if (rest === 0) { best = c; bestRest = 0; break; }     // 整除 = 每排都满
+      if (bestRest !== 0 && rest > bestRest) { best = c; bestRest = rest; }
+    }
+    return best;
+  }
+  function syncCols(el) {
+    if (!el || !el.classList.contains('open')) return;
+    var n = el.querySelectorAll('button').length;
+    var c = pickCols(el, n);
+    if (c) el.style.gridTemplateColumns = 'repeat(' + c + ',minmax(0,1fr))';
+  }
+
   // 三级共用同一个容器与同一段渲染代码，差别只是喂进去的动作清单。
   // 0.26.0：**不再折叠**。以前按可用宽度切片、放不下的收进「⋯」，多一次点击还多一层；
   // 现在把当前可用的动作一次全画出来，宽度不够就由 CSS 换行、让停靠区多占一行
@@ -355,11 +389,12 @@ export function attachTouchUI(ctx, dom) {
     panel.textContent = '';
     acts.forEach(function (k) { panel.appendChild(makeCtxBtn(k)); });
     panel.classList.add('open');
+    syncCols(panel);
     bindLongName(panel);
     // 记下「打开面板这一刻的滚动位置」：重绘会换掉 SVG，内容尺寸变化可能让浏览器把
     // scrollTop 夹回去并派发 scroll —— 那不是用户想滑动，不能拿它收面板（否则刚弹就消失）。
     ctxScroll = ctx.wrap ? { left: ctx.wrap.scrollLeft, top: ctx.wrap.scrollTop } : null;
-    // 面板贴在卡片底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮。
+    // 面板贴在画布底部、会盖住波形下沿：把选中的那一行滚到面板上方，别让人盲目点按钮。
     // 这次滚动是程序自己发起的，要记下目标位置 —— 否则紧随其后的 scroll 事件会被
     // 当成「用户想看更多」，把刚打开的面板立刻收掉（选中靠下的行时表现为面板一闪就没）。
     if (laneOf !== null && ctx.revealLane && TOUCH) {
@@ -448,15 +483,11 @@ export function attachTouchUI(ctx, dom) {
     dockKey = key;
     dock.textContent = '';
     acts.forEach(function (a) { dock.appendChild(makeActBtn(a)); });
-    if (charsOn) {
-      if (acts.length) {
-        var dp = document.createElement('span');
-        dp.className = 'docksep';
-        dock.appendChild(dp);
-      }
-      order.forEach(function (v) { dock.appendChild(makeChip(v)); });
-    }
+    // 格级动作与字符排在同一条流水线里，**不加分隔线**：所有按钮同一尺寸、同一间距，
+    // 组与组之间也只有一个 gap（分隔线两侧各带外边距，会凭空造出 20 多像素的空白）。
+    if (charsOn) order.forEach(function (v) { dock.appendChild(makeChip(v)); });
     dock.classList.add('open');
+    syncCols(dock);
     bindLongName(dock);
   }
 
@@ -471,6 +502,9 @@ export function attachTouchUI(ctx, dom) {
   }
   if (dock) dock.addEventListener('click', onDockClick);
   ctx.closeCharDock = hideDock;
+
+  // 宽度变了要重挑列数：renderDock / renderContext 在 key 未变时会早退，不会自己重算。
+  if (ctx.on) ctx.on(window, 'resize', function () { syncCols(panel); syncCols(dock); });
 
   ctx.afterRedraw = function () {
     // 每次重绘后重新决定：上下文条该显示哪一级动作、字符停靠条该不该在。

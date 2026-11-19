@@ -61,7 +61,7 @@ function render(host) {
       tbpanel: mk(),
       chardock: mk(),
       toast: mk(),
-      root: host              // 只读 / 触摸的 class 落在卡片上，不污染 <html>
+      root: host              // 只读 / 触摸的 class 落在预览根元素上，不污染 <html>
     });
     ctx.fromCode(src);
     ctx.setReadonly(true);

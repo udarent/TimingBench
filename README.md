@@ -4,7 +4,7 @@ English · [简体中文](README.zh-CN.md)
 
 **Timing diagrams you edit directly.** Click a waveform cell and the WaveJSON source is rewritten; change the source and the diagram redraws. Neither side is ever treated as the "real" one.
 
-`0.26.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
+`0.27.0` · [MIT](LICENSE) · runs entirely in your browser · nothing is uploaded · [Open the editor](https://udarent.github.io/TimingBench/editor.html)
 
 Your source is not reformatted behind your back: diagram edits are written back as a minimal patch — comments, indentation, key order and quotes survive — and any result that would not round-trip is rolled back.
 
@@ -88,6 +88,9 @@ Don't want to hand-write any of this? Draw the diagram in the editor and click `
 - **Restructure without the source.** Add or remove rows and cycles, toggle a phase line, reorder rows,
   append a trailing cycle, add spacers — and build groups right on the canvas: select a range of rows,
   give it a name, nest it as deep as you like. No group in the source? It gets created for you.
+- **Split however you like.** The divider between source and diagram is draggable: 50/50 by default,
+  drag it (or press the arrow keys when it has focus) and that ratio is remembered per orientation;
+  double-click to go back to half and half.
 - **Phases you can drag.** Click the `φ` badge next to a row and that row turns into a ruler: press anywhere
   to jump, drag to slide the waveform against the reference grid (one cell per period, 0.05 snap).
 - **Connect with arcs.** Turn on link mode, click two cells; unused letters are assigned for you. Double-click an arc to change its shape or label, clear it to delete.

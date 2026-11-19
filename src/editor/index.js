@@ -5,9 +5,10 @@ import { EXAMPLE } from '../core/example.js';
 import { createShapes } from './shapes.js';
 import { attachInteractions } from './interactions.js';
 import { attachTouchUI } from './touch.js';
+import { attachSplitter } from './splitter.js';
 
 export function createEditor(dom){
-  // 宿主根元素：主站是 documentElement；嵌入宿主（如 Obsidian 插件）可传自己的容器，
+  // 宿主根元素：主站是 documentElement；宿主（如 Obsidian 插件）可传自己的容器，
   // 避免把 is-readonly / is-touch 写到宿主页面的 <html> 上。
   var root = dom.root || document.documentElement;
   // 全局监听登记簿：宿主（如 Obsidian 插件）可能反复创建 / 销毁编辑器实例，
@@ -31,7 +32,7 @@ export function createEditor(dom){
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, selRows:null, ratio:1, parseOK:false,
             ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0, phaseEdit:null, zoom:1,
-            // 默认视图：双栏（左源码 / 右波形）。嵌入已移除，没有别的默认值。
+            // 默认视图：双栏（左源码 / 右波形）。视图只有两态，默认就是这一个。
             W:0, H:0, drag:null, rev:0, readonly:false,
             view: 'both' },
     inlineCtx:null, painting:null
@@ -198,6 +199,9 @@ export function createEditor(dom){
     if(!dom.app) return;
     if(state.layout) dom.app.setAttribute('data-layout',state.layout);
     else dom.app.removeAttribute('data-layout');
+    // 分隔条的方向（col-resize / row-resize）与比例档位都跟着分屏方向翻。
+    // 分隔条本身在 attachSplitter 里装配，早于 / 晚于此处调用都安全（有 undefined 守卫）。
+    if(ctx.repaintSplitter) ctx.repaintSplitter();
   }
   // 切分屏：只在 rows / cols 之间翻，写进 localStorage 当偏好。没有「切回自动」的入口 ——
   // 那需要一个显式的 null 值，而唯一会传 null 的调用方（全屏方向按钮退出时还原）已在
@@ -214,7 +218,7 @@ export function createEditor(dom){
   // 顶栏只剩**一个**切换键（波形 ⇄ 双栏），状态落在 .app[data-view] 上，由 CSS 控制显隐。
   // 默认 both（左源码 / 右波形）；只读预览由 demo.js 自己切到 diagram。
   // 不写 localStorage —— 视图是「此刻我在干什么」，不是长期偏好；每次进来都从默认开始，
-  // 全屏 / 退出编辑回到卡片时也不会停在「上次留在双栏、卡片只剩半屏代码」的怪状态。
+  // 退出再进来也不会停在「上次留在双栏、源码占掉半屏」的怪状态。
   var VIEWS={ diagram:1, both:1 };
   function currentView(){ return VIEWS[state.view] ? state.view : 'both'; }
   // 老引擎不认 focus({preventScroll})，退化到无参 focus；两者都失败就静默 —— 焦点不是关键路径。
@@ -226,7 +230,7 @@ export function createEditor(dom){
     if(!VIEWS[v] || v===state.view) return;
     state.view=v;
     applyView();
-    // 切到双栏让 textarea 拿焦点，切回波形聚焦画布。只读卡片没有顶栏按钮、走不到这里。
+    // 切到双栏让 textarea 拿焦点，切回波形聚焦画布。只读预览没有顶栏按钮、走不到这里。
     if(!state.readonly) focusEl(v==='diagram' ? ctx.wrap : code);
     ctx.redraw();
   }
@@ -374,14 +378,14 @@ export function createEditor(dom){
     on=!!on;
     if(state.readonly===on) return;
     state.readonly=on;
-    // 不在这里重置缩放：0.20.1 起只读卡片也能放大，读者放大看清小字、点一下进编辑，
+    // 不在这里重置缩放：0.20.1 起只读预览也能放大，读者放大看清小字、点一下进编辑，
     // 若这时把倍数打回 1，画面会「啪」地缩回去，手指底下那块内容也跟着跑（实测被点的格子
     // 会偏 69px，而且画布还没超出容器宽、滚都滚不回来）。基数确实会换，但倍数属于用户的
     // 意图，跨模式保留更可预期；真正会换掉整条基数的是进出全屏，那里单独归位。
     if(on){
       state.selCell=null; state.sel=null; state.selLane=null;
       state.linkMode=false; state.connect=null; state.linkCursor=null;
-      if(ctx.closePhaseEdit) ctx.closePhaseEdit(true);   // 尺子是编辑态的东西，不能留在只读卡片上
+      if(ctx.closePhaseEdit) ctx.closePhaseEdit(true);   // 尺子是编辑态的东西，不能留在只读预览上
       if(ctx.inlineCtx) ctx.closeInline(true);
       if(ctx.closePanel) ctx.closePanel();
       if(ctx.hideToast) ctx.hideToast();
@@ -395,7 +399,7 @@ export function createEditor(dom){
   ctx.isReadonly=function(){ return state.readonly; };
   ctx.onReadonlyChange=function(fn){ readonlyListeners.push(fn); };
   // fn(msg) —— msg 为字符串表示当前有错（通常是解析失败），为 null 表示错误已解除。
-  // 返回注销函数，宿主在卡片卸载时调用，避免重渲染后堆积回调。
+  // 返回注销函数，宿主卸载编辑器时调用，避免重渲染后堆积回调。
   ctx.onError=function(fn){
     errorListeners.push(fn);
     return function(){ var i=errorListeners.indexOf(fn); if(i>=0) errorListeners.splice(i,1); };
@@ -415,6 +419,7 @@ export function createEditor(dom){
   createShapes(ctx);
   attachInteractions(ctx);
   attachTouchUI(ctx, dom);
+  attachSplitter(ctx, dom);
   // 触摸操作栏跟着每次重绘同步按钮可用态；桌面无 hook，重绘开销不变
   var paint=ctx.redraw;
   ctx.redraw=function(){ paint(); if(ctx.afterRedraw) ctx.afterRedraw(); };
@@ -431,8 +436,8 @@ export function createEditor(dom){
   });
   // 旋屏 / 窗口缩放、以及**画布容器自己**的尺寸变化都要重排：底部两条操作条的展开与收起、
   // 进出全屏只改容器、不改窗口，`window.resize` 收不到 —— 少了这条，画布高度会停在旧值，
-  // 表现为「滚到底还差一截、最下面几行点不到」（卡片里则是「底下空出一片」）。
-  // 去重：卡片内 .svgwrap 高度与内容互相影响，重画会再改它一次 —— 记下已渲染过的尺寸避免来回抖。
+  // 表现为「滚到底还差一截、最下面几行点不到」（窄容器里则是「底下空出一片」）。
+  // 去重：窄容器内 .svgwrap 高度与内容互相影响，重画会再改它一次 —— 记下已渲染过的尺寸避免来回抖。
   var rzTimer=null, obsKey='';
   function scheduleRedraw(){
     clearTimeout(rzTimer);

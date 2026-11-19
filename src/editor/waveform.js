@@ -129,7 +129,7 @@ var CHIP_W=G.CHIP_W;
 
   // 候选字符背后的单周期缩略波形：与主画布同一个 waveGlyph。
   // 坐标**不按指针分叉**：两端共用 28×26 画布与同一组 y 轨道（5/13/21），只在按钮盒子上
-  // 缩放（手机 48×44 / 桌面 30×28）。这样同一字符的图案在嵌入卡片与编辑页完全一致。
+  // 缩放（触摸端与桌面都是同一套规格）。这样同一字符的图案在只读预览与编辑页完全一致。
   function chipGlyph(v){ return waveGlyph(v,null,0,5,13,21,CHIP_W,{arrowX:3}); }
   // 字符说明只用于 aria-label（视觉上不再出现 tooltip）。英文是首选语言。
   function chipDesc(v){

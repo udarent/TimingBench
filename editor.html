@@ -6,7 +6,7 @@
 <title>TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.26.0">
+<meta name="version" content="0.27.0">
 <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
@@ -19,6 +19,10 @@
     <textarea id="code" spellcheck="false" wrap="off" aria-label="WaveJSON source"></textarea>
     <div class="errdot" id="errdot" hidden></div>
   </div>
+  <!-- 两栏之间可拖动的分隔条：默认 50/50，拖到哪儿记到哪儿（双击 / Enter 回 50%）。
+       role=separator + tabindex 让它可被键盘取到（左右方向键每次 2%，Shift 10%）。 -->
+  <div class="splitter" id="splitter" role="separator" aria-orientation="vertical"
+       aria-label="Resize panes" aria-valuemin="10" aria-valuemax="90" aria-valuenow="50" tabindex="0"></div>
   <div class="pane diagram">
     <div class="svgwrap" id="svgwrap" aria-label="Editable timing diagram canvas"></div>
     <!-- 波形区自己的两条：上排是选中对象的动作，下排是字符输入。

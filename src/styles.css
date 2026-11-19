@@ -1,23 +1,57 @@
 /* 共享样式：主页面上下分区 + 波形图元。 */
-:root{--bg:#fff;--panel:#fff;--src-bg:#f7f7f7;--hover:rgba(0,0,0,.05);--ink:#1f2328;--muted:#6b7078;--line:rgba(0,0,0,.10);--line2:rgba(0,0,0,.30);--accent:#185fa5;--accent-bg:#e9f2fc;--ok:#1d9e75;--ok-bg:#e1f5ee;--warn:#ba7517;--warn-bg:#faeeda;--err:#c0392b;--err-bg:#fcebeb;--bus:#ba7517;--bus-bg:#faeeda;--bus2:#fff;--bus3:#ffffb4;--bus4:#ffe0b9;--bus5:#b9e0ff;--bus6:#ccfdfe;--bus7:#cdfdc5;--bus8:#f0c1fb;--bus9:#f5c2c0;--wave-ink:var(--ink);--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--dock-acts:47px;--dock-chars:40px;--sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+:root{--bg:#fff;--panel:#fff;--src-bg:#f7f7f7;--hover:rgba(0,0,0,.05);--ink:#1f2328;--muted:#6b7078;--line:rgba(0,0,0,.10);--line2:rgba(0,0,0,.30);--accent:#185fa5;--accent-bg:#e9f2fc;--ok:#1d9e75;--ok-bg:#e1f5ee;--warn:#ba7517;--warn-bg:#faeeda;--err:#c0392b;--err-bg:#fcebeb;--bus:#ba7517;--bus-bg:#faeeda;--bus2:#fff;--bus3:#ffffb4;--bus4:#ffe0b9;--bus5:#b9e0ff;--bus6:#ccfdfe;--bus7:#cdfdc5;--bus8:#f0c1fb;--bus9:#f5c2c0;--wave-ink:var(--ink);--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
 @media (prefers-color-scheme:dark){:root{--bg:#191a1c;--panel:#222427;--src-bg:#202225;--hover:rgba(255,255,255,.07);--ink:#e9e9e6;--muted:#9b9b95;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.3);--accent:#6cb0ee;--accent-bg:#14304a;--ok:#5dcaa5;--ok-bg:#12382b;--warn:#ef9f27;--warn-bg:#3a2a10;--err:#f09595;--err-bg:#3b1e1e;--bus:#ef9f27;--bus-bg:#3a2a10;--bus2:#3a3b3e;--bus3:#4a4a24;--bus4:#4a3520;--bus5:#1d3a55;--bus6:#1e4547;--bus7:#22452a;--bus8:#402748;--bus9:#4a2a28}}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);overflow:hidden;
   display:flex;flex-direction:column;height:100vh;height:100dvh}
-/* 分屏：左右（左代码 / 右时序图）为默认；HUD 的 ⇄ / ⇅ 按钮可切成上下，选择会记住。
-   没有显式选择时按宽度自适应（窄窗口退回上下，见下面的媒体查询）。 */
-.app{display:grid;grid-template-columns:minmax(320px,34%) minmax(0,1fr);flex:1 1 auto;min-height:0}
-.app[data-layout="rows"]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
-.app[data-layout="rows"] .pane.src{border-right:0;border-bottom:1px solid var(--line)}
-.app[data-layout="cols"]{grid-template-columns:minmax(320px,34%) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+/* 分屏：左右（左代码 / 右时序图）为默认；顶栏的 ⇄ 可切成上下，选择会记住。
+   没有显式选择时按宽度自适应（窄窗口退回上下，见下面的媒体查询）。
+
+   **三轨网格**（0.27.0）：`比例轨 + 分隔条 + 1fr`。中间那条分隔线是**可拖动的** ——
+   默认两区各占 50%，用户按当下的任务拖（读源码要宽代码区、改波形要宽画布），
+   停手即记住（`--split` 由 splitter.js 写到 .app 的行内样式上，并持久化到 localStorage）。
+   分隔条占真实轨道（不是叠在 pane 上的浮层）：它不吃画布宽度，也不会被 `overflow:hidden` 裁掉。 */
+:root{--split-w:7px}          /* 分隔条命中区宽度；触摸端加宽（见下） */
+.is-touch{--split-w:11px}
+.app{display:grid;--split:50%;
+  grid-template-columns:minmax(0,var(--split)) var(--split-w) minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr);
+  flex:1 1 auto;min-height:0}
+.app[data-layout="rows"]{grid-template-columns:minmax(0,1fr);
+  grid-template-rows:minmax(0,var(--split)) var(--split-w) minmax(0,1fr)}
 .pane{position:relative;min-width:0;min-height:0;overflow:hidden}
-.pane.src{background:var(--src-bg);border-right:1px solid var(--line)}
+.pane.src{background:var(--src-bg)}
+/* 分隔条：7px 命中区，视觉上只有中间 1px 的线（用背景渐变画，省掉一层伪元素）。
+   悬停 / 拖动 / 键盘聚焦时线变粗、变强调色 —— 松手不变，因为「能不能拖」要一看就知道。
+   触摸端加宽到 11px：手指按 7px 太窄，容易点上旁边的源码。 */
+.splitter{position:relative;z-index:15;touch-action:none;cursor:col-resize;
+  background:linear-gradient(var(--line),var(--line)) center/1px 100% no-repeat}
+.splitter[aria-orientation="horizontal"]{cursor:row-resize;
+  background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat}
+.splitter:hover,.splitter:focus-visible,.splitter.drag{
+  background-image:linear-gradient(var(--accent),var(--accent));background-size:3px 100%}
+.splitter[aria-orientation="horizontal"]:hover,.splitter[aria-orientation="horizontal"]:focus-visible,
+.splitter[aria-orientation="horizontal"].drag{background-size:100% 3px}
+.splitter:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* 抓手：正中三个小点。只靠一条 1px 的线，用户根本看不出「这条能拖」——
+   加点阵比把线染深更有效：线还是要淡（它同时是黑白两套主题下的分隔线），
+   点阵只在中间一小段出现，像旧式窗框上的拖动纹。悬停 / 拖动时隐去（那时线已变成强调色）。 */
+.splitter::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:3px;height:22px;border-radius:2px;
+  background:radial-gradient(circle,var(--muted) 1px,transparent 1.3px) center/3px 8px repeat-y;
+  opacity:.5;pointer-events:none}
+.splitter[aria-orientation="horizontal"]::after{width:22px;height:3px;
+  background:radial-gradient(circle,var(--muted) 1px,transparent 1.3px) center/8px 3px repeat-x}
+.splitter:hover::after,.splitter:focus-visible::after,.splitter.drag::after{opacity:0}
+/* 拖动期间：整页不选中文字、光标保持 resize（否则掠过源码时手型会变回 I 形） */
+html.is-resizing,html.is-resizing *{user-select:none!important;cursor:col-resize!important}
+html.is-resizing.is-resizing-rows,html.is-resizing.is-resizing-rows *{cursor:row-resize!important}
 /* 桌面宽屏 = 左代码 / 右时序图（2026-11-13）。窄窗口（鼠标但没横向空间）回退成上下分区，
    触摸端另有自己的规则（见 .is-touch 段）。 */
 @media (max-width: 860px){
-  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
-  .pane.src{border-right:0;border-bottom:1px solid var(--line)}
+  .app{grid-template-columns:minmax(0,1fr);
+    grid-template-rows:minmax(0,var(--split)) var(--split-w) minmax(0,1fr)}
 }
 .gutter{position:absolute;left:0;top:0;bottom:0;width:40px;padding:12px 9px 12px 0;text-align:right;font:12px/1.65 var(--mono);color:var(--muted);border-right:1px solid var(--line);overflow:hidden;white-space:pre;user-select:none;pointer-events:none;
   /* 行号槽必须**盖住**横向滚动后钻到它下面的源码：textarea 是后出现的绝对定位元素，
@@ -36,7 +70,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
    按钮不再折叠（没有「⋯」）：宽度不够就换行，`.dockzone` 自然长高，画布是它的 flex
    兄弟、等量让位 —— 于是按钮永远可见，也永远不盖住波形。 */
 .dockzone{position:relative;flex:0 0 auto;display:flex;flex-direction:column;justify-content:flex-end;z-index:20;
-  min-height:calc(max(var(--dock-acts), var(--dock-chars)) + env(safe-area-inset-bottom,0px));
+  min-height:calc(var(--dock-row) + env(safe-area-inset-bottom,0px));
   padding-bottom:env(safe-area-inset-bottom,0px)}
 /* 四条子条各自定高、绝不压缩：dockzone 的高度是按它们的实测值加出来的，
    一旦允许 flex 收缩，按钮会被压掉几像素（实测 panel 57 vs 需要 60，底边直接裁掉）。 */
@@ -154,9 +188,20 @@ svg{display:block;font-family:var(--sans)}
    用 display:none 而非 visibility，让隐藏的 textarea 不参与 Tab 序列、也不吃焦点。 */
 .app[data-view="diagram"]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 .app[data-view="diagram"] .pane.src{display:none}
+/* 只图形时没有第二栏可调：分隔条一并收掉，否则中间会留一条 7px 的空缝 */
+.app[data-view="diagram"] .splitter{display:none}
 /* 只读态没有任何全局动作 → 顶栏整条不占位（否则卡片 iframe 会白白高 40px） */
 .topbar:empty{display:none}
-.is-touch{--dock-acts:61px;--dock-chars:56px}
+/* 底部按钮的统一规格：格级动作 / 行·列动作 / 字符**同一尺寸、同一间距、同一圆角**。
+   以前三套数字并存（动作 32×32、字符 30×28、触摸 48×44），并排看就是「有大有小」；
+   组与组之间还插了一条 1px 竖线，两侧各带 6px 外边距 —— 那 21px 的空白正是「相邻按钮之间有空白」。
+   **`--btn` 是下限，不是定值**（0.26.0）：两条按钮条都是网格，列数由可用宽度算出来、
+   每列 `1fr` 均分 —— 按钮随屏宽微调，**整排正好铺满**，右侧不留「不足一个按钮」的空白。
+   **高度固定为 `--btn`，只有宽度随列均分**（0.27.0）：改之前用 `aspect-ratio:1/1`，
+   按钮越宽就越高，于是「14 个行动作」和「5 个列动作」的按钮条一个 48px 一个 43px，
+   选中对象一换，整条就跳 7px。改成定高之后，停靠区高度只跟「排数」有关。 */
+:root{--btn:32px;--btn-gap:4px;--dock-pad:4px 8px;--dock-row:40px;--btn-radius:6px}
+.is-touch{--btn:44px;--btn-gap:6px;--dock-pad:6px 8px;--dock-row:56px;--btn-radius:10px}
 .is-touch .topbar{flex:0 0 54px;padding:0 8px;gap:8px}
 .is-touch .topbar .hudBtn{min-width:44px;height:44px;padding:0;font-size:18px;border-radius:10px}
 .is-touch body{overflow:hidden}
@@ -183,109 +228,59 @@ svg{display:block;font-family:var(--sans)}
    原生滚动 —— 跟手、回弹、滚动条都还在。 */
 .svgwrap.is-phase{touch-action:none}
 .is-touch .cellSel{stroke-width:2.4}
-/* 上下文条：桌面与触摸端都钉在**底部**（桌面是 34px 方按钮的整行条，触摸端换成 44px 大按钮，
-   规则在下面 .is-touch 段里）。行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头
-   按钮都已撤掉，所以画布右侧也不再为它们留位（ACT_W = 0，见 geometry.js）。 */
-/* 上下文条：整行排布，**允许换行**（0.26.0）。理由：折叠（⋯）多一次点击、展开层还要盖住画布；
-   换行只是让停靠区多占一行，画布顺势让位，所有动作一直可见、可点。 */
-.tbpanel.open{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;min-height:var(--dock-acts);
+/* 上下文条与字符停靠条：同一套按钮规格（见上面的 --btn 令牌）。
+   两条都钉在波形区底部、选中对象才出现、互相排斥；按钮一次全铺，放不下就换行。 */
+.tbpanel.open{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--btn),1fr));
+  gap:var(--btn-gap);padding:var(--dock-pad);min-height:var(--dock-row);align-content:center;
   background:var(--panel);border-top:1px solid var(--line)}
-/* 动作按钮的统一尺寸：格级（停靠条）/ 行级 / 列级三者必须一致 —— 它们本来就共用同一批
-   24 单位图标，尺寸/圆角/描边各写一份就会像现在这样「看着都差不多、放一起却对不齐」。
-   桌面 32×32（停靠条内容高正好 32，不溢出）、触摸 44×44（触屏最小命中区）。 */
-.tbpanel button.ctxbtn{width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--line);
-  border-radius:6px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
-  cursor:pointer}
-/* 图标 24px（32×32 ⇒ 偏移 4px）+ 2px 描边 + 圆端点。端点必须与触摸端一致：
-   桌面不写就是 butt/miter，同一个图标在两端的拐角形状会不同（用户能看出「风格不统一」）。
-   为什么必须 24/2：见上面格级动作那段注释 —— 同一批 24 单位图标，只有 1:1 才清晰。 */
+/* 动作按钮（行 / 列 / 格级共用）：正方形 + 24px 线性图标。
+   圆角与尺寸统一走令牌 —— 格级动作在停靠条里，行 / 列在上下文条里，三者必须同大才对得齐。 */
+.tbpanel button.ctxbtn{width:auto;height:var(--btn);min-width:0;padding:0;
+  border:1px solid var(--line);border-radius:var(--btn-radius);background:var(--src-bg);color:var(--ink);
+  display:grid;place-items:center;cursor:pointer;touch-action:manipulation}
+/* 图标 24px（32 ⇒ 偏移 4、44 ⇒ 偏移 10）+ 2px 描边 + 圆端点。
+   端点必须两端一致：桌面不写就是 butt/miter，同一个图标在两端拐角形状会不同。
+   24 单位的图标必须 1:1 渲染 —— 缩到 17px 就是 0.708 倍，1px 描边变亚像素、中心落在半像素上。 */
 .tbpanel button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
+.tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .tbpanel button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
-.is-touch .tbpanel{display:none}
-.is-touch .tbpanel.open{display:flex;flex-wrap:wrap;gap:8px;padding:8px}
-.is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
-  border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
-  font:13px var(--sans);touch-action:manipulation}
-/* 上下文图标条：44×44 方块 + 居中线条图标；图标画的是「被操作对象的缩略图」 */
-.is-touch .tbpanel button.ctxbtn{min-width:44px;width:44px;height:44px;min-height:44px;padding:0;
-  display:flex;align-items:center;justify-content:center}
-.is-touch .tbpanel button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
-  stroke-width:2}
-.is-touch .tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.is-touch .tbpanel button.ctxbtn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.is-touch .tbpanel button:active{background:var(--accent-bg);border-color:var(--accent)}
-.is-touch .toast{display:none;position:fixed;left:50%;bottom:calc(12px + var(--toast-lift,0px));transform:translateX(-50%);z-index:30;
-  max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
-  font:12px/1.5 var(--sans);box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none}
-.is-touch .toast.show{display:block}
-/* 字符停靠条：选中格才出现，钉在卡片底部（非嵌入时让开 60px 的操作栏）。
-   与旧版「画在 SVG 里再随滚动反向位移」的字符条相比，它不随画布滚动、不盖波形，
-   命中区稳定在 44px —— 手机上一根手指不会被它带着跑。 */
-.chardock{display:none}
-/* 桌面：字符停靠条与触摸端是**同一个组件**（#chardock / .chipbtn），只是摆放与尺寸
-   按指针定。原先桌面在 SVG 里另画一条 23 颗的 charChips —— 两套渲染、两套布局、
-   两套点击，还有一段「滚动时反向位移把 chips 钉回可视区」的补偿。现在一套。
-   0.26.0：不论桌面还是触摸端，23 颗一律全铺 —— 放不下就换行。 */
 
-.chardock.open{display:flex;flex-wrap:wrap;
-  align-content:center;justify-content:flex-start;gap:4px;padding:4px 8px;min-height:var(--dock-chars);
-  background:var(--panel);border-top:1px solid var(--line);user-select:none;
-  /* 23 颗 × 30px ≈ 690：窄卡片（如 520 的 iframe）放不下时必须横向滚动，
-     不能居中溢出 —— 居中会让第一颗跑到负坐标，用户看不到也点不到。 */
-}
-/* 字符按钮的基础样式：字形按 30×28 的内联网格画，触摸端再放大到 48×44。 */
-.chardock .chipbtn{position:relative;flex:0 0 30px;width:30px;height:28px;min-width:30px;padding:0;
-  border:1px solid var(--line);border-radius:6px;background:var(--src-bg);color:var(--ink);overflow:hidden}
+/* 字符停靠条：同一个组件（#chardock / .chipbtn），桌面与触摸只差尺寸令牌。
+   0.26.0：23 颗一次全铺，放不下就换行（不再折叠、不再横向滚动）。 */
+.chardock{display:none}
+.chardock.open{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--btn),1fr));
+  align-content:center;gap:var(--btn-gap);padding:var(--dock-pad);min-height:var(--dock-row);
+  background:var(--panel);border-top:1px solid var(--line);user-select:none}
+/* 字符按钮：正方形，波形字形铺底、字符压在上面。尺寸与动作按钮完全一致。 */
+.chardock .chipbtn{position:relative;width:auto;height:var(--btn);min-width:0;
+  padding:0;border:1px solid var(--line);border-radius:var(--btn-radius);
+  background:var(--src-bg);color:var(--ink);overflow:hidden;cursor:pointer;touch-action:manipulation}
 .chardock .chipbtn:not(.act) svg{position:absolute;inset:0;width:100%;height:100%;
   --wave-ink:var(--muted);opacity:.85;pointer-events:none}
 .chardock .chipbtn span{position:relative;font:600 12px var(--mono);
   text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
-/* 停靠条左侧的三个格级动作（label / node / link）：与字符同尺寸，靠一条竖线分开。
-   它们画的是 24×24 网格的 stroke 图，不是波形预览，所以不套字符那套配色与缩放。
-
-   ⚠️ **基础规则必须把它排除在外**（上面那条 `:not(.act)`）。这个位置的坑踩过两次：
-   · 0.18.0：`.chipbtn svg{inset:0}` 与这里同特异性、写在后面，把 `left/top:50%` 重置成 auto，
-     图标被 translate 推出按钮再被 `overflow:hidden` 裁掉（实测按钮 30×28、svg 17×17、dx=-7.5）；
-   · 0.19.3：同上但发生在触摸端 —— `.is-touch` 那条又把 `inset:0` 盖回来，偏移 -11,-11，
-     44px 按钮里只剩左上角一条缝。
-   两次的教训是同一条：**别靠声明顺序或 `!important` 抢，直接让基础规则不匹配它。**
-
-   ⚠️ 尺寸与描边也是功能性的：24 单位的图标必须 **24px 1:1 渲染 + 2px 描边**。缩成 17px 就是
-   0.708 倍，1px 描边变成亚像素、中心还落在半像素上 —— 抗锯齿把线摊到两个像素，1 倍屏上
-   斜边断口、圆环发灰（0.19.3 用户实测「头两个按钮图标异常」；2 倍屏和缩略图上都看不出来）。 */
-/* 桌面尺寸与行/列动作按钮对齐（32×32）：三者共用同一批 24 单位图标，按钮也必须同大。
-   停靠条内容高恰好 32（--dock-chars 40 − 上下 padding 4×2），不会溢出。
-   端点同样用 round —— 与上下文条、触摸端保持同一套画笔。 */
-.chardock .chipbtn.act{flex:0 0 32px;width:32px;min-width:32px;height:32px}
+/* 格级三个动作（label / node / link）画的是 24 单位 stroke 图，不套字符那套配色。
+   ⚠️ 基础规则用 `:not(.act)` 把它排除在外（不是靠声明顺序抢）—— 踩过两次：
+   · 0.18.0：`.chipbtn svg{inset:0}` 把 `left/top:50%` 重置成 auto，图标被 translate 推出按钮再被裁掉；
+   · 0.19.3：`.is-touch` 那条又把 `inset:0` 盖回来，44px 按钮里只剩左上角一条缝。 */
 .chardock .chipbtn.act svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round}
-/* 触摸端这三个按钮收到 44（不跟字符的 48）：320px 卡片里省下的 12px 正好能多摆一颗字符。
-   图标尺寸沿用上面的 24，不另设 —— 多出来的空间留给命中区。 */
-.is-touch .chardock .chipbtn.act{flex:0 0 44px;width:44px;min-width:44px;height:44px}
-.docksep{flex:0 0 1px;align-self:stretch;margin:6px 6px;background:var(--line)}
 .chardock .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
 .chardock .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
 .chardock .chipbtn.on span{color:var(--accent)}
 .chardock .chipbtn:hover{border-color:var(--accent)}
-.is-touch .chardock.open{display:flex;flex-wrap:wrap;
-  align-items:center;align-content:center;gap:6px;padding:6px 8px;
-  background:var(--panel);border-top:1px solid var(--line);
-  user-select:none}
-/* 触摸端只覆盖「与桌面不同」的三项：尺寸（48×44 命中区）、圆角 10、字号 15。
-   定位、配色与选中态由上面的基础规则统一给出，不再重复一遍。 */
-.is-touch .chardock .chipbtn{position:relative;flex:0 0 48px;
-  width:48px;height:44px;min-width:48px;padding:0;border:1px solid var(--line);border-radius:10px;
-  background:var(--src-bg);color:var(--ink);touch-action:manipulation;overflow:hidden}
-.is-touch .chardock .chipbtn span{position:relative;
-  font:600 15px var(--mono);text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
-.is-touch .chardock .chipbtn:active{background:var(--accent-bg);border-color:var(--accent)}
-/* 右边缘淡出：提示这排还能横向滑（23 个字符一排放不下） */
-.is-touch .chardock.open::after{content:"";position:sticky;right:0;flex:0 0 18px;
-  align-self:stretch;margin-left:-18px;
-  background:linear-gradient(to right,rgba(0,0,0,0),var(--panel));pointer-events:none}
+.chardock .chipbtn:active{background:var(--accent-bg);border-color:var(--accent)}
+/* 触摸端只覆盖字号（15px）；尺寸 / 圆角 / 间距全部来自令牌。 */
+.is-touch .chardock .chipbtn span{font:600 15px var(--mono)}
+/* 轻提示：触摸端钉在视口底部，必须按停靠区高度抬起来（--toast-lift 由 touch.js 写），
+   否则会正好压在字符停靠条上。 */
+.is-touch .toast{display:none;position:fixed;left:50%;bottom:calc(12px + var(--toast-lift,0px));transform:translateX(-50%);z-index:30;
+  max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
+  font:12px/1.5 var(--sans);box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none}
+.is-touch .toast.show{display:block}
 /* 首屏手势引导：指尖从右下滑到格子 → 点一下 + 轻涟漪 → 再点一下（双敲进就地编辑）。
    画在页面固定层上，播完由 JS 移除；不占画布、不进波形层、不写任何文字。 */
 .gesture{position:fixed;z-index:35;width:0;height:0;pointer-events:none}

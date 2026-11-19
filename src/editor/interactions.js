@@ -302,13 +302,13 @@ export function attachInteractions(ctx){
   }
 
   // 把选中格挪进可视区：横向居中、纵向避开底部停靠条。
-  // 只在「已经在编辑态、选中又变了」时调用 —— 从只读切进编辑那一下由嵌入壳做锚定，
-  // 两者都动滚动就会互相打架，手指底下的东西会跳。
+  // 只在「已经在编辑态、选中又变了」时调用 —— 别处的锚定（进入编辑、视图切换）若也动滚动，
+  // 两者就会互相打架，手指底下的东西会跳。
   function revealSel(){
     var sc=state.selCell; if(!sc||!state.ir||!wrap.clientWidth) return;
     var lane=null, li=-1; state.ir.lanes.forEach(function(l,i){ if(l.id===sc.lane){ lane=l; li=i; } });
     if(li<0||!lane) return;
-    // 视图可能是等比缩小过的（触摸端 / 卡片），状态里一律是**用户坐标**，
+    // 视图可能是等比缩小过的（触摸端 / 窄容器），状态里一律是**用户坐标**，
     // 而 scrollLeft / clientWidth 是像素 —— 先乘 fit 再比较，否则滚到错地方。
     var k=state.fit||1;
     // 格心与格宽都走行级标尺（period 行更宽、phase 行整体左移）；period:1 时与 CELL 等价。
@@ -324,7 +324,7 @@ export function attachInteractions(ctx){
   }
 
   // 触摸端选中一行后，上下文条会从底部升起；把这一行滚到「条上方」的可视区里，
-  // 否则矮卡片（嵌入 340px）里被选中的行正好藏在面板后面，点 up / down 时看不见效果。
+  // 否则矮容器（比如 340px 高的横屏手机）里被选中的行正好藏在面板后面，点 up / down 时看不见效果。
   // 面板是 .pane.diagram 的真实 flex 子项，wrap.clientHeight 已经把它的高度让出来了 ——
   // 这里不能再减一次面板高度（旧版面板是绝对浮层才需要补），否则会多滚一截、底部空一片。
   function revealLane(laneId){
@@ -334,7 +334,7 @@ export function attachInteractions(ctx){
     var k=state.fit||1;                        // 用户坐标 → 像素，见 revealSel 的说明
     var cy=(TOP+li*ROW_H+ROW_H/2)*k;
     var vh=wrap.clientHeight;
-    if(vh<ROW_H*k*2) vh=ROW_H*k*2;             // 卡片太矮时至少保证两行之内的判断可用
+    if(vh<ROW_H*k*2) vh=ROW_H*k*2;             // 容器太矮时至少保证两行之内的判断可用
     var maxT=Math.max(0,wrap.scrollHeight-wrap.clientHeight);
     var top=wrap.scrollTop;
     if(cy<top+ROW_H*k*0.6||cy>top+vh-ROW_H*k*0.6) top=Math.min(maxT,Math.max(0,cy-vh/2));
@@ -687,9 +687,9 @@ export function attachInteractions(ctx){
       return;
     }
 
-    // 只读卡片：点画布**不进编辑**。进编辑只有一个入口 —— 右下角那颗笔（#embedhint）。
-    // 点波形进编辑看着方便，实际是「想拖着看一眼」时也被迫跳进编辑态：卡片上最常做的是
-    // 看，不是改。笔图标是明确的「我要改」入口，点它再进，语义才干净。
+    // 只读预览：点画布**什么都不做**。展示图是「看」的界面，改图走图上那颗铅笔 ——
+    // 它带着这张图的源码跳到编辑器页面。点波形进编辑看着方便，实际是「想拖着看一眼」时
+    // 也被迫跳进编辑态；铅笔是明确的「我要改」入口，语义才干净。
     if(state.readonly) return;
     var hc0=cellAt(e);
     // 六点把手：按下即进入「拖拽移动」，不再走普通分派（否则会先把它当成点行/点列）。
@@ -814,7 +814,7 @@ export function attachInteractions(ctx){
     ctx.focusCanvas();
     ctx.redraw();
   }
-  // 屏幕坐标 → SVG 用户坐标。视图可能是等比缩小过的（触摸端 / 看卡片），
+  // 屏幕坐标 → SVG 用户坐标。视图可能是等比缩小过的（触摸端 / 窄容器），
   // 所以必须按 viewBox 与渲染尺寸的比例换算，不能拿 clientX-rect.left 直接当用户坐标 ——
   // 那是 1:1 时代的老假设，缩放后预览弧线会整体偏移。
   function svgXY(cx,cy){
@@ -835,7 +835,7 @@ export function attachInteractions(ctx){
 
   // 触摸后浏览器会补发一套兼容鼠标事件。只靠 800ms 时间窗挡不住长按：按住 1.2 秒再抬手，
   // 窗口早就过期，合成的 mousedown 会被当成桌面点击 —— 表现为「长按打开就地编辑，
-  // 一抬手编辑框被关掉、格子反而被选中」，只读卡片里更糟（长按抬手直接进了编辑态）。
+  // 一抬手编辑框被关掉、格子反而被选中」，只读预览里更糟（长按抬手直接进了编辑态）。
   // 有 sourceCapabilities 就按「这次事件是否由触摸产生」判断，时间窗只作老浏览器兜底。
   function syntheticMouse(e){
     if(e.sourceCapabilities&&e.sourceCapabilities.firesTouchEvents) return true;
@@ -912,7 +912,7 @@ export function attachInteractions(ctx){
   // ①「这一下从哪开始」定语义（0.14.2）：起点在相位尺上＝改相位；起点在别处＝移动视图；
   //    第二根手指落下＝移动视图，并把本次手势改出的相位撤回。
   // ② 手势开始之后，**坐标一律从 document 收**（0.14.3）：手指很容易滑出画布 ——
-  //    相位尺在小卡片上只有 87px 宽，尺子外平移更是要滑很远。只听 wrap 上的 pointermove，
+  //    相位尺在窄容器里只有 87px 宽，尺子外平移更是要滑很远。只听 wrap 上的 pointermove，
   //    滑出去就再也没有事件，表现为「按下去跳到某个值，之后怎么拖都不动」。
   //    document 用 capture 阶段装，任何元素 stopPropagation 都挡不住。
   var tPts={}, tPan=null, tDown=null, tActive=false, tLast=0;
@@ -933,9 +933,9 @@ export function attachInteractions(ctx){
   var tMulti=false;                       // 本次手势用过 ≥2 指 ⇒ 抬手不许变成 tap
   var tZoomed=false;                      // 本次手势改过缩放 ⇒ 抬手补一次完整重绘落定
   function tPinchStart(){
-    // 只读卡片也接管（0.20.1）：读者看不清小字时最需要放大，而宿主页面缩放的是整页。
-    // 卡片里放大后会超出卡片宽高、由画布自己滚 —— 上报给宿主的高度用的是**未缩放**的
-    // 那份（见 shapes.js 的 contentH），所以宿主那张卡片不会因为读者揑一下就变高。
+    // 只读预览也接管（0.20.1）：读者看不清小字时最需要放大，而宿主页面缩放的是整页。
+    // 只读预览里放大后会超出容器宽高、由画布自己滚 —— 上报的高度用的是**未缩放**的
+    // 那份（见 shapes.js 的 contentH），所以预览根元素不会因为读者捏一下就变高。
     var ks=Object.keys(tPts); if(ks.length<2) return false;
     var a=tPts[ks[0]], b=tPts[ks[1]];
     var c={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
@@ -1101,7 +1101,7 @@ export function attachInteractions(ctx){
     if(!x&&!y){ x=p.x; y=p.y; }
     if(Math.abs(x-p.x)>12||Math.abs(y-p.y)>12) return;
     if(Date.now()-p.t>500) return;
-    // 只读卡片：点按什么都不做（进编辑只认右下角的笔）。拖动 / 捏合缩放任由后面的
+    // 只读预览：点按什么都不做（进编辑只认右下角的笔）。拖动 / 捏合缩放任由后面的
     // 手势逻辑处理 —— 那是「看」，不该被当成「要改」。
     if(state.readonly) return;
     // p.c 为 null = 点在画布空白：同样派发，dispatchTarget 用它清选中（触摸端没有 Esc，
@@ -1336,7 +1336,7 @@ export function attachInteractions(ctx){
       if(pk==='0'){ prevent(e); applyPhase(0); return; }
     }
     if(typing||otherControl()) return;
-    // 只读态不响应任何编辑键；Esc 由卡片外层负责退出编辑态。
+    // 只读态不响应任何编辑键（预览没有编辑态可退，Esc 只清选中）。
     if(state.readonly) return;
     if(state.linkMode){ linkKeys(e); return; }
     var k=e.key;
