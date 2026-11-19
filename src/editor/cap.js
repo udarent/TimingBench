@@ -7,11 +7,8 @@
 //      否则「不画字符条」和「因此底部留 0 高」会被混成同一条规则。
 //
 // 场景只有两轴：**指针**（fine / coarse）× **读写**（Edit / View）。
-// 「是不是嵌入卡片」不是第三轴，也不进这张表 —— 它只影响布局（等比 fit、裁顶部、按内容
-// 算高）。顶栏那三个重型入口（视图切换 / 分屏方向 / 嵌入代码）在卡片里默不显示，但那是
-// **开关**决定的，写在 ui.js，不在这张表里 —— 卡片加 data-src 就又能显示出来，属于配置
-// 而不是场景能力。曾经把「卡片」和「只读」当成一回事，结果桌面卡片点进编辑后就落回
-// deskEdit，虽然行为碰巧正确，但表读起来是错的。
+// 「是不是只读预览」不是第三轴 —— 它就是 View 那一列；预览特有的版式（等比 fit、裁掉顶部
+// 列号带、按内容算高）由布局按 `state.readonly` 推导，不进这张表。
 //
 // 能力策略三态：
 //   on   —— 本场景绘制，且是本场景的主要入口
@@ -21,7 +18,6 @@
 //           「删掉」，而是分别换成固定停靠条、上下文条、↑↓ 图标。标成 swap 的地方
 //           一定另有实现，读代码时不要以为漏了。
 import { TOUCH } from './mode.js';
-import { SRC, SNIPPET } from './ui.js';
 
 var ON = 'on', OFF = 'off', SW = 'swap';
 
@@ -65,30 +61,17 @@ export var CAP = {
   inlineEdit: { deskEdit: ON, deskView: OFF, touchEdit: ON,  touchView: OFF }
 };
 
-// HUD 图标的顺序。之前这里是两句写死的 cmd()，外加一个 `if (!(T && embedCard))` 把
-// 「连线」和「嵌入代码」一起摘掉。两张图标的去留其实各有理由，现在分开声明：
-//   · 连线（◇）：0.9.17 从 HUD 移到底部上下文条（与 label / node 同排，见 ACTS），
-//     四场景统一走动作行，不再占顶栏。触摸卡片因此也能连线（旧实现里被顺带摘掉了）。
+// 顶栏命令的顺序与去留：
+//   · 撤销 / 重做：编辑的基本操作，始终保留。
 //   · 视图（view）：一个切换键「波形 ⇄ 双栏」，决定代码 pane 在不在（0.25.0 取消「只代码」）。
-//   · 嵌入代码（<>）：把当前源码生成一段可粘贴的 iframe。
 //   · 分屏方向（layout）：只在「双栏」成立时才有意义。
-// 后三个是 0.24.0 起的**开关项**：普通嵌入卡片默认全关（只有 撤销 / 重做），
-// 独立编辑页默认全开，宿主用 data-src / data-snippet 打开 —— 见 ui.js。
-var HUD_ITEMS = ['undo', 'redo', 'layout', 'view', 'embed'];
+// 连线（◇）0.9.17 起在底部动作行（与 label / node 同排，见 ACTS），不占顶栏；
+// 「<> 生成嵌入代码」随嵌入能力一起移除（0.26.0）。
+var HUD_ITEMS = ['undo', 'redo', 'layout', 'view'];
 
-export function hudCmds(scene, inCard) {
+export function hudCmds(scene) {
   if (!can('hud', scene)) return [];
-  // 三个「重型入口」由 ui.js 的开关决定（见那里关于默认值的说明）：
-  //   layout —— 分屏方向，只有存在「双栏」时才说得通，所以还要 !inCard；
-  //   view   —— 波形 ⇄ 双栏 的切换键；
-  //   embed  —— 「<>」把这张图再嵌一次。
-  // 其余（撤销 / 重做）是编辑的基本操作，始终保留。
-  return HUD_ITEMS.filter(function (c) {
-    if (c === 'layout') return !inCard && SRC;
-    if (c === 'view') return SRC;
-    if (c === 'embed') return SNIPPET;
-    return true;
-  });
+  return HUD_ITEMS.slice();
 }
 
 export function can(name, scene) {

@@ -6,7 +6,7 @@
 <title>TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.25.0">
+<meta name="version" content="0.26.0">
 <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
@@ -22,17 +22,14 @@
   <div class="pane diagram">
     <div class="svgwrap" id="svgwrap" aria-label="Editable timing diagram canvas"></div>
     <!-- 波形区自己的两条：上排是选中对象的动作，下排是字符输入。
-         它们只作用于波形，所以收在波形区里 —— 不再横跨整个页面、也不盖在代码区下面。 -->
+         它们只作用于波形，所以收在波形区里 —— 不再横跨整个页面、也不盖在代码区下面。
+         0.26.0：没有「⋯」溢出层了 —— 放不下就换行，停靠区变高、画布让位。 -->
     <div class="dockzone" id="dockzone">
       <div class="tbpanel" id="tbpanel" role="toolbar" aria-label="Row and column actions"></div>
-      <!-- 溢出区放在各自按钮条的下方：展开时占位、把画布顶上去，而不是浮在画布上 -->
-      <div class="tbmore" id="tbmore" role="toolbar" aria-label="More row and column actions"></div>
       <div class="chardock" id="chardock" role="toolbar" aria-label="Wave characters"></div>
-      <div class="charmore" id="charmore" role="toolbar" aria-label="All wave characters"></div>
     </div>
   </div>
 </div>
-<button type="button" class="embedhint" id="embedhint" aria-label="Edit this timing diagram" aria-pressed="false"><svg class="hintico hintico-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M14.5 5.5l4 4"/></svg><svg class="hintico hintico-done" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l5 5L20 7"/></svg></button>
 <div class="toast" id="toast" aria-live="polite"></div>
 <script type="module" src="src/main.js"></script>
 </body>

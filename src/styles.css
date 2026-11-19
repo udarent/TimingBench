@@ -14,7 +14,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
 .pane{position:relative;min-width:0;min-height:0;overflow:hidden}
 .pane.src{background:var(--src-bg);border-right:1px solid var(--line)}
 /* 桌面宽屏 = 左代码 / 右时序图（2026-11-13）。窄窗口（鼠标但没横向空间）回退成上下分区，
-   触摸端与嵌入卡片另有自己的规则（见 .is-touch / .is-embed 段）。 */
+   触摸端另有自己的规则（见 .is-touch 段）。 */
 @media (max-width: 860px){
   .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
   .pane.src{border-right:0;border-bottom:1px solid var(--line)}
@@ -30,26 +30,19 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--sans);ov
    所以不再盖在波形上、也不需要画布为它们预留高度。 */
 .pane.diagram{position:relative;display:flex;flex-direction:column;min-height:0}
 .svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto;background:var(--bg);outline:none}
-/* 停靠区**恒高**：动作条 + 字符条两条都算进高度，哪怕此刻只开了一条。
-   为什么必须恒高（用户实测「选中元素又移动时画面反复跳动」）：
-   曾由内容决定高度 —— 字符条只在「选中格」时出现，于是点格子画布矮 47px、点行名又长回 40px，
-   画布底边跟着跳，120ms 后的去抖重画再来一次。所以高度必须是常量。
-   **0.18.0：常量取两者的较大者，不再相加。** 因为这两条已经**互斥**：上下文条只在选中
-   行 / 列时出现，字符停靠条只在选中格时出现（格级三个动作已挪进停靠条左侧），同一时刻最多
-   一条。按「两条都在」预留等于永远空着一整行；取 max 既保持恒定（不抖），又只占一行。
-   只读卡片不预留（那里没有这两条，`reportHeight` 也不能被它撑高）。 */
-/* 页面 / 触摸端：恒高（两条子条互斥，取 max 就只占一行），切换选中对象时版面一动不动。
-   嵌入卡片单独覆盖成 height:auto —— 卡片是「贴着内容长」的，留一条没有按钮的空带就是纯浪费
-   （用户实测「波形和最下排按钮之间一段无用空白」）。 */
+/* 停靠区：**一行的底噪 + 按排数长高**（0.26.0）。
+   两条子条互斥（选中格 → 字符条；选中行 / 列 → 上下文条），所以常态只占一行；
+   `min-height` 保住这一行，切选中对象时版面不抖。
+   按钮不再折叠（没有「⋯」）：宽度不够就换行，`.dockzone` 自然长高，画布是它的 flex
+   兄弟、等量让位 —— 于是按钮永远可见，也永远不盖住波形。 */
 .dockzone{position:relative;flex:0 0 auto;display:flex;flex-direction:column;justify-content:flex-end;z-index:20;
-  height:calc(max(var(--dock-acts), var(--dock-chars)) + env(safe-area-inset-bottom,0px))}
+  min-height:calc(max(var(--dock-acts), var(--dock-chars)) + env(safe-area-inset-bottom,0px));
+  padding-bottom:env(safe-area-inset-bottom,0px)}
 /* 四条子条各自定高、绝不压缩：dockzone 的高度是按它们的实测值加出来的，
    一旦允许 flex 收缩，按钮会被压掉几像素（实测 panel 57 vs 需要 60，底边直接裁掉）。 */
 .dockzone > *{flex:0 0 auto}
-.is-readonly .dockzone{height:0}
+.is-readonly .dockzone{min-height:0}
 /* 嵌入卡片：没有按钮时不占位（0），有按钮时只占一行；两条子条同高 ⇒ 选格↔选行不跳。 */
-.is-embed .dockzone{height:auto;padding-bottom:env(safe-area-inset-bottom,0px)}
-.is-embed .chardock.open{height:var(--dock-acts)}
 /* 离屏文本测量容器：只给 shapes.js 量行名宽度用，永远不可见、不吃事件 */
 .measure{position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;visibility:hidden;font-family:var(--sans)}
 /* 键盘用户用 Tab / F6 进入画布时给出可见焦点；鼠标点击不显示 */
@@ -125,7 +118,6 @@ svg{display:block;font-family:var(--sans)}
 .waveBusInk{fill:none;stroke:var(--wave-ink);stroke-width:1;stroke-linejoin:round;pointer-events:none}
 .waveLabel{fill:var(--ink);font-size:10px}
 /* 只读卡片与编辑态共用同一套排版：不另设字号 / 字色（只读态只是少画编辑控件）。 */
-.is-embed.is-readonly .waveNode{font-weight:600}
 /* 源码 wave 比全局周期数短时，尾部按 repeater 延续画出可续写区 */
 .tailSlot{opacity:.78;pointer-events:none}
 .tailCell:hover{fill:var(--accent-bg)}
@@ -162,10 +154,6 @@ svg{display:block;font-family:var(--sans)}
    用 display:none 而非 visibility，让隐藏的 textarea 不参与 Tab 序列、也不吃焦点。 */
 .app[data-view="diagram"]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 .app[data-view="diagram"] .pane.src{display:none}
-/* 嵌入卡片的 both 视图必须显式给两行：.is-embed .app 只定义了单行 grid，
-   两个 pane 时第二个落进「按内容撑高」的隐式行、第一行（源码）被挤到 2px
-   —— 用户实测「双栏看不到代码区」的根因。提高特异性压过 .is-embed .app 的单行定义。 */
-.is-embed .app[data-view="both"]{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
 /* 只读态没有任何全局动作 → 顶栏整条不占位（否则卡片 iframe 会白白高 40px） */
 .topbar:empty{display:none}
 .is-touch{--dock-acts:61px;--dock-chars:56px}
@@ -198,36 +186,35 @@ svg{display:block;font-family:var(--sans)}
 /* 上下文条：桌面与触摸端都钉在**底部**（桌面是 34px 方按钮的整行条，触摸端换成 44px 大按钮，
    规则在下面 .is-touch 段里）。行 / 列动作现在只有这一条通道 —— 画布上的行尾工具组与列头
    按钮都已撤掉，所以画布右侧也不再为它们留位（ACT_W = 0，见 geometry.js）。 */
-/* 上下文条：整行、定高、**绝不换行**。换行会把这一条撑成两三排 —— 停靠区虽然恒高，
-   但按钮会被自己的行高挤掉（44px × 3 排 > 61px）。放不下的动作不再横向滚动（滚动在触摸端
-   会与「滑动看画布」混淆），而是收进「⋯」，与字符停靠条同一套溢出逻辑。 */
-.tbpanel.open{display:flex;flex-wrap:nowrap;gap:4px;padding:6px 8px;height:var(--dock-acts);
-  background:var(--panel);border-top:1px solid var(--line);overflow:hidden}
+/* 上下文条：整行排布，**允许换行**（0.26.0）。理由：折叠（⋯）多一次点击、展开层还要盖住画布；
+   换行只是让停靠区多占一行，画布顺势让位，所有动作一直可见、可点。 */
+.tbpanel.open{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;min-height:var(--dock-acts);
+  background:var(--panel);border-top:1px solid var(--line)}
 /* 动作按钮的统一尺寸：格级（停靠条）/ 行级 / 列级三者必须一致 —— 它们本来就共用同一批
    24 单位图标，尺寸/圆角/描边各写一份就会像现在这样「看着都差不多、放一起却对不齐」。
    桌面 32×32（停靠条内容高正好 32，不溢出）、触摸 44×44（触屏最小命中区）。 */
-:is(.tbpanel,.tbmore) button.ctxbtn{width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--line);
+.tbpanel button.ctxbtn{width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--line);
   border-radius:6px;background:var(--src-bg);color:var(--ink);display:grid;place-items:center;
   cursor:pointer}
 /* 图标 24px（32×32 ⇒ 偏移 4px）+ 2px 描边 + 圆端点。端点必须与触摸端一致：
    桌面不写就是 butt/miter，同一个图标在两端的拐角形状会不同（用户能看出「风格不统一」）。
    为什么必须 24/2：见上面格级动作那段注释 —— 同一批 24 单位图标，只有 1:1 才清晰。 */
-:is(.tbpanel,.tbmore) button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
+.tbpanel button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-:is(.tbpanel,.tbmore) button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
-:is(.tbpanel,.tbmore) button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
+.tbpanel button.ctxbtn:hover{border-color:var(--accent);color:var(--accent)}
+.tbpanel button.ctxbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
 .is-touch .tbpanel{display:none}
-.is-touch .tbpanel.open{display:flex;flex-wrap:nowrap;gap:8px;padding:8px;overflow:hidden}
+.is-touch .tbpanel.open{display:flex;flex-wrap:wrap;gap:8px;padding:8px}
 .is-touch .tbpanel button{min-height:44px;min-width:86px;padding:6px 10px;
   border:1px solid var(--line);border-radius:10px;background:var(--src-bg);color:var(--ink);
   font:13px var(--sans);touch-action:manipulation}
 /* 上下文图标条：44×44 方块 + 居中线条图标；图标画的是「被操作对象的缩略图」 */
-.is-touch :is(.tbpanel,.tbmore) button.ctxbtn{min-width:44px;width:44px;height:44px;min-height:44px;padding:0;
+.is-touch .tbpanel button.ctxbtn{min-width:44px;width:44px;height:44px;min-height:44px;padding:0;
   display:flex;align-items:center;justify-content:center}
-.is-touch :is(.tbpanel,.tbmore) button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
+.is-touch .tbpanel button.ctxbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;
   stroke-width:2}
-.is-touch :is(.tbpanel,.tbmore) button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.is-touch :is(.tbpanel,.tbmore) button.ctxbtn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.is-touch .tbpanel button.ctxbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.is-touch .tbpanel button.ctxbtn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .is-touch .tbpanel button:active{background:var(--accent-bg);border-color:var(--accent)}
 .is-touch .toast{display:none;position:fixed;left:50%;bottom:calc(12px + var(--toast-lift,0px));transform:translateX(-50%);z-index:30;
   max-width:88vw;padding:8px 14px;border-radius:10px;background:var(--ink);color:var(--bg);
@@ -240,33 +227,20 @@ svg{display:block;font-family:var(--sans)}
 /* 桌面：字符停靠条与触摸端是**同一个组件**（#chardock / .chipbtn），只是摆放与尺寸
    按指针定。原先桌面在 SVG 里另画一条 23 颗的 charChips —— 两套渲染、两套布局、
    两套点击，还有一段「滚动时反向位移把 chips 钉回可视区」的补偿。现在一套。
-   桌面放得下 23 颗就全平铺（不折叠），触摸端 4 颗 + ⋯，由 JS 按 TOUCH 决定数量。 */
+   0.26.0：不论桌面还是触摸端，23 颗一律全铺 —— 放不下就换行。 */
 
-/* 溢出区（0.25.0）：两条按钮条各自的「更多」都挂在**下方**，展开时占位。
-   旧实现钉在按钮条上沿往上弹，卡片只有 200px 高时会把画布整个盖住（波形点不着、拖不动）。
-   现在它参与布局：在流内正常撑开 dockzone，画布随之变矮 —— 永远不会盖住波形。 */
-.charmore,.tbmore{display:none}
-.charmore.open,.tbmore.open{display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px;
-  padding:6px 8px;max-height:40vh;overflow:auto;
-  background:var(--panel);border-top:1px solid var(--line)}
-.tbmore.open{gap:8px;padding:8px}
-/* 大视图（整页编辑器 / 全屏）：溢出区改成**向上浮出**，不占布局。
-   这时画布很大，盖住底部一小条远好过「整块界面重排 + 图重新缩放」——
-   展开/收起只触发一次合成，尺寸一个像素都不变。嵌入卡片仍走上面的下挂占位。 */
-.dockzone.more-up .charmore.open,.dockzone.more-up .tbmore.open{position:absolute;left:0;right:0;bottom:100%;
-  z-index:23;max-height:40vh;box-shadow:0 -4px 14px rgba(0,0,0,.12)}
-.chardock.open{display:flex;
-  align-items:center;justify-content:flex-start;gap:4px;padding:4px 8px;height:var(--dock-chars);
+.chardock.open{display:flex;flex-wrap:wrap;
+  align-content:center;justify-content:flex-start;gap:4px;padding:4px 8px;min-height:var(--dock-chars);
   background:var(--panel);border-top:1px solid var(--line);user-select:none;
   /* 23 颗 × 30px ≈ 690：窄卡片（如 520 的 iframe）放不下时必须横向滚动，
      不能居中溢出 —— 居中会让第一颗跑到负坐标，用户看不到也点不到。 */
-  overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
+}
 /* 字符按钮的基础样式：字形按 30×28 的内联网格画，触摸端再放大到 48×44。 */
-:is(.chardock,.charmore) .chipbtn{position:relative;flex:0 0 30px;width:30px;height:28px;min-width:30px;padding:0;
+.chardock .chipbtn{position:relative;flex:0 0 30px;width:30px;height:28px;min-width:30px;padding:0;
   border:1px solid var(--line);border-radius:6px;background:var(--src-bg);color:var(--ink);overflow:hidden}
-:is(.chardock,.charmore) .chipbtn:not(.act) svg{position:absolute;inset:0;width:100%;height:100%;
+.chardock .chipbtn:not(.act) svg{position:absolute;inset:0;width:100%;height:100%;
   --wave-ink:var(--muted);opacity:.85;pointer-events:none}
-:is(.chardock,.charmore) .chipbtn span{position:relative;font:600 12px var(--mono);
+.chardock .chipbtn span{position:relative;font:600 12px var(--mono);
   text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
 /* 停靠条左侧的三个格级动作（label / node / link）：与字符同尺寸，靠一条竖线分开。
    它们画的是 24×24 网格的 stroke 图，不是波形预览，所以不套字符那套配色与缩放。
@@ -284,34 +258,30 @@ svg{display:block;font-family:var(--sans)}
 /* 桌面尺寸与行/列动作按钮对齐（32×32）：三者共用同一批 24 单位图标，按钮也必须同大。
    停靠条内容高恰好 32（--dock-chars 40 − 上下 padding 4×2），不会溢出。
    端点同样用 round —— 与上下文条、触摸端保持同一套画笔。 */
-:is(.chardock,.charmore) .chipbtn.act{flex:0 0 32px;width:32px;min-width:32px;height:32px}
-:is(.chardock,.charmore) .chipbtn.act svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+.chardock .chipbtn.act{flex:0 0 32px;width:32px;min-width:32px;height:32px}
+.chardock .chipbtn.act svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round}
 /* 触摸端这三个按钮收到 44（不跟字符的 48）：320px 卡片里省下的 12px 正好能多摆一颗字符。
    图标尺寸沿用上面的 24，不另设 —— 多出来的空间留给命中区。 */
-.is-touch :is(.chardock,.charmore) .chipbtn.act{flex:0 0 44px;width:44px;min-width:44px;height:44px}
+.is-touch .chardock .chipbtn.act{flex:0 0 44px;width:44px;min-width:44px;height:44px}
 .docksep{flex:0 0 1px;align-self:stretch;margin:6px 6px;background:var(--line)}
-:is(.chardock,.charmore) .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
-:is(.chardock,.charmore) .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
-:is(.chardock,.charmore) .chipbtn.on span{color:var(--accent)}
-:is(.chardock,.charmore) .chipbtn:hover{border-color:var(--accent)}
-/* 「⋯」：与字符同尺寸，只显示三个点；展开时点亮。 */
-:is(.chardock,.charmore) .chipbtn.more span,:is(.tbpanel,.tbmore) button.ctxbtn.more span{font:600 15px var(--sans);color:var(--muted);line-height:1}
-:is(.chardock,.charmore) .chipbtn.more.on,:is(.tbpanel,.tbmore) button.ctxbtn.more.on{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
-.is-touch .chardock.open{display:flex;
-  align-items:center;gap:6px;padding:6px 8px;
+.chardock .chipbtn.on{border-color:var(--accent);background:var(--accent-bg)}
+.chardock .chipbtn.on svg{--wave-ink:var(--accent);opacity:1}
+.chardock .chipbtn.on span{color:var(--accent)}
+.chardock .chipbtn:hover{border-color:var(--accent)}
+.is-touch .chardock.open{display:flex;flex-wrap:wrap;
+  align-items:center;align-content:center;gap:6px;padding:6px 8px;
   background:var(--panel);border-top:1px solid var(--line);
-  overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
-  touch-action:pan-x;user-select:none}
+  user-select:none}
 /* 触摸端只覆盖「与桌面不同」的三项：尺寸（48×44 命中区）、圆角 10、字号 15。
    定位、配色与选中态由上面的基础规则统一给出，不再重复一遍。 */
-.is-touch :is(.chardock,.charmore) .chipbtn{position:relative;flex:0 0 48px;
+.is-touch .chardock .chipbtn{position:relative;flex:0 0 48px;
   width:48px;height:44px;min-width:48px;padding:0;border:1px solid var(--line);border-radius:10px;
   background:var(--src-bg);color:var(--ink);touch-action:manipulation;overflow:hidden}
-.is-touch :is(.chardock,.charmore) .chipbtn span{position:relative;
+.is-touch .chardock .chipbtn span{position:relative;
   font:600 15px var(--mono);text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
-.is-touch :is(.chardock,.charmore) .chipbtn:active{background:var(--accent-bg);border-color:var(--accent)}
+.is-touch .chardock .chipbtn:active{background:var(--accent-bg);border-color:var(--accent)}
 /* 右边缘淡出：提示这排还能横向滑（23 个字符一排放不下） */
 .is-touch .chardock.open::after{content:"";position:sticky;right:0;flex:0 0 18px;
   align-self:stretch;margin-left:-18px;
@@ -343,145 +313,6 @@ svg{display:block;font-family:var(--sans)}
 .is-touch .errdot{width:12px;height:12px;top:12px;right:12px}
 .is-touch .inline-edit{font-size:16px;height:100%}
 
-/* ---------------------------------------------------------------------------
-   嵌入模式（?embed=1）：只显示波形卡片，供宿主页面 iframe 引入。
-   默认只读（无 HUD / 字符条 / chrome），点波形或提示条进入编辑。
-   高度由内容决定，宿主通过 postMessage 收到 height 后自行设置 iframe 高度。
-   --------------------------------------------------------------------------- */
-.embedhint{display:none}
-/* 宿主一般会按 postMessage 的 height 设 iframe 高度；未接时退化为可滚动，避免内容被裁 */
-.is-embed body{overflow:auto}
-/* 嵌入卡片里没有标签页与操作栏（卡片只承担「看 / 就地改」两件事），
-   但**上下文条必须保留** —— 触摸端没有 hover，选中行 / 列后的 up·down·改名·加行
-   全在 #tbpanel 里，隐藏它等于把行重排、行编辑、列操作整组功能关掉。 */
-/* 嵌入卡片底部没有 60px 的操作栏，上下文条直接贴底；安全区由 .dockzone 统一让出
-   （0.10.4 起停靠区是一行定高，两条并排，不再各自加 padding-bottom）。
-   卡片编辑态的「单行横向滚动」不再是特例 —— 整页与卡片共用同一条单行规则。 */
-/* 嵌入卡片的源码 pane 不再无条件隐藏 —— 编辑态可切到双栏（0.23.0，0.25.0 起只剩双栏这一档）。
-   只读态仍只显示波形：data-view 默认就是 diagram，且 setReadonly 会强制复位到 diagram，
-   所以这里不再需要 display:none!important（那条会把编辑态的双栏一起藏掉）。
-   卡片就是一个固定高度的窗口：.app / .pane 撑满 iframe，画布自己在里面滚。
-   之前 .app 是 height:auto、.pane 有 overflow:hidden —— 编辑态内容比卡片高时，
-   下面几行会被裁掉且没有可滚动容器（纵向根本没有滚动条），手机上等于「看不见也点不到」。
-   只读态内容本来就等比缩到卡片宽、不会溢出，所以看不出差别。 */
-.is-embed .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
-.is-embed .svgwrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto}
-/* 嵌入卡片：画布 + 底部两条与整页同一套模型 —— flex 列，画布 flex:1 自己滚，dock 真占高度。
-   曾经因为「卡片高度被 aspect-ratio 锁死」把 dock 改成绝对浮层，代价是它不参与滚动范围的
-   账：滚动高度按「内容 − 视口」算，浮层只盖画面，于是滚到底最后一两行仍压在 dock 底下
-   （用户实测「全屏后能平移但范围不够，底部被编辑按钮挡住」）。dock 进文档流后画布自动让出
-   它的高度，滚到底就真的到底。只读卡片不弹 dock（高度 0），版式与之前完全一致。 */
-.is-embed .pane.diagram{display:flex;flex-direction:column;height:100%;min-height:0}
-.is-embed:fullscreen .svgwrap,
-.is-embed:-webkit-full-screen .svgwrap{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-/* 内容比卡片窄时水平居中（宽于卡片时仍从左侧起排、可横向滚动） */
-/* 只读卡片：让 SVG 自己按视口等比适配（viewBox 不变，preserveAspectRatio 默认 xMidYMid meet）。
-   原因有两个：① 纯 iframe 的高度由宿主的 aspect-ratio 决定，而内部几何常量会随指针类型变
-   （粗指针整体放大），片段在桌面生成、手机里看时比例会差几个百分点 —— 交给浏览器 meet
-   就是「永远完整显示，最多几像素边距」，不会裁掉任何一行；② 旧片段写死了过大的 height，
-   也不会再把图钉在顶部、下面空一大片。 */
-.is-embed.is-readonly .svgwrap svg{width:100%;height:100%;margin:0}
-/* 只读卡片放大后（0.20.1 起可捏合 / Ctrl+滚轮）：上面那条 100% 必须让位给 svg 上的
-   width/height 属性 —— 否则「设了尺寸也不生效」，捏合看起来毫无反应。同时回到左对齐：
-   内容已经比卡片宽，再从中心起排会让左右各留半截空白、还滚不到头。 */
-.is-embed.is-readonly .svgwrap.is-zoom svg{width:auto;height:auto;margin:0}
-.is-embed .svgwrap svg{margin-inline:auto}
-/* 只读态：画布只承担查看，光标不暗示可编辑 */
-.is-embed.is-readonly .svgwrap{cursor:default}
-.is-embed.is-readonly .svgwrap:focus-visible{outline:none}
-/* 退出 / 进入编辑的图标按钮：钉在卡片**右上角**，压在波形图的一个角上。
-   为什么不是左上：只读态不再画列号行，第一行行名紧贴顶部，左上角放按钮会正好压住它；
-   为什么不是右下：卡片比内容高时它会悬在空白带里（旧片段写死 height 时就是这样）。
-   右上角是波形末端，压住的是「持续电平」那一角，不丢信息。
-   铅笔＝点一下进入编辑，对勾＝编辑中、点一下结束；零常驻文字，语义只在 aria-label。 */
-/* 只读卡片里这颗「编辑」按钮画成**裸图标**：原先它带 1px 边框 + 圆角 + 底色，
-   在去掉卡片边框之后，它自己又成了一个浮在图角上的小圆角方块（对照 WaveDrom 的教程图
-   会显得多余）。命中区仍是 30×30，只是不再画框；编辑态（对勾）才重新上底色。 */
-.is-embed .embedhint{display:flex;position:fixed;right:8px;top:8px;z-index:40;
-  align-items:center;justify-content:center;width:30px;height:30px;padding:0;
-  border:0;border-radius:8px;background:transparent;color:var(--muted);
-  cursor:pointer;opacity:.35;transition:opacity .15s,color .15s,border-color .15s,background .15s}
-.is-embed .embedhint .hintico{width:16px;height:16px;fill:none;stroke:currentColor;
-  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.is-embed .embedhint .hintico-done{display:none}
-.is-embed .embedhint.editing .hintico-edit{display:none}
-.is-embed .embedhint.editing .hintico-done{display:block}
-.is-embed .embedhint:hover{opacity:1;color:var(--accent);border-color:var(--accent)}
-.is-embed .embedhint.editing{opacity:.95;color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
-/* 全屏编辑：完成/退出是全屏里唯一的出口 —— 放大到 48px、避开刘海与系统栏（safe-area），
-   并压在所有浮层之上，避免「点了没反应」（小按钮点按被当成滚动 / 落在不可点区域）。 */
-html.is-embed:fullscreen .embedhint,
-html.is-embed:-webkit-full-screen .embedhint{
-  width:48px;height:48px;border-radius:12px;z-index:130;opacity:1;
-  top:calc(10px + env(safe-area-inset-top,0px));
-  right:calc(10px + env(safe-area-inset-right,0px))}
-html.is-embed:fullscreen .embedhint .hintico,
-html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
-@media (pointer:coarse){
-  .is-embed .embedhint{width:38px;height:38px;border-radius:10px}
-  .is-embed .embedhint .hintico{width:20px;height:20px}
-}
-/* 两态都在右上，位置固定不动 —— 点进编辑时按钮不会跳，读者不用重新找它。 */
-
-/* ---------------------------------------------------------------------------
-   嵌入代码面板：HUD 的 <> 图标打开，把当前 WaveJSON 生成宿主可粘贴的片段。
-   浮层只在交互时出现，不进入 SVG，因此不影响波形层指纹。
-   --------------------------------------------------------------------------- */
-/* 遮罩自己可以滚：面板高度不再被「视口 − 48」截断（截断会让底部的复制按钮落在面板之外，
-   小卡片里根本点不到）。改用「面板不定高 + 遮罩滚动」：装得下时靠 margin:auto 居中，
-   装不下时 overshoot 到下方、由遮罩滚出来 —— 顶部不会被 flex 居中挤到负坐标。 */
-.shareMask{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;
-  padding:24px;background:rgba(0,0,0,.32);overflow:auto;overscroll-behavior:contain}
-.sharePanel{width:min(620px,100%);margin:auto;display:flex;flex-direction:column;
-  border-radius:12px;border:1px solid var(--line);background:var(--panel);
-  box-shadow:0 12px 40px rgba(0,0,0,.28);overflow:hidden}
-.shareHead{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:12px 14px;border-bottom:1px solid var(--line);font:500 13px/1.4 var(--sans);color:var(--ink)}
-.shareClose{border:0;background:transparent;color:var(--muted);font:14px/1 var(--sans);
-  cursor:pointer;padding:4px 6px;border-radius:6px}
-.shareClose:hover{color:var(--accent);background:var(--accent-bg)}
-/* 两种嵌入形态的切换：脚本 + div（自动高度）与纯 iframe（内容随 URL 走） */
-.shareTabs{display:flex;gap:6px;padding:12px 14px 0}
-.shareTab{min-height:28px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;
-  background:var(--src-bg);color:var(--muted);font:12.5px var(--sans);cursor:pointer}
-.shareTab:hover{color:var(--accent);border-color:var(--accent)}
-.shareTab[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:500}
-/* 可选入口：默认不勾 —— 普通嵌入只要「看 / 改波形」，源码视图与再次嵌入都是噪音。
-   勾上后片段里会多出 data-src / data-snippet（或 &src=1 / &snippet=1）。 */
-.shareOpts{display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 14px 0}
-.shareOpts label{display:inline-flex;align-items:center;gap:6px;
-  font:12.5px var(--sans);color:var(--muted);cursor:pointer;user-select:none}
-.shareOpts label:hover{color:var(--ink)}
-.shareOpts input[type="checkbox"]{width:14px;height:14px;margin:0;accent-color:var(--accent);cursor:pointer}
-.shareHint{margin:0;padding:12px 14px 0;font:12.5px/1.6 var(--sans);color:var(--muted)}
-.shareCode{margin:12px 14px 0;padding:10px 12px;height:calc(9 * 1.55em);resize:vertical;
-  border:1px solid var(--line2);border-radius:8px;background:var(--src-bg);color:var(--ink);
-  font:12px/1.55 var(--mono);white-space:pre;overflow:auto;outline:none}
-.shareCode:focus{border-color:var(--accent)}
-.shareFoot{display:flex;align-items:center;gap:10px;padding:12px 14px 14px}
-.shareCopy{min-height:32px;padding:6px 14px;border:1px solid var(--accent);border-radius:8px;
-  background:var(--accent-bg);color:var(--accent);font:500 12.5px var(--sans);cursor:pointer}
-.shareCopy:hover{background:var(--accent);color:var(--panel)}
-.shareTip{font:12px var(--sans);color:var(--muted)}
-.shareTip.ok{color:var(--ok)}
-/* 矮容器（嵌入卡片通常 200–320 高）：9 行代码框 + 说明段会把面板撑到视口之外。
-   收成「5 行代码 + 隐藏说明」，面板就地装得下 —— 不必让人在 240px 的卡片里滚动找复制按钮。
-   装不下时仍由遮罩滚动兜底（上面的 overflow:auto）。 */
-@media (max-height:460px){
-  .shareMask{padding:12px}
-  .shareHint{display:none}
-  .shareCode{height:calc(5 * 1.55em)}
-}
-/* 手机上这块面板没有 hover 可用，关闭 / 页签 / 复制一律按触摸口径放大到 44px 命中区；
-   遮罩留白收窄，让片段文本框在小屏上更宽（片段本来就长，横向多一列字符都是收益）。 */
-.is-touch .shareMask{padding:16px}
-.is-touch .shareHead{padding:10px 8px 10px 14px}
-.is-touch .shareClose{min-width:44px;min-height:44px;font-size:18px;padding:0}
-.is-touch .shareTabs{padding:10px 14px 0}
-.is-touch .shareTab{min-height:44px;padding:8px 16px;font-size:13.5px}
-.is-touch .shareCode{font-size:12.5px}
-.is-touch .shareCopy{min-height:44px;padding:10px 20px;font-size:13.5px}
-
 /* 尊重系统的「减少动态效果」偏好。
    这里只关掉**自动播放**的装饰动效，不碰交互反馈：
    · 首屏手势引导（gFinger 2.2s + 两圈扩散）是打开页面自己就开始播的，
@@ -492,3 +323,20 @@ html.is-embed:-webkit-full-screen .embedhint .hintico{width:24px;height:24px}
   .gesture{display:none}
   .errdot.pulse{animation:none}
 }
+
+/* ---------------------------------------------------------------------------
+   站点自用只读预览（首页 logo 位、教程页示例，由 src/demo.js 渲染）
+   按容器宽等比缩放、不出滚动条 —— 与把图当图片看的诉求一致。
+   --------------------------------------------------------------------------- */
+.tb-preview{position:relative;overflow:hidden}
+.tb-preview .svgwrap{overflow:hidden}
+.tb-preview .svgwrap svg{display:block;width:100%;height:auto;margin:0}
+
+/* 预览卡右侧上角的铅笔：跳编辑器并带上这张图的源码（预览本身仍只读）。
+   与编辑器同一套配色，明暗主题自动跟随。 */
+.tb-edit{position:absolute;right:8px;top:8px;z-index:3;box-sizing:border-box;
+  width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);
+  text-decoration:none;opacity:.9;transition:opacity .12s,color .12s,border-color .12s,background .12s}
+.tb-edit:hover,.tb-edit:focus-visible{opacity:1;color:var(--accent);border-color:var(--accent);background:var(--accent-bg);outline:none}
+.tb-edit svg{display:block;width:16px;height:16px}

@@ -1,25 +1,38 @@
 // 主页面入口：仅装配编辑器，不加载任何辅助页面或能力。
 import { createEditor } from './editor/index.js';
 import { TOUCH } from './editor/mode.js';
-import { EMBED } from './editor/embed.js';
-import { attachEmbed } from './editor/embed-shell.js';
+import { Core } from './core/ir.js';
 
 if (TOUCH) document.documentElement.classList.add('is-touch');
 
+const codeEl = document.getElementById('code');
+
 const ctx = createEditor({
-  code:     document.getElementById('code'),
+  code:     codeEl,
   wrap:     document.getElementById('svgwrap'),
   gutter:   document.getElementById('gutter'),
   errdot:   document.getElementById('errdot'),
   app:      document.getElementById('app'),
-  isEmbed:  EMBED,   // 三视图默认值靠它：嵌入卡=只图形，独立页=双栏
   topbar:   document.getElementById('topbar'),
   tbpanel:  document.getElementById('tbpanel'),
-  tbmore:   document.getElementById('tbmore'),
   chardock: document.getElementById('chardock'),
-  charmore: document.getElementById('charmore'),
   toast:    document.getElementById('toast')
 });
 
-// 嵌入模式（?embed=1）：只显示波形卡片，并接管只读 / 编辑切换与宿主通信
-if (EMBED) attachEmbed(ctx, { hint: document.getElementById('embedhint') });
+// 首页 / 教程页的铅笔把该图源码放在片段里传进来（#wj=<base64url>）。
+// 片段坏了就留在默认示例，不影响编辑器可用。
+const m = /^#wj=([A-Za-z0-9_-]+)$/.exec(location.hash);
+if (m) {
+  try {
+    // base64url 去掉了补位，atob 要求长度是 4 的倍数，先补回来
+    const pad = (4 - (m[1].length % 4)) % 4;
+    const bin = atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '==='.slice(0, pad));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    // 页面上的源码是压缩单行，排成多行再进代码框（用户自己写过的多行源码原样保留）
+    const src = Core.formatSource(new TextDecoder().decode(bytes));
+    codeEl.value = src;      // fromCode 只解析重绘，源码框要自己写
+    ctx.fromCode(src);
+    ctx.renderGutter();
+  } catch (e) { /* 保留默认示例 */ }
+}

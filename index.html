@@ -6,9 +6,12 @@
 <title>TimingBench - Editable digital timing diagram everywhere</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.25.0">
+<meta name="version" content="0.26.0">
 <meta name="description" content="TimingBench draws your timing diagram from a simple textual description, the WaveJSON format — and lets you edit either side: change a character and the diagram redraws, click the diagram and the description is rewritten.">
+<link rel="stylesheet" href="src/styles.css">
 <style>
+  /* shared styles.css targets a full-screen editor; restore normal document flow here */
+  body{display:block;height:auto;overflow:auto}
   /* Layout mirrors wavedrom.com's front page: one centered column, a logo block,
      the wordmark, the tagline, four lines of text, and a row of links. */
   :root{
@@ -34,10 +37,10 @@
   .word2{font-size:25px;color:var(--muted);margin-bottom:35px}
   .word3{font-size:18px;margin-bottom:35px;padding:0 16px}
 
-  /* The logo slot holds a live, editable diagram drawn for this page — the
-     diagram is the product, so it takes the place of a static logo image. */
+  /* The logo slot holds a live, read-only diagram drawn for this page — the
+     diagram is the product, so it takes the place of a static logo image.
+     Its pencil opens the same source in the editor. */
   .logo{width:100%;max-width:360px;margin:0 auto 35px}
-  .logo iframe{display:block;width:100%;border:0}
   .logo .fallback{font:13px/1.6 var(--roboto);color:var(--muted);margin:0}
 
   @media (max-width:560px){
@@ -57,8 +60,8 @@
     <a href="https://github.com/udarent/TimingBench/issues">Issues</a>
   </div>
 
-  <!-- Read-only until clicked; click it and the diagram becomes editable in place. -->
-  <div class="logo" data-timingbench data-title="TimingBench live diagram" data-height="240"
+  <!-- Site showcase: drawn by the same renderer, read-only. The pencil opens it in the editor. -->
+  <div class="logo" data-timingbench data-title="TimingBench live diagram"
        data-wavejson="{ signal: [ { name: 'clk', wave: 'p.......' }, { name: 'addr', wave: 'x3.x4..x', data: ['A1', 'A2'] }, { name: 'wdata', wave: 'x3..3..x', data: ['D1', 'D2'] }, { name: 'wr', wave: '01..0...', node: '.a......' }, { name: 'ack', wave: '0..1.0..', node: '...b....' } ], edge: ['a~>b t1'] }"></div>
   <noscript>
     <p class="fallback">JavaScript is off, so the live diagram can't run here — <a href="editor.html">open the editor</a> instead.</p>
@@ -68,20 +71,19 @@
   <div class="word word2">Editable Digital Timing Diagram everywhere</div>
   <div class="roboto word3">
 TimingBench draws your timing diagram from a simple textual description, the WaveJSON format.<br>
-Edit a wave character and the diagram redraws; click the diagram and the description is rewritten.<br>
-Switch between diagram, code, or both, in the editor or inside an embedded card.<br>
+Edit a wave character and the diagram redraws; drag on a cell and the description is rewritten.<br>
+Switch between diagram, code, or both, right in the editor.<br>
 The editor runs entirely in your browser — nothing you type leaves the page.<br>
-The same rendering engine can be embedded into any webpage or note.
+No build step, no dependencies — the whole editor is plain static files.
   </div>
 
   <!-- Second row: only what the nav row above does not already offer, the same split wavedrom.com
        uses (nav on top, extra resources below). No repeating Editor / Issues here. -->
   <div class="roboto lll">
-    <a href="embed-demo.html">Embed demo</a>
     <a href="LICENSE">MIT license</a>
     <a href="https://wavedrom.com/">WaveDrom</a>
   </div>
 
 </body>
-<script src="embed.js"></script>
+<script type="module" src="src/demo.js"></script>
 </html>

@@ -42,9 +42,10 @@ function gripDots(x,y,cols,rows){
 
 export function createShapes(ctx){
   var state=ctx.state, wrap=ctx.wrap;
-  // 本帧的行高：只读卡片走紧凑口径（RO_ROW_H），编辑态用 ROW_H。
+  // 本帧的行高：只读预览走紧凑口径（RO_ROW_H），编辑态用 ROW_H。
+  // 0.26.0 起没有「嵌入卡片」这个概念了，只读 = 首页 / 教程页的展示图。
   // 放在闭包里是因为它要读 state；所有取行高的地方都过这一个函数，避免各处写死 48 而漂移。
-  function rowH(){ return (state.readonly && state.embedCard) ? RO_ROW_H : ROW_H; }
+  function rowH(){ return state.readonly ? RO_ROW_H : ROW_H; }
   // 当前场景（desk|touch × Edit|Card）。所有「画不画某个控件」的判据一律查 cap.js 的能力表：
   // `can('laneMeta')` 读起来就是「这个场景该不该画 φ/T 徽标」，比 `if(T||state.readonly)` 好审。
   // 仍直接读 T / readonly 的地方都是**布局派生**（因为没画控件而少留的高度 / 少留的边距），
@@ -301,7 +302,7 @@ export function createShapes(ctx){
     var rawW=Math.max(minW,Math.min(maxW,leftBound+measW+16));
     NAME_W=Math.min(maxW,Math.ceil(rawW/8)*8);
     XS=NAME_W+8;                                 // 行名右缘（NAME_W-6）到波形 8px
-    // 其它模块（interactions 的键盘滚动定位、embed-shell 的进编辑锚定）读 G 的实时值
+    // 其它模块（interactions 的键盘滚动定位、touch 的 revealSel）读 G 的实时值
     G.NAME_W=NAME_W; G.XS=XS;
     var N=ir.ticks;
     // 全图列数（参考周期）：period≠1 的行一个字符占多列，行宽不再都等于字符数，
@@ -321,9 +322,9 @@ export function createShapes(ctx){
     // 最小 240 防止未布局（隐藏标签页）时算出 0 列。
     var viewW=Math.max(240, Math.round(wrap.clientWidth||0)||360);
     // 波形层仍按内容撑宽并允许横向滚动；但至少铺满卡片，便于钉住的顶栏 / 底栏有落脚宽度。
-    // 只读态（嵌入卡片默认）两项都不需要：既没有行工具（不预留 ACT_W），也没有钉住的顶栏 /
-    // 底栏（不需要铺满 viewW）。所以只按「内容宽」算，窄了就交给下面的 fit 等比缩小，
-    // 比卡片窄就保持 1:1 并靠 .svgwrap svg 的 margin-inline:auto 居中 —— 卡片右侧不会再空出一条。
+    // 只读预览两项都不需要：既没有行工具（不预留 ACT_W），也没有钉住的顶栏 / 底栏
+    // （不需要铺满 viewW）。所以只按「内容宽」算，宽了就交给下面的 fit 等比缩小，
+    // 比容器窄就保持 1:1 并靠 .svgwrap svg 的 margin-inline:auto 居中 —— 右侧不会空出一条。
     // 只读卡片的「内部尺寸」：嵌入片段按 W/H 算 aspect-ratio，让 iframe 高度随宽度自适应，
     // 卡片底部不会再留一片空白（旧片段写死 height，窄卡片里就空出上百像素）。
     // 只读卡片不要再背「顶部给 HUD 留位置」这笔账：HUD 只在编辑态画，留着就是一圈死白。
@@ -336,7 +337,7 @@ export function createShapes(ctx){
     var roTrimBottom=6;                      // 最后一行下沿到卡片底
     // 行距与波形带：只读卡片用紧凑口径（见文件顶 rowH()），编辑态不变。
     var RH=rowH();
-    var tight=(state.readonly && state.embedCard);
+    var tight=!!state.readonly;
     var bandT=tight?0.10:0.25, bandM=tight?0.50:0.48, bandB=tight?0.90:0.71;
     // 只读态不画末尾的追加列，所以右侧只需容下最后一个真实格子的右边缘（= ACT_X - 1）。
     var roW=Math.max(ACT_X+PAD, 360);
@@ -345,9 +346,9 @@ export function createShapes(ctx){
     })();
     var roH=roBottomY+4+roTrimBottom-roTrimTop;
     state.roBox={w:roW, h:roH};
-    // 下面这几处直接读 readonly / embedCard，是**布局**不是能力：
+    // 下面这几处直接读 readonly，是**布局**不是能力：
     // 列号行不画（能力表关了 colhead）→ 画布宽度不再为右侧 ACT_W 留位；
-    // 只读卡片 → 顶部那一整条 HUD 区从 viewBox 里裁掉、整张图等比 fit。
+    // 只读预览 → 顶部那一整条列号 / HUD 区从 viewBox 里裁掉、整张图等比 fit。
     // 换句话说：能力回答「有没有」，布局回答「因此省下多少」。别把两者合并。
     var W=state.readonly ? roW : Math.max(ACT_X+ACT_W+PAD, viewW, 560);
     var bottom=TOP+ir.lanes.length*RH;
@@ -357,19 +358,17 @@ export function createShapes(ctx){
     var actY=bottom+4;
     // 底部两条（动作 / 字符）现在是 .pane.diagram 里的真实 flex 子项，不再盖在画布上，
     // 所以画布不必为它们预留高度 —— 画布高度由 flex 自动让出，这里不记任何「底栏预留」。
-    // 嵌入卡片：高度只按内容算（宿主据此设 iframe 高度，避免下方留一片空白）；
-    // 整页模式：内容高于视口时抬高到视口高度，让钉住的底栏有可见滚动终点。
-    // 只读嵌入卡片底部收到 12px（编辑态仍留 20，字符条 / 停靠条需要落点）
-    // 底部留白：两档都收到 6。原来编辑态留 20，是给「画在 SVG 里的底栏」当落点的 ——
+    // 高度只按内容算（0.25.0 起不再抬到视口高 —— 那会让停靠区一变就多重排一次）。
+    // 底部留白两档都收到 6。原来编辑态留 20，是给「画在 SVG 里的底栏」当落点的 ——
     // 底栏 0.18.0 起就是画布外的 flex 子项，这 20（×缩放 ≈ 18px）纯粹是波形下面一条死白，
     // 用户实测「点格子后波形与按钮之间明显一段空白」就是它。
-    var contentH=bottom+((state.embedCard&&state.readonly)?roTrimBottom:6);
+    var contentH=bottom+6;
     // 画布高度**只由内容决定**（不再抬到视口高）。旧做法是「整页模式下把 SVG 拉到视口高」，
     // 那是给当时「底栏画在 SVG 里、要钉住」用的；底栏早已是画布外的真实 flex 子项。
     // 留在原地就成了另一种抖动源：停靠区一出现，视口变矮 → SVG 跟着变矮 → 又一次重排。
     var H=contentH, c, x;
     // 只读卡片把顶部那段「HUD 区」从 viewBox 里裁掉：渲染高度同步变矮，卡片不再顶着一条死白。
-    var vbTop=(state.embedCard&&state.readonly)?roTrimTop:0;
+    var vbTop=state.readonly?roTrimTop:0;
     var vbH=H-vbTop;
     // 嵌入只读卡片：整张图按卡片宽度等比缩小，让波形一次全显示 —— 读者不会去横向拖一张
     // 只读卡片。进入编辑后 fit=1，恢复 1:1 + 滚动，保证点选精度。
@@ -385,10 +384,8 @@ export function createShapes(ctx){
     //   桌面整页 —— 保持 1:1 + 横向滚动（宽屏装得下，缩了反而费眼）。
     // 纵向不参与 fit：行数随图变化，硬塞进一屏只会把字压糊。
     var rawFit = viewW > 0 ? viewW / W : 1;
-    var fsBig = !!state.embedCard && !state.readonly && !!state.fsEdit;
-    var baseFit = fsBig ? Math.min(2, Math.max(1, rawFit))
-            : (state.embedCard && state.readonly) ? Math.min(2, rawFit)
-            : (T || state.embedCard) ? Math.min(1, rawFit)
+    var baseFit = state.readonly ? Math.min(2, rawFit)
+            : T ? Math.min(1, rawFit)
             : 1;
     // 缩放是用户的**乘数**，叠在布局算出的基数上，两件事别混：布局回答「装不装得下」
     // （上面四条），用户回答「想放多大看」。所以 fit = baseFit × zoom，后续所有
@@ -418,7 +415,7 @@ export function createShapes(ctx){
     // 高度上报用**未缩放**的像素高：宿主按它设 iframe 高度，若跟着放大后的高度上报，
     // 用户在只读卡片里捏一下，宿主那张卡片就被撑高一次（内容溢出交给画布自己滚）。
     var outW0 = baseOutW;
-    state.contentH=state.embedCard?Math.round(vbH * outW0 / W):contentH;
+    state.contentH = state.readonly ? Math.round(vbH * outW0 / W) : contentH;
     state.W=W; state.H=H;
     // xMidYMin：只读卡片把 svg 拉满视口时，比例若略有偏差，多出来的空间留在下方而不是
     // 上下均分 —— 图始终贴顶，进编辑时「把被点的格子钉回手指下」的换算不必再补一层偏移。

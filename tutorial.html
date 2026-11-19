@@ -6,9 +6,12 @@
 <title>WaveJSON tutorial · TimingBench</title>
 <meta name="author" content="udarent">
 <meta name="email" content="helloyuechen@163.com">
-<meta name="version" content="0.25.0">
-<meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the difference is that every diagram is a live, editable embed block rendered by the same editor — not an image.">
+<meta name="version" content="0.26.0">
+<meta name="description" content="A Hitchhiker's Guide to WaveJSON in WaveDrom's learning order. The code is plain WaveJSON, exactly as in WaveDrom's tutorial; the diagrams are drawn by the same renderer the editor uses, so they look identical to what you get in the editor.">
+<link rel="stylesheet" href="src/styles.css">
 <style>
+  /* shared styles.css targets a full-screen editor; restore normal document flow here */
+  body{display:block;height:auto;overflow:auto}
   :root{
     --bg:#fff;--src-bg:#f7f8fa;--ink:#22262b;--muted:#8a8f96;
     --line:rgba(0,0,0,.10);--accent:#1a6fb5;
@@ -44,11 +47,9 @@
      border-top:1px solid var(--line)}
   section.step > p{margin:6px 0 16px;color:var(--ink)}
   /* No border, radius or fill — same as WaveDrom's tutorial, where the diagram
-     sits directly on the page. The diagram is an iframe of the editor, which
-     paints its own body background, so this container stays transparent and the
-     dark --bg below is matched to the editor's so no seam shows. */
+     sits directly on the page. The container stays transparent so no seam shows
+     against the page background. */
   .livecard{background:transparent;margin:0 0 6px}
-  .livecard iframe{display:block;width:100%;border:0}
   .hint{margin:6px 0 4px;font-size:13px;color:var(--muted)}
   .hint code{font-family:var(--mono);font-size:12.5px}
   pre{margin:0 0 14px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;
@@ -82,15 +83,15 @@
   </header>
 
   <h1>Hitchhiker's Guide to WaveJSON</h1>
-  <p class="sub">Following WaveDrom's tutorial order: the code blocks are plain WaveJSON, exactly as in the original tutorial — the diagrams below each one are live, editable embed blocks rendered by the same editor, not images.</p>
+  <p class="sub">Following WaveDrom's tutorial order: the code blocks are plain WaveJSON, exactly as in the original tutorial — the diagrams below each one are drawn by the same renderer the editor uses — not screenshots.</p>
 
   <p class="intro">
     WaveJSON is a format that describes digital timing diagrams. A document is a plain object whose
     <code>signal</code> array holds the wave lanes; each character in a lane's <code>wave</code>
     string is one time period and <code>.</code> repeats the previous state.<br>
-    <strong>Click any diagram below to edit it.</strong> Change a cell, drag on the canvas, or use the
-    segmented control in the top bar to switch between <em>diagram</em>, <em>code</em>, and <em>both</em>
-    (the block's own source, pretty-printed). <code>Esc</code> returns to read-only.
+    <strong>Click the pencil on any diagram</strong> to open that exact source in the editor.
+    Change a cell, drag on the canvas, or use the <em>{ }</em> key in the top bar to switch
+    between <em>diagram</em> and <em>both</em>.
   </p>
 
   <section class="step">
@@ -98,7 +99,7 @@
     <p>A lane has two required fields: <code>name</code> and <code>wave</code>. Each wave character is
     one period; <code>.</code> repeats the previous state.</p>
 <pre>{ signal: [{ name: "Alfa", wave: "01.zx=ud.23.456789" }] }</pre>
-    <div class="livecard" data-timingbench data-height="120"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [{ name: 'Alfa', wave: '01.zx=ud.23.456789' }] }"></div>
     <p class="hint">Click a cell, then pick a character; <code>0 1 x z u d p P n N h l H L = 2–9</code> are all supported.</p>
   </section>
@@ -119,7 +120,7 @@
   { name: "clk3", wave: "nhNhplPl" },
   { name: "clk4", wave: "xlh.L.Hx" }
 ] }</pre>
-    <div class="livecard" data-timingbench data-height="300"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'pclk', wave: 'p.......' }, { name: 'Pclk', wave: 'P.......' }, { name: 'nclk', wave: 'n.......' }, { name: 'Nclk', wave: 'N.......' }, {}, { name: 'clk0', wave: 'phnlPHNL' }, { name: 'clk1', wave: 'xhlhLHl.' }, { name: 'clk2', wave: 'hpHplnLn' }, { name: 'clk3', wave: 'nhNhplPl' }, { name: 'clk4', wave: 'xlh.L.Hx' } ] }"></div>
   </section>
 
@@ -132,7 +133,7 @@
   { name: "bus",  wave: "x.==.=x", data: ["head", "body", "tail", "data"] },
   { name: "wire", wave: "0.1..0." }
 ] }</pre>
-    <div class="livecard" data-timingbench data-height="140"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'clk', wave: 'P......' }, { name: 'bus', wave: 'x.==.=x', data: ['head', 'body', 'tail', 'data'] }, { name: 'wire', wave: '0.1..0.' } ] }"></div>
   </section>
 
@@ -146,7 +147,7 @@
   {},
   { name: "Acknowledge", wave: "1.....|01." }
 ] }</pre>
-    <div class="livecard" data-timingbench data-height="220"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p.....|...' }, { name: 'Data', wave: 'x.345x|=.x', data: ['head', 'body', 'tail', 'data'] }, { name: 'Request', wave: '0.1..0|1.0' }, {}, { name: 'Acknowledge', wave: '1.....|01.' } ] }"></div>
     <p class="hint">Add a spacer from a row's action bar; toggle a gap from a column's action bar.</p>
   </section>
@@ -173,7 +174,7 @@
     { name: "rdata", wave: "x.....4x", data: "Q2" }
   ]
 ] }</pre>
-    <div class="livecard" data-timingbench data-height="360"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p..Pp..P' }, ['Master', ['ctrl', { name: 'write', wave: '01.0....' }, { name: 'read', wave: '0...1..0' } ], { name: 'addr', wave: 'x3.x4..x', data: 'A1 A2' }, { name: 'wdata', wave: 'x3.x....', data: 'D1' } ], {}, ['Slave', ['ctrl', { name: 'ack', wave: 'x01x0.1x' } ], { name: 'rdata', wave: 'x.....4x', data: 'Q2' } ] ] }"></div>
     <p class="hint">You can build groups right on the canvas: select a row (Shift-click another row name to take a
     range), then use <strong>group rows</strong> in the action bar and type a name. What you type is the
@@ -195,7 +196,7 @@
   { name: "DQS",  wave: "z.......0.1010z." },
   { name: "DQ",   wave: "z.........5555z.", data: "D0 D1 D2 D3" }
 ] }</pre>
-    <div class="livecard" data-timingbench data-height="240"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'CK', wave: 'P.......', period: 2 }, { name: 'CMD', wave: 'x.3x=x4x=x=x=x=x', data: 'RAS NOP CAS NOP NOP NOP NOP', phase: 0.5 }, { name: 'ADDR', wave: 'x.=x..=x........', data: 'ROW COL', phase: 0.5 }, { name: 'DQS', wave: 'z.......0.1010z.' }, { name: 'DQ', wave: 'z.........5555z.', data: 'D0 D1 D2 D3' } ] }"></div>
     <p class="hint">Both fields are applied to the drawing and can be edited in place. Click <code>&phi;</code> next
     to a row name to start editing that row's phase &mdash; then simply <strong>drag the wave itself</strong>
@@ -228,7 +229,7 @@
 ],
   config: { hscale: 1 }
 }</pre>
-    <div class="livecard" data-timingbench data-height="140"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: ['head', 'body', 'tail'] }, { name: 'Request', wave: '01..0' } ], config: { hscale: 1 } }"></div>
 <pre>{ signal: [
   { name: "clk",     wave: "p...." },
@@ -238,7 +239,7 @@
   head: { text: "WaveDrom example", tick: 0, every: 2 },
   foot: { text: "Figure 100", tock: 9 }
 }</pre>
-    <div class="livecard" data-timingbench data-height="200"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: 'a b c' }, { name: 'Request', wave: '01..0' } ], head: { text: 'WaveDrom example', tick: 0, every: 2 }, foot: { text: 'Figure 100', tock: 9 } }"></div>
     <p class="caveat"><code>config.hscale</code> is applied for real: it widens the whole time axis
     (cell width &times; hscale, capped at 8) while row height and font size stay put &mdash; try
@@ -268,7 +269,7 @@ Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|
 ],
   edge: ["a~b t1", "c-~a t2", "c-~>d time 3", "d~-e", "e~>f", "f->g", "g-~>h", "h~>i some text", "h~->j"]
 }</pre>
-    <div class="livecard" data-timingbench data-height="260"
+    <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'A', wave: '01........0....', node: '.a........j' }, { name: 'B', wave: '0.1.......0.1..', node: '..b.......i' }, { name: 'C', wave: '0..1....0...1..', node: '...c....h..' }, { name: 'D', wave: '0...1..0.....1.', node: '....d..g...' }, { name: 'E', wave: '0....10.......1', node: '.....ef....' } ], edge: ['a~b t1', 'c-~a t2', 'c-~>d time 3', 'd~-e', 'e~>f', 'f->g', 'g-~>h', 'h~>i some text', 'h~->j'] }"></div>
     <p class="hint">Double-click an arc to edit its shape or label.</p>
   </section>
@@ -306,6 +307,6 @@ Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|
   </footer>
 
 </div>
-<script src="embed.js"></script>
+<script type="module" src="src/demo.js"></script>
 </body>
 </html>

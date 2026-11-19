@@ -5,20 +5,39 @@ import { EXAMPLE } from '../core/example.js';
 import { createShapes } from './shapes.js';
 import { attachInteractions } from './interactions.js';
 import { attachTouchUI } from './touch.js';
-import { attachShare } from './share.js';
-import { SRC } from './ui.js';
 
 export function createEditor(dom){
+  // 宿主根元素：主站是 documentElement；嵌入宿主（如 Obsidian 插件）可传自己的容器，
+  // 避免把 is-readonly / is-touch 写到宿主页面的 <html> 上。
+  var root = dom.root || document.documentElement;
+  // 全局监听登记簿：宿主（如 Obsidian 插件）可能反复创建 / 销毁编辑器实例，
+  // 必须能一次性摘掉挂在 document / window 上的监听，否则重渲染一次就多一套。
+  var listeners = [];
+  var runtime = {
+    on: function (target, type, fn, opts) {
+      target.addEventListener(type, fn, opts);
+      listeners.push([target, type, fn, opts]);
+    },
+    destroy: function () {
+      for (var i = 0; i < listeners.length; i++) {
+        var a = listeners[i];
+        try { a[0].removeEventListener(a[1], a[2], a[3]); } catch (e) {}
+      }
+      listeners.length = 0;
+    }
+  };
   var ctx={
     code:dom.code, wrap:dom.wrap, gutter:dom.gutter, errdot:dom.errdot,
     EXAMPLE:EXAMPLE,
     state:{ ir:null, undo:[], redo:[], sel:null, selCell:null, selLane:null, selRows:null, ratio:1, parseOK:false,
             ch:'1', connect:null, linkMode:false, linkCursor:null, edgeIdx:0, phaseEdit:null, zoom:1,
-            // 默认视图：没有源码入口（SRC 关）时只能是图形；否则独立页双栏、嵌入卡片只图形。
+            // 默认视图：双栏（左源码 / 右波形）。嵌入已移除，没有别的默认值。
             W:0, H:0, drag:null, rev:0, readonly:false,
-            view: SRC ? (dom.isEmbed ? 'diagram' : 'both') : 'diagram' },
+            view: 'both' },
     inlineCtx:null, painting:null
   };
+  // 必须在任何 attach* 之前挂上：interactions 一注册监听就要用到 ctx.on。
+  ctx.on=runtime.on; ctx.destroy=runtime.destroy;
   var state=ctx.state, code=ctx.code, gutter=ctx.gutter, errdot=ctx.errdot;
   var codeEditBase=null, lastCodeInput=0, timer=null;
 
@@ -45,6 +64,10 @@ export function createEditor(dom){
     svg.appendChild(ring);
     setTimeout(function(){ if(ring.parentNode) ring.parentNode.removeChild(ring); },480);
   }
+  // 宿主（如 Obsidian 插件）要一行**看得见**的失败原因：桌面端红点只有 hover 才出文字，
+  // 触摸端与键盘根本拿不到。这里把「当前是否有错、错在哪」广播出去，由宿主决定怎么显示；
+  // 传 null 表示错误已解除（成功解析 / 成功提交后都会走一次）。
+  var errorListeners=[];
   function notify(t,bad,el){
     if(bad){
       errdot.hidden=false; errdot.title=String(t);
@@ -52,6 +75,11 @@ export function createEditor(dom){
       if(el) denyRing(el);
     }
     else { errdot.hidden=true; errdot.title=''; }
+    // 宿主在 createEditor 之后才注册回调，注册瞬间可能已经有一次失败 —— 留一份最近状态给它补读。
+    ctx.lastError = bad ? String(t) : null;
+    for(var i=0;i<errorListeners.length;i++){
+      try{ errorListeners[i](bad?String(t):null); }catch(e){ /* 宿主的显示问题不该影响解析 */ }
+    }
   }
   function status(){ if(state.parseOK){ errdot.hidden=true; errdot.title=''; } }
 
@@ -140,6 +168,8 @@ export function createEditor(dom){
     try{ ir=Core.buildIR(src); }
     catch(e){ state.parseOK=false; ctx.status(); notify('Draft: '+e.message+(e.pos!==undefined?' (offset '+e.pos+')':'')+'; keeping the last valid diagram',true); return; }
     state.ir=ir; state.parseOK=true; state.sel=null; state.ratio=1; state.connect=null; state.rev++;
+    // 上一次是失败的、这次过了：把宿主的错误条收掉（没有错就别广播，免得白刷新一次）
+    if(ctx.lastError) notify(null);
     ctx.redraw(); ctx.status();
   }
 
@@ -182,7 +212,7 @@ export function createEditor(dom){
   // ---- 视图模式：只图形 / 图形+代码双栏（0.25.0 取消「只代码」——没有对应的使用场景）----
   // 与「分屏方向」是两件事：layout 决定「两个 pane 怎么摆」，view 决定「代码 pane 在不在」。
   // 顶栏只剩**一个**切换键（波形 ⇄ 双栏），状态落在 .app[data-view] 上，由 CSS 控制显隐。
-  // 默认由调用方给：独立 editor 是 both（原行为），嵌入卡片是 diagram（原行为，先看波形）。
+  // 默认 both（左源码 / 右波形）；只读预览由 demo.js 自己切到 diagram。
   // 不写 localStorage —— 视图是「此刻我在干什么」，不是长期偏好；每次进来都从默认开始，
   // 全屏 / 退出编辑回到卡片时也不会停在「上次留在双栏、卡片只剩半屏代码」的怪状态。
   var VIEWS={ diagram:1, both:1 };
@@ -318,7 +348,6 @@ export function createEditor(dom){
 
   function doCmd(act){
     if(act==='link'){ setLinkMode(!state.linkMode); return; }
-    if(act==='embed'){ if(ctx.openEmbedCode) ctx.openEmbedCode(); return; }
     if(act==='layout'){ toggleLayout(); return; }
     // 一个键来回切：波形 ⇄ 双栏。另外保留 view:diagram / view:both 两条显式命令，
     // 给「必须落到某个确定视图」的场合（测试、宿主脚本）用。
@@ -338,8 +367,8 @@ export function createEditor(dom){
 
   function focusCanvas(){ try{ ctx.wrap.focus({preventScroll:true}); }catch(e){ try{ ctx.wrap.focus(); }catch(e2){} } }
 
-  // 只读态：波形照常渲染、可滚动缩放，但不出 HUD / 字符条，点击不产生任何编辑。
-  // 嵌入卡片默认只读（以看为主），点一下波形进入编辑；Esc 或点空白回到只读。
+  // 只读态：波形照常渲染、可缩放，但不出顶栏 / 操作条，点击不产生任何编辑。
+  // 目前唯一使用者是首页 / 教程页的展示图（src/demo.js 装配，点右上角铅笔去编辑器改）。
   var readonlyListeners=[];
   function setReadonly(on){
     on=!!on;
@@ -358,13 +387,19 @@ export function createEditor(dom){
       if(ctx.hideToast) ctx.hideToast();
       if(ctx.wrap.blur) try{ ctx.wrap.blur(); }catch(e){}
     }
-    document.documentElement.classList.toggle('is-readonly', on);
+    root.classList.toggle('is-readonly', on);
     ctx.redraw(); ctx.status();
     for(var i=0;i<readonlyListeners.length;i++) readonlyListeners[i](on);
   }
   ctx.setReadonly=setReadonly;
   ctx.isReadonly=function(){ return state.readonly; };
   ctx.onReadonlyChange=function(fn){ readonlyListeners.push(fn); };
+  // fn(msg) —— msg 为字符串表示当前有错（通常是解析失败），为 null 表示错误已解除。
+  // 返回注销函数，宿主在卡片卸载时调用，避免重渲染后堆积回调。
+  ctx.onError=function(fn){
+    errorListeners.push(fn);
+    return function(){ var i=errorListeners.indexOf(fn); if(i>=0) errorListeners.splice(i,1); };
+  };
 
   ctx.notify=notify; ctx.status=status; ctx.renderGutter=renderGutter;
   ctx.denyRing=denyRing;
@@ -380,7 +415,6 @@ export function createEditor(dom){
   createShapes(ctx);
   attachInteractions(ctx);
   attachTouchUI(ctx, dom);
-  attachShare(ctx);
   // 触摸操作栏跟着每次重绘同步按钮可用态；桌面无 hook，重绘开销不变
   var paint=ctx.redraw;
   ctx.redraw=function(){ paint(); if(ctx.afterRedraw) ctx.afterRedraw(); };
@@ -404,7 +438,7 @@ export function createEditor(dom){
     clearTimeout(rzTimer);
     rzTimer=setTimeout(function(){ obsKey=''; if(!ctx.inlineCtx) ctx.redraw(); },120);
   }
-  window.addEventListener('resize',scheduleRedraw);
+  runtime.on(window,'resize',scheduleRedraw);
   if(typeof ResizeObserver!=='undefined'){
     try{
       new ResizeObserver(function(){
@@ -427,7 +461,9 @@ export function createEditor(dom){
     },320);
   });
 
-  code.value=EXAMPLE;
-  fromCode(EXAMPLE);
-  return ctx;
-}
+  // 初始源码：宿主可传自己的（Obsidian 插件传代码块内容），没传就用示例。
+  // 解析失败时 state.ir 保持 null、画布留空 —— 不能先画示例再解析源码，
+  // 否则源码有语法错时用户会看到一张「自己的代码变成别人的图」的假象。
+  code.value = dom.initial != null ? dom.initial : EXAMPLE;
+  fromCode(code.value);
+  return ctx;}

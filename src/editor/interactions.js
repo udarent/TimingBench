@@ -875,19 +875,19 @@ export function attachInteractions(ctx){
 
   // 点到画布之外（源码框 / 顶栏 / 分享面板 / 页面空白）也要结算相位编辑，
   // 否则会留一把悬空的尺子挂在图上。用 capture：先把手势收成一步，再让目标控件自己的处理跑。
-  document.addEventListener('mousedown',function(e){
+  ctx.on(document,'mousedown',function(e){
     if(!state.phaseEdit) return;
     var t=e.target;
     if(t&&wrap.contains&&wrap.contains(t)) return;
     closePhaseEdit(true);
   },true);
-  document.addEventListener('pointerdown',function(e){
+  ctx.on(document,'pointerdown',function(e){
     if(!state.phaseEdit||e.pointerType==='mouse') return;
     var t=e.target;
     if(t&&wrap.contains&&wrap.contains(t)) return;
     closePhaseEdit(true);
   },true);
-  document.addEventListener('mouseup',function(e){
+  ctx.on(document,'mouseup',function(e){
     if(e&&syntheticMouse(e)) return;
     if(handDrag){ endHandDrag(); return; }
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); return; }
@@ -1052,7 +1052,7 @@ export function attachInteractions(ctx){
     handleDown(pointerShim(e),true);
   });
 
-  document.addEventListener('pointermove',function(e){
+  ctx.on(document,'pointermove',function(e){
     if(e.pointerType==='mouse'||!tActive) return;
     var id=tid(e), cx=e.clientX||0, cy=e.clientY||0;
     if(tPts[id]){ tPts[id].x=cx; tPts[id].y=cy; tPts[id].t=Date.now(); tLast=tPts[id].t; }
@@ -1121,8 +1121,8 @@ export function attachInteractions(ctx){
     if(endPhaseTap(true)) return;
     confirmTap(e.clientX||0,e.clientY||0);
   }
-  document.addEventListener('pointerup',endPointer,true);
-  document.addEventListener('pointercancel',function(e){
+  ctx.on(document,'pointerup',endPointer,true);
+  ctx.on(document,'pointercancel',function(e){
     if(e.pointerType==='mouse') return;
     clearLong(); press=null;
     if(!tActive) return;
@@ -1138,12 +1138,12 @@ export function attachInteractions(ctx){
   // 捏合期间改过缩放的话，先把这次的倍数落定（快路只改了宽高，derived 状态要重算一次）。
   function tSettle(){ if(tZoomed){ tZoomed=false; ctx.redraw(); } tReset(); }
   wrap.addEventListener('lostpointercapture',function(){ if(!ctx.phaseDrag) tSettle(); });
-  window.addEventListener('blur',function(){
+  ctx.on(window,'blur',function(){
     clearLong(); press=null;
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
     tSettle();
   });
-  document.addEventListener('visibilitychange',function(){
+  ctx.on(document,'visibilitychange',function(){
     if(!document.hidden) return;
     clearLong(); press=null;
     if(ctx.phaseDrag){ ctx.phaseDrag=false; flushPhaseStep(); }
@@ -1176,13 +1176,13 @@ export function attachInteractions(ctx){
         if(svg){ var q3=svgXY(t.clientX,t.clientY); showConnectPreview(q3.x,q3.y); }
       }
     },{passive:true});
-    document.addEventListener('touchend',function(e){
+    ctx.on(document,'touchend',function(e){
       // 还有手指按着就不结算：先抬起的那根不算一次 tap（与 Pointer 路径的 tMulti 同义）。
       if(e.touches&&e.touches.length) return;
       var t=e.changedTouches&&e.changedTouches[0];
       confirmTap(t?t.clientX:0, t?t.clientY:0);
     },{passive:true});
-    document.addEventListener('touchcancel',function(){ clearLong(); press=null; },{passive:true});
+    ctx.on(document,'touchcancel',function(){ clearLong(); press=null; },{passive:true});
   }
 
   // ---- 键盘：不用鼠标完成全部编辑 -------------------------------------------
@@ -1302,7 +1302,7 @@ export function attachInteractions(ctx){
     // 连线模式：波形字符、命令键、就地编辑一律不响应
   }
 
-  document.addEventListener('keydown',function(e){
+  ctx.on(document,'keydown',function(e){
     var t=e.target||{}, typing=/^(TEXTAREA|INPUT|SELECT)$/.test(t.tagName||'')||t.isContentEditable;
     // F6 在源码框里也能用；Tab 按浏览器默认顺序同样可达画布
     if(e.key==='F6'){
@@ -1340,7 +1340,7 @@ export function attachInteractions(ctx){
     if(state.readonly) return;
     if(state.linkMode){ linkKeys(e); return; }
     var k=e.key;
-    // Esc 逐层退出：就地编辑框 → 选中（本节）→ 编辑态（embed-shell 那一层）。
+    // Esc 逐层退出：就地编辑框 → 选中（本节）。
     // 这一层必须 stopPropagation，否则一次 Esc 同时清选中又退出编辑，用户分不清发生了什么。
     if(k==='Escape'&&(state.selCell||state.selLane||state.selRows||state.sel!==null&&state.sel!==undefined)){
       prevent(e); e.stopPropagation();
