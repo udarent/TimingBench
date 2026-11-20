@@ -189,7 +189,11 @@ var CHIP_W=G.CHIP_W;
       // `x` 只有斜线，斜线之间是透空的 —— 网格会从底下透出来，看上去像「网格压在波形上」
       // （用户报的就是这个：只有 `x` 会这样，总线不会）。上游没有列网格，所以它没这个问题。
       // 先给这一格铺一层画布底色，`x` 在带内就是实心块，与总线行为一致；底色跟着主题走。
-      if(isX) o.push('<rect class="waveHatchBg" x="'+X+'" y="'+T+'" width="'+W+'" height="'+(B-T)+
+      // **右边多铺 1px**：格线是 0.5px 的描边、居中压在格边界上，只铺到 W 的话右半边会从
+      // 与下一格之间的过渡楔形（`>|<` 之间那块白）里露出来 —— 屏幕上是一条竖线穿过带体，
+      // 页面放大后非常明显（用户第二次报的就是这个）。多铺的 1px 落在下一格的**背景**上
+      // （它的墨迹晚于本 rect 绘制），白盖白，看不出来。
+      if(isX) o.push('<rect class="waveHatchBg" x="'+X+'" y="'+T+'" width="'+(W+1)+'" height="'+(B-T)+
         '" fill="var(--bg)" stroke="none" pointer-events="none"/>');
       var kind=o2.pblock?(o2.psame?'join':'cross'):(prev?'enter':'edge');
       var ra=(kind==='enter')?railEnd(prev,T,B):null;

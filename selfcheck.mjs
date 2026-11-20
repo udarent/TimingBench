@@ -715,13 +715,15 @@ function check() {
        /waveHair/.test(waveGlyph('x', '3', 0, 0, 16, 32, 38, { pbus: true, pblock: true, psame: false, pcls: 'bus3' })),
       'x 的斜线填充丢失（或交叉过渡处没画）');
     // `x` 的块体不填充，斜线之间透空 —— 宿主的列网格会从底下透出来，看着像「网格压在波形上」。
-    // 底色遮罩必须排在这一格**所有图元之前**（排在斜线之后就不是遮罩，而是把斜线盖掉）。
+    // 底色遮罩必须排在这一格**所有图元之前**（排在斜线之后就不是遮罩，而是把斜线盖掉）；
+    // 宽度必须是**格宽 + 1**：格线是 0.5px 描边、居中压在边界上，只铺到格宽的话右半边会从
+    // 「与下一格之间的过渡楔形」里露出来（放大后是一条竖线穿过带体）。
     {
       const gx = waveGlyph('x', '0', 0, 0, 16, 32, 38, {});
       const iBg = gx.indexOf('waveHatchBg');
       const iInk = gx.search(/waveHair|waveBusInk/);
       ok(iBg > 0 && iInk > 0 && iBg < iInk && /fill="var\(--bg\)"/.test(gx) &&
-         /height="32"/.test(gx.slice(iBg - 40, iBg + 160)),
+         /width="39" height="32"/.test(gx.slice(iBg - 40, iBg + 160)),
         '`x` 块体没有铺画布底色（斜线间会透出列网格），或遮罩排在斜线之后（会把斜线盖掉）');
     }
     // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
