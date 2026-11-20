@@ -239,6 +239,8 @@
   head: { text: "WaveDrom example", tick: 0, every: 2 },
   foot: { text: "Figure 100", tock: 9 }
 }</pre>
+    <p class="hint"><strong>Note:</strong> this card looks the same as the previous one &mdash; that is
+    expected. <code>head</code> / <code>foot</code> are kept in your source but not drawn (see the note below).</p>
     <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'clk', wave: 'p....' }, { name: 'Data', wave: 'x345x', data: 'a b c' }, { name: 'Request', wave: '01..0' } ], head: { text: 'WaveDrom example', tick: 0, every: 2 }, foot: { text: 'Figure 100', tock: 9 } }"></div>
     <p class="caveat"><code>config.hscale</code> is applied for real: it widens the whole time axis
