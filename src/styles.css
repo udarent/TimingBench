@@ -127,7 +127,7 @@ svg{display:block;font-family:var(--sans)}
 /* 就地编辑：输入框是 SVG 内的 foreignObject，跟着图元一起滚动 */
 /* 底部只保留上下文操作区：选中格 / 连线态才出现内容 */
 .inline-fo{overflow:visible}
-.inline-edit{width:100%;height:100%;box-sizing:border-box;font:12px var(--mono);padding:2px 6px;border:1px solid var(--accent);border-radius:5px;background:var(--panel);color:var(--ink);box-shadow:0 3px 12px rgba(0,0,0,.22);outline:none}
+.inline-edit{width:100%;height:100%;box-sizing:border-box;font:13px var(--mono);padding:2px 6px;border:1px solid var(--accent);border-radius:5px;background:var(--panel);color:var(--ink);box-shadow:0 3px 12px rgba(0,0,0,.22);outline:none}
 .inline-edit:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg),0 3px 12px rgba(0,0,0,.22)}
 /* 零行空态：整行是可点的占位按钮，悬停时描边与加号一起提亮 */
 .emptyRow{cursor:pointer}
@@ -150,7 +150,10 @@ svg{display:block;font-family:var(--sans)}
 .waveBus{stroke:none}
 /* bus 段的轮廓单独一条 path：段内不画竖边，段与段之间才不会出现「被切一刀」的接缝 */
 .waveBusInk{fill:none;stroke:var(--wave-ink);stroke-width:1;stroke-linejoin:round;pointer-events:none}
-.waveLabel{fill:var(--ink);font-size:10px}
+/* 总线数据标签。字号与 shapes.js 的 FS_LABEL 必须一致（截断估算用同一档），
+   0.27.5 起 10 → 13：对照上游（皮肤 `text{font-size:11pt}` ≈ 14.7px、带宽 20px），
+   我们的带宽 22px，13px 落在 1:1 下能一眼认出。 */
+.waveLabel{fill:var(--ink);font-size:13px}
 /* 只读卡片与编辑态共用同一套排版：不另设字号 / 字色（只读态只是少画编辑控件）。 */
 /* 源码 wave 比全局周期数短时，尾部按 repeater 延续画出可续写区 */
 .tailSlot{opacity:.78;pointer-events:none}

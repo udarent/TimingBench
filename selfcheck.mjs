@@ -197,6 +197,13 @@ function check() {
   const interSrc = read('src/editor/interactions.js');
   const editorSrc = read('src/editor/index.js');
   const cssSrc = read('src/styles.css');
+  // 画布内字号（0.27.5）：对照上游皮肤 `text{font-size:11pt}` ≈ 14.7px 整体上调过一次。
+  // 它既不在波形层指纹里（指纹只收图元几何与文本内容，不收字号），也没有别的东西盯着，
+  // 所以单独立一条：字号被改小就红。CSS 的 .waveLabel 必须与 shapes 的 FS_LABEL 同档。
+  ok(/var FS_LABEL=13, FS_NAME=14, FS_NODE=11, FS_EDGE=11, FS_META=10, FS_GROUP=13;/.test(shapesSrc) &&
+     /\.waveLabel\{fill:var\(--ink\);font-size:13px\}/.test(cssSrc) &&
+     /textEm\(text\) \* FS_EDGE/.test(shapesSrc),
+    '画布内字号被改小，或 CSS 的 .waveLabel 与 shapes 的 FS_LABEL 脱档（上游 11pt≈14.7px，我们 13/14/11）');
   // 捏合缩放（0.20.0）的三条结构前提。都是「删掉之后照样跑得通、功能却静默消失」的那种，
   // 靠断言盯住比靠注释可靠：
   // ① touch-action 必须是 pan-x pan-y —— 改回 manipulation 就等于把 pinch-zoom 让给浏览器，

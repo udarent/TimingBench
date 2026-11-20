@@ -312,6 +312,13 @@ var CHIP_W=G.CHIP_W;
   function charEm(ch){
     return /[\u2e80-\u9fff\u3000-\u303f\uf900-\ufaff\uff00-\uff60\uffe0-\uffe6]/.test(ch)?1:0.56;
   }
+  // 一串文本的**估算宽度**（em 数 × 字号）。画布内没有 getBBox 可用（每加一个标签就强制
+  // 一次布局），所以裁断与「标签会不会撞上」都靠这把尺子 —— 只此一份，别处再写系数就散了。
+  function textEm(text){
+    var s=String(text===null||text===undefined?'':text), w=0, i;
+    for(i=0;i<s.length;i++) w+=charEm(s[i]);
+    return w;
+  }
   function fitLabel(text, room, size){
     var s=String(text===null||text===undefined?'':text);
     if(!s) return '';
@@ -340,4 +347,4 @@ var CHIP_W=G.CHIP_W;
       'u':'pull-up (dashed high)','d':'pull-down (dashed low)'}[v]||'wave character';
   }
 
-export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, fitLabel, blockEdge };
+export { waveGlyph, waveGap, chipGlyph, chipDesc, busClassOf, fitLabel, textEm, blockEdge };

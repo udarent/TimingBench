@@ -5,12 +5,18 @@ import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, clam
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import * as Cap from './cap.js';
-import { waveGlyph, waveGap, busClassOf, fitLabel, blockEdge } from './waveform.js';
+import { waveGlyph, waveGap, busClassOf, fitLabel, textEm, blockEdge } from './waveform.js';
 
 var T=TOUCH;   // 本模块内的 T 只表示 coarse 指针标志（波形图元里的 T 是上沿 y 坐标，已移到 waveform.js）
 // 基准格宽（桌面 38 / 触摸 48）。文档里的 config.hscale 会把它乘掉，所以 CELL 是
 // **每次 redraw 现算**的：BASE_CELL 是常量，CELL 是这一帧的值。
 var BASE_CELL=G.CELL, CELL=BASE_CELL;
+// 画布内字号（0.27.5 起整体上调一档，对照上游皮肤 `text{font-size:11pt}` ≈ 14.7px）：
+// 上游的字相对图更大 —— 20px 带宽里放 14.7px、30px 行高里也放 14.7px，1:1 下很清楚；
+// 我们原来是 10 / 12，同样尺寸下显得又小又糊。现在：数据标签 13（带宽 22）／行名 14（行高 48）
+// ／node 字母 11（与上游 inline 的 11px 一致）／弧线标签 11／行名小标与 spacer 10／组名 13。
+// 只读预览行高 40、带宽 32，同一组字号照样放得下。
+var FS_LABEL=13, FS_NAME=14, FS_NODE=11, FS_EDGE=11, FS_META=10, FS_GROUP=13;
 var NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
 // 行距：**只读预览**按紧凑口径（40），编辑态仍 48 —— 48 是给点击命中、弧线余量与
 // 分组标签留的空间，只读预览用不上，留着就是一排排空气。
@@ -260,19 +266,23 @@ export function createShapes(ctx){
   //   · 光晕：不拿不透明胶囊垫底。那块底色会把弧线和它经过的波形一起盖掉（tutorial Step 8 的
   //     `time 3` 正好压在 node c 和那条上升沿上）。`paint-order:stroke` 先描一圈底色再画字，
   //     可读性一样，但只有字形自己在挡。
-  function edgeLabelSvg(at, text, nodes) {
-    var w = Math.max(12, text.length * 5.4), h = 9;
+  function edgeLabelSvg(at, text, taken) {
+    // 宽度用与裁断同一把尺子（textEm × 字号）：0.27.5 把字号从 9 提到 11 之后，
+    // 写死的「每字 5.4px」偏小了三成，避让判据因此漏判 —— `t1` 会直接压在 `b` 上。
+    var w = Math.max(FS_EDGE, textEm(text) * FS_EDGE), h = FS_EDGE;
     var cxOf = function (dx) { return at.anchor === 'end' ? at.x + dx - w / 2 : at.anchor === 'start' ? at.x + dx + w / 2 : at.x + dx; };
     var hit = function (dx, dy) {
       var cx = cxOf(dx), cy = at.y + dy, j;
-      for (j = 0; j < nodes.length; j++)
-        if (Math.abs(nodes[j].x - cx) < w / 2 + 8 && Math.abs(nodes[j].y - cy) < h / 2 + 7) return true;
+      for (j = 0; j < taken.length; j++)
+        if (Math.abs(taken[j].x - cx) < w / 2 + taken[j].hw && Math.abs(taken[j].y - cy) < h / 2 + 7) return true;
       return false;
     };
     var NUDGE = [[0, 0], [0, -15], [0, 15], [-24, 0], [24, 0]], pick = NUDGE[0], i;
     for (i = 0; i < NUDGE.length; i++) if (!hit(NUDGE[i][0], NUDGE[i][1])) { pick = NUDGE[i]; break; }
+    // 定下来之后自己也进避让表：后面的标签同样不该压在这条上（字号变大后 `t1` / `t2` 就挨得很近）
+    taken.push({ x: cxOf(pick[0]), y: at.y + pick[1], hw: w / 2 + 8 });
     return '<text x="' + (at.x + pick[0]) + '" y="' + (at.y + pick[1]) + '" text-anchor="' + at.anchor +
-      '" dominant-baseline="central" font-size="9" fill="var(--accent)" stroke="var(--panel)"' +
+      '" dominant-baseline="central" font-size="'+FS_EDGE+'" fill="var(--accent)" stroke="var(--panel)"' +
       ' stroke-width="3" stroke-linejoin="round" paint-order="stroke" pointer-events="none">' +
       esc(text) + '</text>';
   }
@@ -298,11 +308,13 @@ export function createShapes(ctx){
         // 字母留到弧线**之后**再画（见函数尾）：先画字母的话，弧线与箭头会结结实实压在
         // 字母上 —— 而字母正是「这条弧线连的是哪两点」的唯一读法（上游也是先边后节点）。
         marks.push('<text class="waveNode" x="' + nx + '" y="' + ny + '" text-anchor="middle"' +
-          ' dominant-baseline="central" font-size="10" fill="var(--accent)" stroke="var(--panel)"' +
+          ' dominant-baseline="central" font-size="'+FS_NODE+'" fill="var(--accent)" stroke="var(--panel)"' +
           ' stroke-width="3" stroke-linejoin="round" paint-order="stroke">' + esc(ch) + '</text>');
       }
     });
     var o = [];
+    // 避让表：{x,y,hw} —— 半径含「半个字宽 + 8px」的余量。node 字母与已放好的标签都算障碍。
+    var taken = nodes.map(function (n) { return { x: n.x, y: n.y, hw: 8 }; });
     ir.edges.forEach(function (e, i) {
       var pe = parseEdge(e); if (!pe) return;
       var a = map[pe.from], b = map[pe.to];
@@ -325,7 +337,7 @@ export function createShapes(ctx){
       // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
       paths.push('<path d="' + g.d + '" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="' + (T ? 20 : 8) + '" pointer-events="' + (state.linkMode ? 'none' : 'stroke') + '"/>');
       var inner = paths.join('');
-      if (pe.label) inner += edgeLabelSvg(edgeLabelAt(a, b, g), cut(pe.label, 18), nodes);
+      if (pe.label) inner += edgeLabelSvg(edgeLabelAt(a, b, g), cut(pe.label, 18), taken);
       o.push('<g class="edgeArc" data-eidx="' + i + '" role="button" aria-label="Edit edge ' + esc(String(e)) + '">' + inner + '</g>');
     });
     // 顺序：弧线 → node 字母。字母最后画，才不会被箭头盖住。
@@ -617,7 +629,7 @@ export function createShapes(ctx){
         // 否则读者会看到一条莫名其妙的「spacer」文字。
         if(can('spacerMark')){
           o.push('<line x1="'+XS+'" y1="'+yM+'" x2="'+ACT_X+'" y2="'+yM+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2 5"/>');
-          o.push('<text x="'+(XS+8)+'" y="'+(yM-6)+'" font-size="9" fill="var(--muted)">spacer</text>');
+          o.push('<text x="'+(XS+8)+'" y="'+(yM-6)+'" font-size="'+FS_META+'" fill="var(--muted)">spacer</text>');
         }
         o.push('</g>');
         return;
@@ -630,8 +642,8 @@ export function createShapes(ctx){
       // 不再是一个会接管后续拖动的手势模式。触摸端字形只有 8~10px，所以另配放大命中区（见下）。
       var meta='', metaHit='';
       if(can('laneMeta')){
-        meta='<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
-             '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="9" fill="var(--muted)"> T'+l.period+'</tspan>';
+        meta='<tspan class="laneMeta" data-act="phase" data-lane="'+l.id+'" font-size="'+FS_META+'" fill="var(--muted)"> φ'+l.phase+'</tspan>'+
+             '<tspan class="laneMeta" data-act="period" data-lane="'+l.id+'" font-size="'+FS_META+'" fill="var(--muted)"> T'+l.period+'</tspan>';
         if(T){
           // 两个字形**各自**一块透明命中区（宽度按实测字宽 + 3px，高度占满整行）：合成一块就分不出
           // 「点 φ 改相位」和「点 T 改周期」。只覆盖到字形，行名文字仍归 `data-act="name"`。
@@ -647,7 +659,7 @@ export function createShapes(ctx){
       }
       // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
-      o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">'+
+      o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="'+FS_NAME+'" fill="var(--ink)">'+
         '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+'</text>');
       if(metaHit) o.push(metaHit);   // 压在字形之上，接住触摸端点按
       // 行级时间标尺：period 决定这一行的格宽（字符按比例横向拉伸），phase 决定整行左移量。
@@ -718,7 +730,7 @@ export function createShapes(ctx){
           // y 用 yM 本身：`central` 基线的落点就是墨迹盒中心，行高 0.25/0.48/0.71 的分带让
           // yM 正好压在带子中线上 —— 曾经写 `yM+1`（旧版想补偿「字显高」），结果是整体偏低 1px。
           o.push('<text class="waveLabel" x="'+((lx0+lx1)/2).toFixed(1)+'" y="'+yM+'" text-anchor="middle" dominant-baseline="central">'+
-            esc(fitLabel(lb,Math.max(10,lx1-lx0-4),10))+'</text>');
+            esc(fitLabel(lb,Math.max(10,lx1-lx0-6),FS_LABEL))+'</text>');
         }
         run=runEnd+1;
       }
@@ -775,7 +787,7 @@ export function createShapes(ctx){
         '<path d="'+brace+'" fill="none" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>'+hit+
         '<text class="laneGroupName"'+(gEdit?' data-act="group" data-group="'+esc(gpath)+'"':'')+
         ' x="'+lx+'" y="'+cy+'" transform="rotate(-90 '+lx+' '+cy+')" text-anchor="middle"'+
-        ' font-size="12" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
+        ' font-size="'+FS_GROUP+'" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
         '</g>');
     });
     o.push(edgeArcs(ir, N));
