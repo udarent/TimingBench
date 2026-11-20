@@ -91,14 +91,15 @@ var CHIP_W=G.CHIP_W;
   // （上游 vm-brick / xm-brick）。总线收口是实心色块、x 收口是斜线填充 —— 形态一样，只是「填什么」
   // 不同，所以共用一份几何。本格自己的电平线照常从格线铺满：过渡压在线下方向内收。
   function blockCap(ch,capCls,X,T,M,B,W,bi,br,bm){
-    var r=railStart(ch,T,B), fp, ink, pts=[], k, hair='', seg;
-    // `u` / `d` 是弱驱动，收口不是 6px 的斜边而是一条 S 曲线，横跨近半格（上游 vmu-2 / vmd）。
-    // 跨度取与电平分支同一条软曲线（min(0.44W, 17)），两处才接得上；块体的填充也要一直
-    // 包到曲线的落点 —— 上游 vmu-2 的填充就是这块弧形区域。
-    var e2=X+W*0.5;                            // 与电平分支同一条跨度（半格）
+    // 收口 = 「上一格的块体在本格开头怎么交出去」。三种走法，按**落在哪条轨**分：
+    //   · 落在顶/底轨、且本格是弱驱动（u / d）   → 一条 S 曲线，横跨半格（上游 vmu / vmd）
+    //   · 没有可落的轨（z 这类中位字符）          → 上下两条 S 曲线收到中位、半格处汇合（上游 vmz）
+    //   · 落在顶/底轨的普通电平                  → 3..9px 的直斜边（上游 vm1 / vm0）
+    // 落点在 e2 = 半格：上游把这几种过渡都画满半个字符，虚线/电平线正好从那里接上。
+    var r=railStart(ch,T,B), e2=X+W*0.5, fp, ink, pts=[], k, hair='', seg;
+    var c1=X+bi+Math.min(4,W*0.10), c2=e2-Math.min(10,W*0.26);
     if(/[ud]/.test(ch)&&(r===T||r===B)){
-      var from=(r===T)?B:T;
-      var c1=X+bi+Math.min(4,W*0.10), c2=e2-Math.min(10,W*0.26), midY=(from+r)/2;
+      var from=(r===T)?B:T, midY=(from+r)/2;
       var cv=' C'+c1+','+midY+' '+c2+','+r+' '+e2+','+r;
       ink='M'+X+','+from+' H'+(X+bi)+cv;
       if(capCls) return '<path class="waveBus '+capCls+'" d="M'+X+','+r+' V'+from+' H'+(X+bi)+cv+' Z" stroke="none"/>'+
@@ -107,36 +108,29 @@ var CHIP_W=G.CHIP_W;
       // 这一段弦与曲线差不到 2px，看不出）。x → u/d 本身是很罕见的组合。
       return waveHatch(X,e2,T,B,W,[X,T,X,B],[X+bi,from,e2,r])+'<path class="waveBusInk" d="'+ink+'"/>';
     }
-    // 块体 → z（上游 vmz）：不是收成尖，而是上下两条缓弯各自收拢到中位、在半格处汇合，
-    // 中间填成一片「梭形」。用直斜边收尖的话，尖点与中位线之间会留一个小三角（Step 6 DQ 尾部）。
-    if(ch==='z'){
-      var cu=X+bi+Math.min(4,W*0.10), cz=e2-Math.min(10,W*0.26);
-      var upC=' C'+cu+','+((T+M)/2)+' '+cz+','+M+' '+e2+','+M;
-      var dnC=' C'+cu+','+((B+M)/2)+' '+cz+','+M+' '+e2+','+M;
-      var inkZ='M'+X+','+T+' H'+(X+bi)+upC+' M'+X+','+B+' H'+(X+bi)+dnC;
+    if(r!==T&&r!==B){
+      // 没有可落的轨（z / 其它中位字符）：两条缓弯各自从顶/底轨收到中位，中间填成一片梭形。
+      // 收成尖（直斜边）的话，尖点与中位线之间会留一个小三角（tutorial Step 6 的 DQ 尾部）。
+      var upC=' C'+c1+','+((T+M)/2)+' '+c2+','+M+' '+e2+','+M;
+      var dnC=' C'+c1+','+((B+M)/2)+' '+c2+','+M+' '+e2+','+M;
+      ink='M'+X+','+T+' H'+(X+bi)+upC+' M'+X+','+B+' H'+(X+bi)+dnC;
       if(capCls) return '<path class="waveBus '+capCls+'" d="M'+X+','+T+' H'+(X+bi)+upC+
-        ' C'+cz+','+M+' '+cu+','+((B+M)/2)+' '+(X+bi)+','+B+' H'+X+' Z" stroke="none"/>'+
-        '<path class="waveBusInk" d="'+inkZ+'"/>';
-      return waveHatch(X,e2,T,B,W,[X,T,X,B],[[X,T,e2,M],[X,B,e2,M]])+'<path class="waveBusInk" d="'+inkZ+'"/>';
+        ' C'+c2+','+M+' '+c1+','+((B+M)/2)+' '+(X+bi)+','+B+' H'+X+' Z" stroke="none"/>'+
+        '<path class="waveBusInk" d="'+ink+'"/>';
+      return waveHatch(X,e2,T,B,W,[X,T,X,B],[[X,T,e2,M],[X,B,e2,M]])+'<path class="waveBusInk" d="'+ink+'"/>';
     }
     if(r===T){
       fp=[[X,T],[X,B],[X+bi,B],[X+br,T]];
       ink='M'+X+','+B+' H'+(X+bi)+' L'+(X+br)+','+T;
       seg=[X+bi,B,X+br,T];
-    } else if(r===B){
+    } else {
       fp=[[X,T],[X,B],[X+bi,T],[X+br,B]];
       ink='M'+X+','+T+' H'+(X+bi)+' L'+(X+br)+','+B;
       seg=[X+bi,T,X+br,B];
-    } else {
-      // 起步轨问不出（z）：收成中高度一个尖（上游 vmz / xmz 的折线近似）
-      fp=[[X,T],[X,B],[X+bi,B],[X+bm,M],[X+bi,T]];
-      ink='M'+(X+bi)+','+B+' L'+(X+bm)+','+M+' L'+(X+bi)+','+T;
     }
     // 收口没有色块可填时（x 走近上一格）就是一片斜线：斜线要跟本格同一套步距，
-    // 且停在收口的边上 —— 落轨的那种只有一个斜边，收尖的那种是两条（取最近的）。
-    if(!capCls) hair=(r===T||r===B)
-      ? waveHatch(X,X+br,T,B,W,[X,T,X,B],seg)
-      : waveHatch(X,X+bm,T,B,W,[X,T,X,B],capEdges(X,bi,bm,T,M,B));
+    // 且停在收口的斜边上。
+    if(!capCls) hair=waveHatch(X,X+br,T,B,W,[X,T,X,B],seg);
     for(k=0;k<fp.length;k++) pts.push(fp[k][0]+','+fp[k][1]);
     return (capCls?'<polygon class="waveBus '+capCls+'" points="'+pts.join(',')+'" stroke="none"/>':'')+
       hair+'<path class="waveBusInk" d="'+ink+'"/>';
