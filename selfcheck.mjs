@@ -184,14 +184,14 @@ function check() {
   // vbTop 退回 0，读者又看到首行上方那条 28px 死白。判据直接咬「由 readonly 决定」。
   ok(/var vbTop=state\.readonly\?roTrimTop:0;/.test(shapesSrc),
     '只读预览的顶部裁边没接上：vbTop 必须由 readonly 决定（否则顶部会重新长出一条死白）');
-  // 只读卡片的行距必须走紧凑口径（40，编辑 48）—— 编辑态的大行距是给点击命中与控件留的。
+  // 只读卡片的行距必须走紧凑口径（30，编辑 40）—— 编辑态多出的 10px 是给行把手与 φ/T 徽标留的。
   // 波形带（0.27.6 起）**两种态只有一套**：带高 = 奇数不取的半格宽（偶数）、在行内垂直居中，
   // 见 geometry.bandOf(rowH)。
   // 这一条同时咬三件事，缺一个就会出现「预览胖砖 / 编辑器扁砖」：
   //   ① 带高由 G.CELL 派生，不再按行高取百分比 —— 形状与行距解耦，两态才可能一模一样；
   //   ② 带在行内居中（t = (rowH-h)/2），行距变了也不会把波形顶到上沿；
   //   ③ shapes / interactions 只**读** bandOf(rowH)，没有谁再传 true/false 去挑另一套比例。
-  ok(/var RO_ROW_H = 40/.test(shapesSrc) &&
+  ok(/var RO_ROW_H = 30/.test(shapesSrc) &&
      /function rowH\(\)\{ return state\.readonly \? RO_ROW_H : ROW_H; \}/.test(shapesSrc) &&
      /export function bandOf\(rowH\)\{/.test(read('src/editor/geometry.js')) &&
      /var h = 2 \* Math\.round\(CELL0 \/ 4\), t = Math\.round\(\(rowH - h\) \/ 2\);/.test(read('src/editor/geometry.js')) &&

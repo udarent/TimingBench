@@ -18,11 +18,9 @@ var BASE_CELL=G.CELL, CELL=BASE_CELL;
 // 只读预览行高 40、带宽 32，同一组字号照样放得下。
 var FS_LABEL=13, FS_NAME=14, FS_NODE=11, FS_EDGE=11, FS_META=10, FS_GROUP=13;
 var NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
-// 行距：**只读预览**按紧凑口径（40），编辑态仍 48 —— 48 是给点击命中、弧线余量与
-// 分组标签留的空间，只读预览用不上，留着就是一排排空气。
-// 参考 WaveDrom 的默认皮肤：格 20×20、行距 30、波形带 20（占行高 67%）。
-// 我们只读态取 行距 40 / 带 0.10~0.90（= 32，占 80%），比上游更满，但仍留 4px 呼吸。
-var RO_ROW_H = 40;
+// 行距：**只读预览 30**（与上游同密度：带 20 / 行距 30），编辑态 40（多出的 10px 给行把手
+// 抓点、φ/T 徽标与弧线余量）。带宽恒为 20（见 geometry.bandOf），所以行距越小波形越密。
+var RO_ROW_H = 30;
 var COL_Y=G.COL_Y;
 var XS=G.XS;
 // 分组每嵌套一层要在行名左侧让出的槽宽（花括号 + 竖排组名占这一条）。
@@ -371,9 +369,10 @@ export function createShapes(ctx){
     // 上游是直接压在线上（`text-anchor:middle`）。可读性靠字形光晕兜，线不会把字吃掉。
     if (g.kind !== 'spline' && g.kind !== 'swing1' && g.kind !== 'swing2')
       return { x: g.mid.x, y: g.mid.y, anchor: 'middle' };
-    // 曲线上：中点**正上方** 7px。试过沿法线让开，陡曲线时法线指向斜上，标签会被推进
-    // 相邻的 node 字母里（t2 正好撞上 b）。固定往上抬一格宽，配字形光晕，够读了。
-    return { x: g.mid.x, y: g.mid.y - 7, anchor: 'middle' };
+    // 曲线上：**中心压在弧长中点**（与上游同口径）。0.27.4 曾抬到中点上方 7px 以避开弧线，
+    // 但行距收到 30（= 上游密度）之后，那 7px 会把标签推进上一行的波形里 —— 现在行与行
+    // 之间只有 10px，抬不动。可读性照旧由字形光晕兜（先描一圈底色再画字）。
+    return { x: g.mid.x, y: g.mid.y, anchor: 'middle' };
   }
   // 标签：先躲 node 字母，再用「描边光晕」兜可读性。
   //   · 避让：字母是「这条弧线连的是哪两点」的唯一读法，被标签压住就白画了。只在真的相交时
