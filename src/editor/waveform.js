@@ -18,12 +18,13 @@ var CHIP_W=G.CHIP_W;
   // 给一组时取**最近**的那条（收口是「>」形的两条边，填线该停在哪条取决于它从哪半边过来）。
   function waveHatch(X,x1,T,B,W,left,right){
     var o=[], dy=B-T;
-    // 步距：按格宽 W/7 取，但**不许**超过行高的 1/6。上游的砖宽恒为 20px、行高也是 20，
-    // 于是它的斜线间隔恒为 5px —— 不随 hscale 变稀；我们若只按 W 取，hscale 4 时间隔会到
-    // 21px，过渡的收口楔形（只有 6px 宽）里一条线都落不进去，看上去就是一块白。
+    // 步距：按格宽 W/7 取，但**不许**超过带宽的 1/3。上游的砖宽恒为 20px、带宽 20，
+    // 于是它的斜线间隔恒为 5px（每砖 4 条）—— 与带宽绑定，不随 hscale 变稀。我们若只按 W 取，
+    // hscale 4 时间隔会到 21px，过渡的收口楔形（只有 6px 宽）里一条线都落不进去，看上去就是一块白。
+    // 取 1/3 而不是 1/6：带宽改由格宽决定后（20px），1/6 会退到 3.2px，比上游密一倍。
     // 再把步距**量化成 W 的整数分之一**：相邻格各按自己的格线起算斜线，W 不是步距的整数倍
     // 时，跨格会错位出半条线，同一条总线走到格线上会出现一道错缝。
-    var want=Math.max(3,Math.min(W/7,dy/6)), nz=Math.max(1,Math.round(W/want)), step=W/nz, k, sx, a, b;
+    var want=Math.max(3,Math.min(W/7,dy/3)), nz=Math.max(1,Math.round(W/want)), step=W/nz, k, sx, a, b;
     // 交点：填线是 45°（y = sx+B-x），与边界线（x0,y0)-(x1,y1) 求交，解一次一元方程。
     var crossX=function(seg,sx){
       var vx=seg[2]-seg[0], vy=seg[3]-seg[1];
@@ -184,6 +185,12 @@ var CHIP_W=G.CHIP_W;
           ' M'+(x1-bi)+','+T+' L'+x1+','+M+' L'+(x1-bi)+','+B+'"/>');
         return '<g class="waveGlyph" data-w="'+esc(ch)+'" pointer-events="none">'+o.join('')+'</g>';
       }
+      // `x` 与总线是同一套块体，但填充不同：总线是**色块**（天然挡住宿主画的列网格），
+      // `x` 只有斜线，斜线之间是透空的 —— 网格会从底下透出来，看上去像「网格压在波形上」
+      // （用户报的就是这个：只有 `x` 会这样，总线不会）。上游没有列网格，所以它没这个问题。
+      // 先给这一格铺一层画布底色，`x` 在带内就是实心块，与总线行为一致；底色跟着主题走。
+      if(isX) o.push('<rect class="waveHatchBg" x="'+X+'" y="'+T+'" width="'+W+'" height="'+(B-T)+
+        '" fill="var(--bg)" stroke="none" pointer-events="none"/>');
       var kind=o2.pblock?(o2.psame?'join':'cross'):(prev?'enter':'edge');
       var ra=(kind==='enter')?railEnd(prev,T,B):null;
       // 上一格问不出轨 = 它是 `z`（中位线）。`z` 不是块体，不能当交叉过渡画 ——

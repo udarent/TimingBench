@@ -827,7 +827,7 @@ export function attachInteractions(ctx){
     var a=state.connect, ln=findLane(a.lane);
     // 起点与真正的 edge 端点同一口径（格左边界 + 带中线），预览线才不会一松手就跳一下；
     // 控制点也走 splineCtl，曲率与落笔后的那条弧线一致。
-    var ax=ln?cellGeo(ln,a.tick).x0:G.XS+a.tick*G.CELL, ay=TOP+a.li*ROW_H+Math.round(ROW_H*bandOf(false).m);
+    var ax=ln?cellGeo(ln,a.tick).x0:G.XS+a.tick*G.CELL, ay=TOP+a.li*ROW_H+bandOf(ROW_H).m;
     var c=splineCtl({x:ax,y:ay},{x:mx,y:my});
     p.setAttribute('d','M'+ax+','+ay+' C'+c.c1.x+','+c.c1.y+' '+c.c2.x+','+c.c2.y+' '+mx+','+my);
   }

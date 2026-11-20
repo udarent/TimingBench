@@ -289,7 +289,7 @@ export function createShapes(ctx){
   // 弧线：唯一「编辑 / 删除 edge」入口是双击弧线本体；清空字符串即删除
   function edgeArcs(ir, N) {
     var map = {}, marks = [], nodes = [];
-    var RH = rowH(), bandM = bandOf(!!state.readonly).m;
+    var RH = rowH(), bandM = bandOf(RH).m;
     ir.lanes.forEach(function (l, li) {
       if (l.kind !== 'signal') return;
       // 锚点落在**过渡带的中点**、波形带的**竖直中线**上：
@@ -297,7 +297,7 @@ export function createShapes(ctx){
       //     `格线 + 6`（= blockEdge 的 bm）。上游把 node 放在「砖块起点 + 6」，也是同一个点
       //     —— 放在格线上会让字母整体左移 6px、看着不像压在边沿上（用户对照 WaveDrom 指出）。
       //   · 纵向：带的中线，不是上沿。旧写法 y = 行顶 + 7，弧线于是贴着上沿走、横穿旁边的波形。
-      var ny = TOP + li * RH + Math.round(RH * bandM), chars = laneChars(l, N), t, ch, nx, cg;
+      var ny = TOP + li * RH + bandM, chars = laneChars(l, N), t, ch, nx, cg;
       for (t = 0; t < chars && t < l.node.length; t++) {
         ch = l.node[t];
         if (!ch || ch === '.') continue;
@@ -446,10 +446,10 @@ export function createShapes(ctx){
     // 恒等于 0（COL_Y 只有 6 / 8），等于从来没裁，读者看到的就是一条 37px 的死白。
     var roTrimTop=Math.max(0, TOP-6);
     var roTrimBottom=6;                      // 最后一行下沿到容器底
-    // 行距与波形带：只读预览用紧凑口径（见文件顶 rowH()），编辑态不变。
+    // 行距分两档（只读 40 / 编辑 48），波形带的**带高与居中**两档共用一套（见 bandOf）：
+    // 疏密不同，形状相同。
     var RH=rowH();
-    var tight=!!state.readonly;
-    var band=bandOf(tight), bandT=band.t, bandM=band.m, bandB=band.b;
+    var band=bandOf(RH), bandT=band.t, bandM=band.m, bandB=band.b;
     // 只读态不画末尾的追加列，所以右侧只需容下最后一个真实格子的右边缘（= ACT_X - 1）。
     var roW=Math.max(ACT_X+PAD, 360);
     var roBottomY=(function(){
@@ -589,7 +589,7 @@ export function createShapes(ctx){
     (state.selRows||[]).forEach(function(id){ spanSet[id]=1; });
     ir.lanes.forEach(function(l,li){
       var y=TOP+li*RH;
-      var yT=y+Math.round(RH*bandT), yM=y+Math.round(RH*bandM), yB=y+Math.round(RH*bandB);
+      var yT=y+bandT, yM=y+bandM, yB=y+bandB;
       // 选中语义分三层（与表格一致）：选中**格**只点亮那一格；选中**行**才铺整行底衬；
       // 行跨度（Shift 选段）另算。旧实现里 `selLane` 是选中格子的副产物，于是「点一个格子
       // 整行都亮」，行/列/格的层级读不出来。
@@ -735,7 +735,7 @@ export function createShapes(ctx){
         run=runEnd+1;
       }
       o.push('<line x1="'+XS+'" y1="'+(y+RH)+'" x2="'+ACT_X+'" y2="'+(y+RH)+'" stroke="var(--line)" stroke-width="0.5"/>');
-      o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(RH*bandT))+'" width="'+(chars*P*CELL)+'" height="'+Math.round(RH*(bandB-bandT))+'" fill="none" stroke="none" pointer-events="none"/>');
+      o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+bandT)+'" width="'+(chars*P*CELL)+'" height="'+(bandB-bandT)+'" fill="none" stroke="none" pointer-events="none"/>');
       if(clipId) o.push('</g>');
       // 相位模式（0.14.5）：**波形本身就是抓手**，不再画一条尺子 + 滑块。
       // 打开相位模式后，在这一行的波形上横向拖动就直接改 phase —— 手指往右拖，波形往右移。

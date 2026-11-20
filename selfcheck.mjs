@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Core } from './src/core/ir.js';
 import { EXAMPLE } from './src/core/example.js';
 import * as Cap from './src/editor/cap.js';
-import { hscaleOf, HSCALE_MAX } from './src/editor/geometry.js';
+import { hscaleOf, HSCALE_MAX, bandOf, G } from './src/editor/geometry.js';
 import { waveGlyph } from './src/editor/waveform.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -184,16 +184,20 @@ function check() {
   // vbTop 退回 0，读者又看到首行上方那条 28px 死白。判据直接咬「由 readonly 决定」。
   ok(/var vbTop=state\.readonly\?roTrimTop:0;/.test(shapesSrc),
     '只读预览的顶部裁边没接上：vbTop 必须由 readonly 决定（否则顶部会重新长出一条死白）');
-  // 只读卡片的行距/波形带必须走紧凑口径：行高 40（编辑 48）、带 0.10~0.90（编辑 0.25~0.71）。
-  // 编辑态的大行高是给点击命中与弧线留的，只读卡片用不上 —— 留着就是每行上下各 13px 空气。
-  // 分带比例 0.27.4 起只有一份（geometry.bandOf），行绘制 / edge 端点 / 连线预览都读它。
-  // 判据因此分两半：比例本身在 geometry.js，shapes.js 必须**读**而不是自己写一套。
+  // 只读卡片的行距必须走紧凑口径（40，编辑 48）—— 编辑态的大行距是给点击命中与控件留的。
+  // 波形带（0.27.6 起）**两种态只有一套**：带高 = 奇数不取的半格宽（偶数）、在行内垂直居中，
+  // 见 geometry.bandOf(rowH)。
+  // 这一条同时咬三件事，缺一个就会出现「预览胖砖 / 编辑器扁砖」：
+  //   ① 带高由 G.CELL 派生，不再按行高取百分比 —— 形状与行距解耦，两态才可能一模一样；
+  //   ② 带在行内居中（t = (rowH-h)/2），行距变了也不会把波形顶到上沿；
+  //   ③ shapes / interactions 只**读** bandOf(rowH)，没有谁再传 true/false 去挑另一套比例。
   ok(/var RO_ROW_H = 40/.test(shapesSrc) &&
      /function rowH\(\)\{ return state\.readonly \? RO_ROW_H : ROW_H; \}/.test(shapesSrc) &&
-     /return readonly \? \{ t: 0\.10, m: 0\.50, b: 0\.90 \} : \{ t: 0\.25, m: 0\.48, b: 0\.71 \};/.test(
-       read('src/editor/geometry.js')) &&
-     /var band=bandOf\(tight\), bandT=band\.t, bandM=band\.m, bandB=band\.b;/.test(shapesSrc),
-    '只读卡片的紧凑行高/波形带被改回编辑态口径，或分带比例被复制成了第二份（端点会与中线错开）');
+     /export function bandOf\(rowH\)\{/.test(read('src/editor/geometry.js')) &&
+     /var h = 2 \* Math\.round\(G\.CELL \/ 4\), t = Math\.round\(\(rowH - h\) \/ 2\);/.test(read('src/editor/geometry.js')) &&
+     !/bandOf\((true|false|tight|!!state\.readonly)\)/.test(shapesSrc + read('src/editor/interactions.js')) &&
+     /var band=bandOf\(RH\), bandT=band\.t, bandM=band\.m, bandB=band\.b;/.test(shapesSrc),
+    '波形带被拆回两套（只读 / 编辑各一份比例），或带高不再由格宽派生 —— 两态的波形形状会再次对不上');
   const interSrc = read('src/editor/interactions.js');
   const editorSrc = read('src/editor/index.js');
   const cssSrc = read('src/styles.css');
@@ -710,6 +714,16 @@ function check() {
     ok(/waveHair/.test(waveGlyph('x', '0', 0, 0, 16, 32, 38, {})) &&
        /waveHair/.test(waveGlyph('x', '3', 0, 0, 16, 32, 38, { pbus: true, pblock: true, psame: false, pcls: 'bus3' })),
       'x 的斜线填充丢失（或交叉过渡处没画）');
+    // `x` 的块体不填充，斜线之间透空 —— 宿主的列网格会从底下透出来，看着像「网格压在波形上」。
+    // 底色遮罩必须排在这一格**所有图元之前**（排在斜线之后就不是遮罩，而是把斜线盖掉）。
+    {
+      const gx = waveGlyph('x', '0', 0, 0, 16, 32, 38, {});
+      const iBg = gx.indexOf('waveHatchBg');
+      const iInk = gx.search(/waveHair|waveBusInk/);
+      ok(iBg > 0 && iInk > 0 && iBg < iInk && /fill="var\(--bg\)"/.test(gx) &&
+         /height="32"/.test(gx.slice(iBg - 40, iBg + 160)),
+        '`x` 块体没有铺画布底色（斜线间会透出列网格），或遮罩排在斜线之后（会把斜线盖掉）');
+    }
     // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
     // 唯独**离开 z** 是普通斜边（而且从 6px 起拐）。写成一条条判据，是因为 browser 的
     // 波形层指纹里根本没有 z / u / d —— 指纹证不了这类改动（Step 1 的缺陷就是这么漏的）。
@@ -1144,6 +1158,17 @@ function check() {
   ok(hscaleOf({ config: { hscale: 3 } }) === 3 && hscaleOf({ config: { hscale: 99 } }) === HSCALE_MAX &&
      hscaleOf({ config: { hscale: 0 } }) === 1 && hscaleOf(null) === 1 && hscaleOf({ config: {} }) === 1,
     'config.hscale 的取值口径不对（应 clamp 1..' + HSCALE_MAX + '）');
+  // 波形带：**两态同一个带高**（由格宽派生），只是行距不同 —— 「只读胖砖 / 编辑扁砖」的根因
+  // 就是旧实现让带宽去跟行距挂钩。这里直接量两个行距下的返回值，同时锁住「居中」与「整数坐标」。
+  {
+    const ed = bandOf(48), ro = bandOf(40), eh = ed.b - ed.t;
+    ok(eh === ro.b - ro.t && eh === 2 * Math.round(G.CELL / 4) && Math.abs(G.CELL / eh - 2) <= 0.2,
+      '两态的波形带高不一致或不再由格宽派生（编辑 ' + eh + ' / 只读 ' + (ro.b - ro.t) + '）');
+    ok(ed.m === 24 && ro.m === 20 && ed.t === 14 && ro.t === 10,
+      '波形带没有在行内居中（编辑 t=' + ed.t + ' m=' + ed.m + ' / 只读 t=' + ro.t + ' m=' + ro.m + '）');
+    ok(Number.isInteger(ed.m) && Number.isInteger(ro.m),
+      '带的中线落在半像素上（标签基线会发虚）：' + ed.m + ' / ' + ro.m);
+  }
   // 数字组名（`[1, {…}]`）是合法 WaveJSON，不能被读成「没有名字的组」
   ok(Core.buildIR("{ signal: [[1, { name:'a', wave:'01' }]] }").lanes[0].groupPath[0] === '1',
     '数字组名被丢弃');
