@@ -18,8 +18,8 @@ var BASE_CELL=G.CELL, CELL=BASE_CELL;
 // 只读预览行高 40、带宽 32，同一组字号照样放得下。
 var FS_LABEL=13, FS_NAME=14, FS_NODE=11, FS_EDGE=11, FS_META=10, FS_GROUP=13;
 var NAME_W=G.NAME_W, ROW_H=G.ROW_H, TOP=G.TOP, PAD=G.PAD, ACT_W=G.ACT_W;
-// 行距：**只读预览 30**（与上游同密度：带 20 / 行距 30），编辑态 40（多出的 10px 给行把手
-// 抓点、φ/T 徽标与弧线余量）。带宽恒为 20（见 geometry.bandOf），所以行距越小波形越密。
+// 行距：只读预览与桌面编辑**同为 30**（与上游同密度：带 20 / 行距 30）。触摸端走 G.ROW_H=60。
+// 带宽恒为 20（见 geometry.bandOf），所以行距越小波形越密。
 var RO_ROW_H = 30;
 var COL_Y=G.COL_Y;
 var XS=G.XS;
