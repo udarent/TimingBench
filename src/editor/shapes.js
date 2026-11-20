@@ -574,6 +574,7 @@ export function createShapes(ctx){
         gopt.pbus=pbus; gopt.pblock=pblock;
         if(pblock) gopt.psame=!ptAt(i);
         if(pbus) gopt.pcls=busClassOf(prevCh);
+
         if(Core.BUS.test(w)) gopt.cls=busClassOf(w);
         var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,cw,gopt);
         o.push(s?glyph:'<g class="tailSlot" role="img" aria-label="Undefined period — tap to extend">'+glyph+'</g>');

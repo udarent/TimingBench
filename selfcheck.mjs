@@ -689,6 +689,13 @@ function check() {
     const noRise = ['h','H'].filter((ch) => !/V/.test(waveGlyph(ch, '0', 0, 0, 16, 32, 38, {})));
     ok(noRise.length === 0, '半周期高电平没画出起沿：' + noRise.join(' '));
     // x 的斜线：行首整条、以及「上一格是总线（交叉过渡）」两种都要有。
+    // 箭头只挂在**边沿**上，且时钟字符从块体接过来时**不收口**（上游用 pclk/nclk 那类竖直起沿）。
+    // 这两条对应 tutorial Step 2 的两个缺陷：`L.` 的延续格多出一个孤立箭头、`x→h` 多一个三角缺口。
+    ok(!/waveArrow/.test(waveGlyph('L', 'L', 0, 0, 16, 32, 38, {})), '已在低电平的 L 仍画了箭头（`L.` 的延续格会出现孤立箭头）');
+    ok(/waveArrow/.test(waveGlyph('P', 'P', 0, 0, 16, 32, 38, {})), '连续完整时钟 P 的延续格丢了箭头（上游每格都该有）');
+    ok(!/waveHair/.test(waveGlyph('h', 'x', 0, 0, 16, 32, 38, { pbus: false, pblock: true, psame: false })) &&
+       /waveHair/.test(waveGlyph('1', 'x', 0, 0, 16, 32, 38, { pbus: false, pblock: true, psame: false })),
+      'x 接半周期状态时仍画了收口（时钟字符应是竖直起沿、不收口）');
     ok(/waveHair/.test(waveGlyph('x', '0', 0, 0, 16, 32, 38, {})) &&
        /waveHair/.test(waveGlyph('x', '3', 0, 0, 16, 32, 38, { pbus: true, pblock: true, psame: false, pcls: 'bus3' })),
       'x 的斜线填充丢失（或交叉过渡处没画）');

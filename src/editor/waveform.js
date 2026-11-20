@@ -134,7 +134,11 @@ var CHIP_W=G.CHIP_W;
     var isBus=Core.BUS.test(ch), isX=(ch==='x');
     // 上一格是**块体**（总线 / x）时，它的收口要由本格画 —— 过渡属于新格，见下面块体分支。
     // 块体自己那半块在块体分支里跟自己的起口一起画。
-    if(o2.pblock&&!isBus&&!isX)
+    // 时钟 / 半周期字符（p P n N h H l L）**不收口**：上游给它们用的是时钟砖块
+    // （`pclk` = `M0,20 0,0 20,0`、`nclk` = `m0,0 0,20 20,0`），左边界是一条**竖直**的起沿，
+    // 块体就在格线上截断。照普通电平那样画斜收口，`x` 与 `h` 之间会多出一个三角缺口，
+    // 而且那一格的高电平比上游短一截（tutorial Step 2 的 clk1 / clk4 首格）。
+    if(o2.pblock&&!isBus&&!isX&&!Core.CLOCK.test(ch))
       o.push(blockCap(ch,o2.pbus?(o2.pcls||'bus2'):null,X,T,M,B,W,bi,br,bm));
     if(isBus||isX){
       // 总线与 `x` 都是**满高块体**（x 只是把填充换成斜线），过渡规则完全一样，所以合成一支。
@@ -208,19 +212,23 @@ var CHIP_W=G.CHIP_W;
       // 时钟 / 半周期状态的**边沿要不要画**，取决于上一个字符收在哪条轨上（上游 xclude 的语义）：
       // 已经停在目标电平上就只画平段，否则才画那条起沿。少了这一步，`hp` / `pl` 这类连续
       // 字符会在格子边界多出一条横穿整行的竖线（Step 2 的 clk0 / clk2 最显眼）。
-      var up=/[pPhH]/.test(ch), pl=prev?railEnd(prev,T,B):null, d;
+      var up=/[pPhH]/.test(ch), pl=prev?railEnd(prev,T,B):null, d, edge;
       if(/[pPnN]/.test(ch)){
         // 完整时钟：前半段电平 first、后半段 second，中间那次跳变始终要画；
         // 起沿只在「上一格没收在 first」时才画（已在该电平 = 上游 xclude 的情形）。
         var first=up?T:B, second=up?B:T, start=(pl===first)?first:second;
         d='M'+X+','+start+(start===first?'':' V'+first)+' H'+(X+W/2)+' V'+second+' H'+x1;
+        edge=true;                                  // 中间那次跳变恒存在
       } else {
         // 半周期状态（h/H 高、l/L 低）：目标是单一电平
         var lev=up?T:B;
-        d=(pl===lev)?'M'+X+','+lev+' H'+x1:'M'+X+','+(up?B:T)+' V'+lev+' H'+x1;
+        edge=(pl!==lev);                            // 已经在目标电平上就没有边沿
+        d=edge?'M'+X+','+(up?B:T)+' V'+lev+' H'+x1:'M'+X+','+lev+' H'+x1;
       }
       o.push('<path class="waveInk" d="'+d+'"/>');
-      if(/[PHNL]/.test(ch)) o.push(waveArrow(ax,T,B,up));
+      // 箭头挂在**那条边沿**上：没有跳变（`L.` 的延续格、已在低电平的 `lL`）就不该有箭头。
+      // 完整时钟 p/P/n/N 每格都有中间那次跳变，所以延续格照样要有箭头（`P.......` 上游是 8 个）。
+      if(/[PHNL]/.test(ch) && edge) o.push(waveArrow(ax,T,B,up));
     } else {
       // `u` / `d` 是**弱驱动**：电平段画虚线，而切换那一笔是**实线的 S 曲线、横跨近半格**
       // （上游 umd / dm0 等砖块：先水平 3px，再用三次贝塞尔在中点附近拐过去，跨度 17/20 砖）。
