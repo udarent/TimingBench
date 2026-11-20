@@ -45,6 +45,7 @@
   section.step{margin:0 0 14px;padding-top:8px}
   h2{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:44px 0 6px;padding-top:12px;
      border-top:1px solid var(--line)}
+  h3{font-size:15px;font-weight:700;margin:20px 0 8px}
   section.step > p{margin:6px 0 16px;color:var(--ink)}
   /* No border, radius or fill — same as WaveDrom's tutorial, where the diagram
      sits directly on the page. The container stays transparent so no seam shows
@@ -273,7 +274,25 @@ Sharp lines: -   -|   -|-  &lt;-&gt;  &lt;-|&gt;  &lt;-|-&gt;  -&gt;  -|&gt;  -|
 }</pre>
     <div class="livecard" data-timingbench
          data-wavejson="{ signal: [ { name: 'A', wave: '01........0....', node: '.a........j' }, { name: 'B', wave: '0.1.......0.1..', node: '..b.......i' }, { name: 'C', wave: '0..1....0...1..', node: '...c....h..' }, { name: 'D', wave: '0...1..0.....1.', node: '....d..g...' }, { name: 'E', wave: '0....10.......1', node: '.....ef....' } ], edge: ['a~b t1', 'c-~a t2', 'c-~>d time 3', 'd~-e', 'e~>f', 'f->g', 'g-~>h', 'h~>i some text', 'h~->j'] }"></div>
-    <p class="hint">Double-click an arc to edit its shape or label.</p>
+
+    <h3>Sharp lines</h3>
+<pre>{ signal: [
+  { name: "A", wave: "01..0..",  node: ".a..e.." },
+  { name: "B", wave: "0.1..0.",  node: "..b..d.", phase: 0.5 },
+  { name: "C", wave: "0..1..0",  node: "...c..f" },
+  {                              node: "...g..h" },
+  {                              node: "...I..J",  phase: 0.5 },
+  { name: "D", wave: "0..1..0",  phase: 0.5 }
+],
+  edge: [
+  "b-|a t1", "a-|c t2", "b-|-c t3", "c-|&gt;e t4", "e-|&gt;f more text",
+  "e|-&gt;d t6", "c-g", "f-h", "g&lt;-&gt;h 3 ms", "I+J 5 ms"
+  ]
+}</pre>
+    <div class="livecard" data-timingbench
+         data-wavejson="{ signal: [ { name: 'A', wave: '01..0..', node: '.a..e..' }, { name: 'B', wave: '0.1..0.', node: '..b..d.', phase: 0.5 }, { name: 'C', wave: '0..1..0', node: '...c..f' }, { node: '...g..h' }, { node: '...I..J', phase: 0.5 }, { name: 'D', wave: '0..1..0', phase: 0.5 } ], edge: ['b-|a t1', 'a-|c t2', 'b-|-c t3', 'c-|-&gt;e t4', 'e-|&gt;f more text', 'e|-&gt;d t6', 'c-g', 'f-h', 'g&lt;-&gt;h 3 ms', 'I+J 5 ms'] }"></div>
+    <p class="hint">Rows that carry only <code>node</code> draw no waveform — they exist so edges have somewhere to land.
+    Double-click an arc to edit its shape or label.</p>
   </section>
 
   <section class="step">

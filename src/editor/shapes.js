@@ -59,6 +59,13 @@ export function createShapes(ctx){
   var SC='deskEdit';
   function can(name){ return Cap.can(name,SC); }
 
+  // 行名的**显示值**：源码里没写 `name` 的行不画名字。上游 `render-wave-lane.js` 是
+  // `const name = el[0][0]; if (name) {...}` —— 没有名字就整段不画。tutorial Step 8 的
+  // sharp lines 例子有两行只写了 node（`{ node: '...g..h' }`），上游是空白行，我们以前把
+  // 兜底值 'sig' 画了出来，并排对比一眼就能看出差别。IR 里仍保留 'sig'（编辑 / 写回需要值），
+  // 只在这里按 `hasName` 决定画不画。
+  function dispName(l){ return l.hasName===false ? '' : l.name; }
+
   // ---- 行名区宽度自适应 ----------------------------------------------------
   // 行名区不该为「可能出现的长名字」常年留白：名字短就窄，长度决定宽度。
   // 测量用离屏 SVG 真实文本（字体 / 字号与画布一致），不按字符数估算 —— 中英文混排、
@@ -85,7 +92,7 @@ export function createShapes(ctx){
     for(var i=0;i<ir.lanes.length;i++){
       l=ir.lanes[i];
       if(l.kind==='spacer') continue;         // spacer 行不画行名
-      w=measure(l.name,12);
+      w=measure(dispName(l),12);
       if(withMeta){
         w+=measure(' φ'+l.phase,9)+measure(' T'+l.period,9);
       }
@@ -660,7 +667,7 @@ export function createShapes(ctx){
       // 右缘留 6（原 8）：行名与波形之间的空隙由 geometry.js 的 XS 统一控制，
       // 这里只留字形本身的呼吸位，两处加起来正好 8px。
       o.push('<text class="laneName" data-lane="'+l.id+'" x="'+(NAME_W-6)+'" y="'+yM+'" text-anchor="end" dominant-baseline="central" font-size="'+FS_NAME+'" fill="var(--ink)">'+
-        '<tspan class="laneNameText" data-act="name">'+esc(l.name)+'</tspan>'+meta+'</text>');
+        '<tspan class="laneNameText" data-act="name">'+esc(dispName(l))+'</tspan>'+meta+'</text>');
       if(metaHit) o.push(metaHit);   // 压在字形之上，接住触摸端点按
       // 行级时间标尺：period 决定这一行的格宽（字符按比例横向拉伸），phase 决定整行左移量。
       // period=1 / phase=0 时这些值与改造前逐一相同（P=1、sh=0、cw=CELL、chars=N）。
@@ -689,8 +696,14 @@ export function createShapes(ctx){
         if(pbus) gopt.pcls=busClassOf(prevCh);
 
         if(Core.BUS.test(w)) gopt.cls=busClassOf(w);
-        var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,cw,gopt);
-        o.push(s?glyph:'<g class="tailSlot" role="img" aria-label="Undefined period — tap to extend">'+glyph+'</g>');
+        // 整行**没有 slots** = 只有 node 的行（`{ node: '...g..h' }`）或 piece-wise 路径
+        // （`wave: ['pw', …]`，我们只留原文不建模）。上游这两种都不画任何波形墨迹：
+        // 没有 slots 就没有「格」，一个格子都没有，画出来的只能是凭空捏的斜线块。
+        // 命中区照旧铺（用户仍能点这一格开始写），只是不画 ink。
+        if(l.slots.length){
+          var glyph=waveGlyph(w,prevCh,x0,yT,yM,yB,cw,gopt);
+          o.push(s?glyph:'<g class="tailSlot" role="img" aria-label="Undefined period — tap to extend">'+glyph+'</g>');
+        }
         if(s&&s.gap) o.push(waveGap(x0,yT,yB));
         // 命中区裁到波形起点：phase 行的首格有一半落在行名区，不能让它压住行名抢点击。
         // period=1 / phase=0 时 rx=x0+1、宽=CELL-2，与改造前逐字节相同。

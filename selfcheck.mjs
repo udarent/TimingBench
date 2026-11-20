@@ -418,6 +418,12 @@ function check() {
   ok(tut.includes('index.html'), 'tutorial.html 缺少返回首页的链接');
   ok(/data-timingbench/.test(tut) && /data-wavejson=/.test(tut),
     'tutorial.html 缺少示例图（data-timingbench / data-wavejson）');
+  // Step 8 必须像上游那样**两个**例子：Splines 与 Sharp lines（0.27.8 补上后者）。
+  // 判据咬「sharp 那例独有的内容」—— 行名缺失的锚点行（`{ node: '...g..h' }`）、
+  // `-|` 折线与 `<->` 双箭头、`+` 那种两端带竖头的跨度线。
+  ok(/Sharp lines/.test(tut) && /b-\|a t1/.test(tut) && /I\+J 5 ms/.test(tut) &&
+     /g&lt;-&gt;h 3 ms/.test(tut) && /\{ +node: '\.\.\.g\.\.h' \}/.test(tut),
+    'tutorial Step 8 缺少上游的 sharp lines 例子（折线 / 双箭头 / 只有 node 的锚点行）');
   {
     const ts = [...tut.matchAll(/<script[^>]*>/g)].map((m) => m[0]);
     ok(ts.length === 1 && /src="src\/demo\.js"/.test(ts[0]),
@@ -1177,6 +1183,17 @@ function check() {
     const hs = bandOf(48);
     G.CELL = base;
     ok(hs.b - hs.t === eh, 'hscale 放大格宽后带宽跟着变了（应恒等于基准半格宽）：' + (hs.b - hs.t));
+  }
+  // 只有 node 的锚点行（tutorial Step 8 sharp lines 用到两行）：没有 name / wave 属性这回事
+  // 必须被记住 —— 渲染层靠 `hasName` 决定画不画行名，写回层靠两个标记决定补不补属性。
+  {
+    const ir = Core.buildIR("{ signal: [ { name: 'A', wave: '01..', node: '.a..' }, { node: '..g.' } ] }");
+    const a = ir.lanes[1];
+    ok(a.hasName === false && a.hasWave === false && a.slots.length === 0 && a.node.join('') === '..g.',
+      '只有 node 的行解析不对（hasName=' + a.hasName + ' hasWave=' + a.hasWave + ' slots=' + a.slots.length + '）');
+    const out = Core.emitIR(ir);
+    ok(!/name: 'sig'/.test(out) && !/wave: ''/.test(out),
+      '写回时给锚点行补了 name / wave（源码被凭空改动）：' + out.replace(/\s+/g, ' ').slice(0, 120));
   }
   // 数字组名（`[1, {…}]`）是合法 WaveJSON，不能被读成「没有名字的组」
   ok(Core.buildIR("{ signal: [[1, { name:'a', wave:'01' }]] }").lanes[0].groupPath[0] === '1',

@@ -129,6 +129,13 @@ export const Core = (function () {
     var nn = n > 0 ? n : (nd ? nd.length : 0);
     for (var i=0;i<nn;i++) node.push(nd && i<nd.length ? nd[i] : '.');
     var lane = {
+      // `hasName`：源码里**有没有** name 属性。上游对没有 name 的行不画行名（tutorial 的
+      // `{ node: '...g..h' }` 就是空白行）；我们内部仍用 'sig' 兜底（编辑与写回都要有个值），
+      // 只在**显示**时看这个标记。别拿 namePropRange 判断 —— 它只在 clone 里被复制，解析时并不赋值。
+      hasName:!!prop(item,'name'),
+      // 同理记录「源码里有没有 wave」：整行没有 wave（只有 node 的锚点行）在写回时也不该
+      // 凭空补一个 `wave: ''` —— 那是纯粹的噪声，用户会以为编辑器动了他的源码。
+      hasWave:!!prop(item,'wave'),
       id:id, kind:'signal', name:strOf(item,'name','sig'), phase:numOf(item,'phase',0), period:numOf(item,'period',1),
       groupPath:groupPath.slice(), slots:slots, subs:pw.subs, node:node,
       dataForm:d?d.form:null, range:[item.s,item.e], extras:extras, waveRaw:waveRaw,
@@ -222,9 +229,12 @@ export const Core = (function () {
   function emitLane(l){
     if(l.kind==='spacer') return spacerSrc(l);
     var labels=laneLabels(l), parts=[];
-    parts.push('name: '+quote(l.name));
-    // piece-wise 路径（数组 wave）整段原样写回，别用 slots 重建 —— 那一行本来就没有 slots
-    parts.push('wave: '+(l.waveRaw||quote(laneWave(l))));
+    // 源码里本来没有 name 的行（只有 node 的锚点行）不补 name —— 补了它就从「空白行」变成
+    // 「叫 sig 的行」，与上游的样子也不一致。用户真改了名字（与兜底值不同）时照常写。
+    if(l.hasName!==false || l.name!==(l.orig&&l.orig.name)) parts.push('name: '+quote(l.name));
+    // piece-wise 路径（数组 wave）整段原样写回，别用 slots 重建 —— 那一行本来就没有 slots。
+    // 整行没有 wave、也没有任何格子（锚点行）时不写 `wave: ''`，那是没来由的噪声。
+    if(l.waveRaw || l.slots.length || l.hasWave) parts.push('wave: '+(l.waveRaw||quote(laneWave(l))));
     if(needData(l)) parts.push('data: '+(l.dataForm==='str'&&labels.every(function(x){return x&&!/\s/.test(x);}) ? quote(labels.join(' ')) : '['+qmap(labels)+']'));
     if(l.node.some(function(x){return x!=='.';})) parts.push('node: '+quote(l.node.join('')));
     if(l.phase) parts.push('phase: '+l.phase);
@@ -272,7 +282,7 @@ export const Core = (function () {
     return { ticks:ir.ticks, rev:ir.rev, raw:ir.raw, rootRange:ir.rootRange.slice(), config:ir.config?JSON.parse(JSON.stringify(ir.config)):null,
       edges:ir.edges.slice(), extras:ir.extras.map(function(x){return {key:x.key,text:x.text,range:x.range.slice()};}),
       lanes:ir.lanes.map(function(l){
-        return { id:l.id, kind:l.kind, name:l.name, phase:l.phase, period:l.period, groupPath:l.groupPath.slice(),
+        return { id:l.id, kind:l.kind, hasName:l.hasName!==false, hasWave:l.hasWave!==false, name:l.name, phase:l.phase, period:l.period, groupPath:l.groupPath.slice(),
           slots:l.slots.map(function(s){ var o={w:s.w,point:s.point,gap:s.gap,label:s.label};
             if(s.saved) o.saved={w:s.saved.w,label:s.saved.label}; return o; }),
           subs:l.subs.map(function(s){return {at:s.at,s:s.s};}), node:l.node.slice(), dataForm:l.dataForm,
@@ -444,7 +454,7 @@ export const Core = (function () {
           fresh={ id:aid, kind:'spacer', name:'', phase:0, period:1, groupPath:[], slots:[], subs:[], node:[], dataForm:null,
             range:[0,0], raw:'', extras:[], waveRaw:null, orig:{}, fresh:true };
         } else {
-          fresh={ id:aid, kind:'signal', name:op.name||'new', phase:0, period:1, groupPath:[], slots:[], subs:[], node:[], dataForm:null,
+          fresh={ id:aid, kind:'signal', hasName:true, hasWave:true, name:op.name||'new', phase:0, period:1, groupPath:[], slots:[], subs:[], node:[], dataForm:null,
             range:[0,0], extras:[], waveRaw:null, waveRange:null, nameRange:null, dataRange:null, nodeRange:null, phaseRange:null, periodRange:null,
             wavePropRange:null, namePropRange:null, dataPropRange:null, nodePropRange:null, phasePropRange:null, periodPropRange:null,
             orig:{wave:'',name:op.name||'new',data:null,node:null,phase:0,period:1}, fresh:true };
