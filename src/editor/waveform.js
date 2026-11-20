@@ -161,7 +161,9 @@ var CHIP_W=G.CHIP_W;
       }
       var kind=o2.pblock?(o2.psame?'join':'cross'):(prev?'enter':'edge');
       var ra=(kind==='enter')?railEnd(prev,T,B):null;
-      if(kind==='enter'&&ra!==T&&ra!==B) kind='cross';
+      // 上一格问不出轨 = 它是 `z`（中位线）。`z` 不是块体，不能当交叉过渡画 ——
+      // 交叉的两条斜线从顶轨和底轨起，中线接不进去，格线上会断开一截（上游这里用的是 zmx 砖块）。
+      if(kind==='enter'&&ra!==T&&ra!==B) kind='mid';
       var fp, bd, left=null;
       if(kind==='cross'){
         // 交叉过渡（上游 vmv-brick / xmv-brick）：两段各从自己的格边起一条斜线，交叉处是腰。
@@ -176,6 +178,14 @@ var CHIP_W=G.CHIP_W;
             pts([[X+bi,T],[X,T],[X,B],[X+bi,B],[X+bm,M]])+'" stroke="none"/>');
           else o.push(waveHatch(X,X+bm,T,B,W,[X,T,X,B],capEdges(X,bi,bm,T,M,B)));
         }
+        left=[X+br,T,X+br,B];
+      } else if(kind==='mid'){
+        // 中位线 → 块体（上游 zmx-brick）：中线走到 X+6，在那里分叉，一条到顶轨、一条到底轨，
+        // 顶/底横线从 X+9 起。块体那半块与其它进法一样从 X+9 起、带一个中高度尖。
+        fp=[[X+br,T],[x1,T],[x1,B],[X+br,B],[X+bm,M]];
+        bd='M'+X+','+M+' H'+(X+bm)+
+           ' M'+(X+bm)+','+M+' L'+(X+br)+','+T+' M'+(X+bm)+','+M+' L'+(X+br)+','+B+
+           ' M'+(X+br)+','+T+' H'+x1+' M'+(X+br)+','+B+' H'+x1;
         left=[X+br,T,X+br,B];
       } else if(kind==='enter'){
         // 斜边从上一格收盘的轨（ra）斜到另一条轨；那条轨的横线一直铺到格线，接缝才不露。
@@ -211,11 +221,26 @@ var CHIP_W=G.CHIP_W;
       o.push('<path class="waveInk" d="'+d+'"/>');
       if(/[PHNL]/.test(ch)) o.push(waveArrow(ax,T,B,up));
     } else {
+      // `u` / `d` 是**弱驱动**：电平段画虚线，而切换那一笔是**实线的 S 曲线、横跨近半格**
+      // （上游 umd / dm0 等砖块：先水平 3px，再用三次贝塞尔在中点附近拐过去，跨度 17/20 砖）。
+      // 以前整格都用虚线、过渡也只是 6px 的直线斜坡 —— 看上去就是「虚线直直地斜下去」，
+      // 和上游那种「一个缓弯落到位、然后接虚线电平」完全不是一回事。
       var cy=waveLevel(ch,T,M,B); if(cy===null) cy=M;
       var py=prev?waveLevel(prev,T,M,B):null;
+      var dash=(ch==='d'||ch==='u'), soft=dash||/[ud]/.test(prev||'');
       var vary=(py!==null&&Math.abs(py-cy)>1);
-      var d=vary?'M'+X+','+py+' H'+px+' L'+ex+','+cy+' H'+x1:'M'+X+','+cy+' H'+x1;
-      o.push('<path class="'+(ch==='d'||ch==='u'?'waveDash':'waveInk')+'" d="'+d+'"/>');
+      var exS=soft?X+Math.min(W*0.44,17):ex, tail='';
+      var d;
+      if(vary){
+        d='M'+X+','+py+' H'+px;
+        if(soft){
+          var c1=px+Math.min(4,W*0.10), c2=exS-Math.min(10,W*0.26);
+          d+=' C'+c1+','+((py+cy)/2)+' '+c2+','+cy+' '+exS+','+cy;
+        } else d+=' L'+exS+','+cy;
+        o.push('<path class="waveInk" d="'+d+'"/>');
+        tail='M'+exS+','+cy+' H'+x1;
+      } else tail='M'+X+','+cy+' H'+x1;
+      o.push('<path class="'+(dash?'waveDash':'waveInk')+'" d="'+tail+'"/>');
     }
     return '<g class="waveGlyph" data-w="'+esc(ch)+'" pointer-events="none">'+o.join('')+'</g>';
   }
