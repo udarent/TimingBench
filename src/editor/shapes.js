@@ -245,19 +245,24 @@ export function createShapes(ctx){
       }
     }
     if (k < 0) return null;                        // 整条折线都在圆内：这条边画不出箭头
+    // **箭头指向**：终点那端指向锚点（圆外 → 圆内），起点那端背离锚点（圆内 → 圆外）。
+    // 这两者的符号不同，弄反了箭头就会「倒着插进字母里」—— 三角整个被字形光晕吃掉，
+    // 屏幕上看到的是「箭头不见了」（踩过）。
+    var out = fromEnd ? { x: poly[k].x, y: poly[k].y } : { x: poly[k].x, y: poly[k].y };
     var inner = fromEnd ? k + 1 : k - 1;           // 内侧相邻点（在圆内）
-    if (inner < 0 || inner > n - 1) {              // 端点在圆外（极长的边 / 起点就远）：直接用端点
-      var j = fromEnd ? n - 2 : 1;
-      var vx = poly[fromEnd ? n - 1 : 0].x - poly[j].x, vy = poly[fromEnd ? n - 1 : 0].y - poly[j].y;
+    if (inner < 0 || inner > n - 1) {              // 端点本身就在圆外：直接用端点，方向取相邻段
+      var tipP = poly[fromEnd ? n - 1 : 0];
+      var nb = poly[fromEnd ? n - 2 : 1];
+      var vx = tipP.x - nb.x, vy = tipP.y - nb.y;
       var vl = Math.sqrt(vx * vx + vy * vy) || 1;
-      return { tip: { x: poly[fromEnd ? n - 1 : 0].x, y: poly[fromEnd ? n - 1 : 0].y }, dir: { x: vx / vl, y: vy / vl } };
+      return { tip: { x: tipP.x, y: tipP.y }, dir: { x: vx / vl, y: vy / vl } };
     }
     // 交点落在「内侧点 q（圆内）」与「外侧点 p（圆外）」之间：|q + s(p-q) - a|² = r²
     var q = poly[inner], p = poly[k];
     var fx = q.x - anchor.x, fy = q.y - anchor.y;
     var gx = p.x - q.x, gy = p.y - q.y;
     var A = gx * gx + gy * gy, B = 2 * (fx * gx + fy * gy), C = fx * fx + fy * fy - rr;
-    var disc = B * B - 4 * A * C, t, gl;
+    var disc = B * B - 4 * A * C, t, gl, ux, uy;
     if (A > 1e-9 && disc >= 0) {
       var sq = Math.sqrt(disc);
       t = (-B - sq) / (2 * A);
@@ -265,7 +270,11 @@ export function createShapes(ctx){
     }
     if (!(t >= 0 && t <= 1)) t = 0;                // 数值兜底：退化时取内侧点
     gl = Math.sqrt(A) || 1;
-    return { tip: { x: q.x + gx * t, y: q.y + gy * t }, dir: { x: gx / gl, y: gy / gl } };
+    ux = gx / gl; uy = gy / gl;                    // 外侧方向（圆内 → 圆外）
+    return {
+      tip: { x: q.x + gx * t, y: q.y + gy * t },
+      dir: fromEnd ? { x: -ux, y: -uy } : { x: ux, y: uy }
+    };
   }
   function opsD(a, ops) {
     var d = 'M' + a.x + ',' + a.y, i, o;
@@ -307,7 +316,7 @@ export function createShapes(ctx){
     return {
       d: opsD(a, g.ops), kind: g.kind, mid: polyAt(poly, mk, total / 2),
       endTip: end && end.tip, endDir: end && end.dir,
-      startTip: start && start.tip, startDir: start && { x: -start.dir.x, y: -start.dir.y }
+      startTip: start && start.tip, startDir: start && start.dir
     };
   }
   // 标签锚点：曲线取弧长中点正上方 7px；折线按拐点位置挑留白最多的那一侧
