@@ -165,12 +165,21 @@ var CHIP_W=G.CHIP_W;
       // 交叉的两条斜线从顶轨和底轨起，中线接不进去，格线上会断开一截（上游这里用的是 zmx 砖块）。
       if(kind==='enter'&&ra!==T&&ra!==B) kind='mid';
       var fp, bd, left=null;
-      if(kind==='cross'){
-        // 交叉过渡（上游 vmv-brick / xmv-brick）：两段各从自己的格边起一条斜线，交叉处是腰。
+      if(kind==='cross'||kind==='mid'){
+        // 两种进法共用同一块体：从 X+9 起、带一个中高度尖；x 的斜线也就从 X+9 开始。
         fp=[[X+br,T],[x1,T],[x1,B],[X+br,B],[X+bm,M]];
-        bd='M'+(X+br)+','+T+' H'+x1+' M'+(X+br)+','+B+' H'+x1+
-           ' M'+(X+bi)+','+T+' L'+(X+br)+','+B+' M'+(X+bi)+','+B+' L'+(X+br)+','+T+
-           ' M'+X+','+T+' H'+(X+bi)+' M'+X+','+B+' H'+(X+bi);
+        left=[X+br,T,X+br,B];
+        if(kind==='mid'){
+          // 中位线 → 块体（上游 zmx-brick）：中线走到 X+6 在那里分叉，一条到顶轨、一条到底轨。
+          bd='M'+X+','+M+' H'+(X+bm)+
+             ' M'+(X+bm)+','+M+' L'+(X+br)+','+T+' M'+(X+bm)+','+M+' L'+(X+br)+','+B+
+             ' M'+(X+br)+','+T+' H'+x1+' M'+(X+br)+','+B+' H'+x1;
+        } else {
+          // 交叉过渡（上游 vmv-brick / xmv-brick）：两段各从自己的格边起一条斜线，交叉处是腰。
+          bd='M'+(X+br)+','+T+' H'+x1+' M'+(X+br)+','+B+' H'+x1+
+             ' M'+(X+bi)+','+T+' L'+(X+br)+','+B+' M'+(X+bi)+','+B+' L'+(X+br)+','+T+
+             ' M'+X+','+T+' H'+(X+bi)+' M'+X+','+B+' H'+(X+bi);
+        }
         // 上一段若是总线，把它的收口（一条竖带 + 尖）补上；若是 x，补的是同一形状的**斜线**。
         // 缺了这半块，斜线带就会在格线上被平切，与下一块之间留一道白缝（上游两段是收成同一个尖对触的）。
         if(!o2.psame){
@@ -178,14 +187,6 @@ var CHIP_W=G.CHIP_W;
             pts([[X+bi,T],[X,T],[X,B],[X+bi,B],[X+bm,M]])+'" stroke="none"/>');
           else o.push(waveHatch(X,X+bm,T,B,W,[X,T,X,B],capEdges(X,bi,bm,T,M,B)));
         }
-        left=[X+br,T,X+br,B];
-      } else if(kind==='mid'){
-        // 中位线 → 块体（上游 zmx-brick）：中线走到 X+6，在那里分叉，一条到顶轨、一条到底轨，
-        // 顶/底横线从 X+9 起。块体那半块与其它进法一样从 X+9 起、带一个中高度尖。
-        fp=[[X+br,T],[x1,T],[x1,B],[X+br,B],[X+bm,M]];
-        bd='M'+X+','+M+' H'+(X+bm)+
-           ' M'+(X+bm)+','+M+' L'+(X+br)+','+T+' M'+(X+bm)+','+M+' L'+(X+br)+','+B+
-           ' M'+(X+br)+','+T+' H'+x1+' M'+(X+br)+','+B+' H'+x1;
         left=[X+br,T,X+br,B];
       } else if(kind==='enter'){
         // 斜边从上一格收盘的轨（ra）斜到另一条轨；那条轨的横线一直铺到格线，接缝才不露。
@@ -229,7 +230,7 @@ var CHIP_W=G.CHIP_W;
       var py=prev?waveLevel(prev,T,M,B):null;
       var dash=(ch==='d'||ch==='u'), soft=dash||/[ud]/.test(prev||'');
       var vary=(py!==null&&Math.abs(py-cy)>1);
-      var exS=soft?X+Math.min(W*0.44,17):ex, tail='';
+      var exS=soft?X+Math.min(W*0.44,17):ex, tail;
       var d;
       if(vary){
         d='M'+X+','+py+' H'+px;
