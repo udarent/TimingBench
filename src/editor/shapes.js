@@ -153,6 +153,9 @@ export function createShapes(ctx){
   // 形状表：key 是去掉箭头后的 token，值是折线种类。表里没有的写法回落 spline ——
   // 仍然画得出来、不报错，源码也一个字不动（上游对未知形状画一条红线，那是在报错，
   // 而这里的输入是用户手写的文本，画成看得懂的样子比画一条红线有用）。
+  // node 字母的「保留半径」：字母 11px（半高 ≈ 5.5）+ 3px 光晕（外沿 +1.5）再加 1px 呼吸。
+  // 箭头尖一律停在这个圆上，node 字母因此永远不会削掉箭头 —— 这是**几何模型**，不画圆。
+  var ARROW_CLEAR = 7;
   var EDGE_SHAPES = {
     '': 'spline', '~': 'spline',
     '-': 'line',
@@ -218,21 +221,51 @@ export function createShapes(ctx){
     }
     return poly[poly.length - 1];
   }
-  // 包含 `dist` 那一小段折线的**方向**（单位向量）。箭头据此对齐曲线末段 ——
-  // 曲线末端（贝塞尔 c2 与终点重合的写法）拿控制点算切线会退化成零向量，而折线采样点本身是有向的。
-  function segDirAt(poly, mk, dist) {
-    var i, l, total = mk[mk.length - 1].at;
-    if (!(dist > 0)) dist = 0;
-    if (dist > total) dist = total;
-    for (i = 1; i < poly.length; i++) {
-      if (mk[i].at >= dist) {
-        l = mk[i].len || 1;
-        return { x: (poly[i].x - poly[i - 1].x) / l, y: (poly[i].y - poly[i - 1].y) / l };
+  // 箭头尖：**折线与「以锚点为圆心、半径 r 的圆」的交点**。
+  // 为什么不用「沿折线退 r」：那是**弧长**，弧线一弯，点到锚点的直线距离就短于 r
+  // （末端转得越急差得越多），而 node 字母是**圆形遮挡** —— 该比的是直线距离。
+  // 求交是精确的、且与来向无关：任何角度、任何曲率都正好停在圆心外 r 处。
+  // 返回 { tip, dir }：dir 是「包含交点那一小段折线」的单位方向（箭头朝向与画出来的线严格同向，
+  // 而拿贝塞尔控制点算切线，遇到 c2 与终点重合的写法会退化成零向量）。
+  // 整条折线都落在圆内（极短的边）时返回 null —— 那条边画不出箭头。
+  function tipOnCircle(poly, anchor, r, fromEnd) {
+    var n = poly.length, rr = r * r, i, k = -1, dx, dy;
+    // 从**锚点那一端**往回（或往前）找第一个落在圆外的采样点：
+    //   fromEnd  —— 折线的终点是锚点，往回扫；
+    //   !fromEnd —— 折线的起点是锚点，往前扫。
+    if (fromEnd) {
+      for (i = n - 1; i >= 0; i--) {
+        dx = poly[i].x - anchor.x; dy = poly[i].y - anchor.y;
+        if (dx * dx + dy * dy >= rr) { k = i; break; }
+      }
+    } else {
+      for (i = 0; i < n; i++) {
+        dx = poly[i].x - anchor.x; dy = poly[i].y - anchor.y;
+        if (dx * dx + dy * dy >= rr) { k = i; break; }
       }
     }
-    l = mk[mk.length - 1].len || 1;
-    return { x: (poly[poly.length - 1].x - poly[poly.length - 2].x) / l,
-             y: (poly[poly.length - 1].y - poly[poly.length - 2].y) / l };
+    if (k < 0) return null;                        // 整条折线都在圆内：这条边画不出箭头
+    var inner = fromEnd ? k + 1 : k - 1;           // 内侧相邻点（在圆内）
+    if (inner < 0 || inner > n - 1) {              // 端点在圆外（极长的边 / 起点就远）：直接用端点
+      var j = fromEnd ? n - 2 : 1;
+      var vx = poly[fromEnd ? n - 1 : 0].x - poly[j].x, vy = poly[fromEnd ? n - 1 : 0].y - poly[j].y;
+      var vl = Math.sqrt(vx * vx + vy * vy) || 1;
+      return { tip: { x: poly[fromEnd ? n - 1 : 0].x, y: poly[fromEnd ? n - 1 : 0].y }, dir: { x: vx / vl, y: vy / vl } };
+    }
+    // 交点落在「内侧点 q（圆内）」与「外侧点 p（圆外）」之间：|q + s(p-q) - a|² = r²
+    var q = poly[inner], p = poly[k];
+    var fx = q.x - anchor.x, fy = q.y - anchor.y;
+    var gx = p.x - q.x, gy = p.y - q.y;
+    var A = gx * gx + gy * gy, B = 2 * (fx * gx + fy * gy), C = fx * fx + fy * fy - rr;
+    var disc = B * B - 4 * A * C, t, gl;
+    if (A > 1e-9 && disc >= 0) {
+      var sq = Math.sqrt(disc);
+      t = (-B - sq) / (2 * A);
+      if (!(t >= 0 && t <= 1)) t = (-B + sq) / (2 * A);
+    }
+    if (!(t >= 0 && t <= 1)) t = 0;                // 数值兜底：退化时取内侧点
+    gl = Math.sqrt(A) || 1;
+    return { tip: { x: q.x + gx * t, y: q.y + gy * t }, dir: { x: gx / gl, y: gy / gl } };
   }
   function opsD(a, ops) {
     var d = 'M' + a.x + ',' + a.y, i, o;
@@ -266,16 +299,15 @@ export function createShapes(ctx){
   function edgePath(a, b, shape) {
     var g = edgeSegs(a, b, shape);
     var poly = polyOf(a, g.ops), mk = polyMarks(poly), total = mk[mk.length - 1].at;
-    // 箭头尖要**离开 node 字母一点**：字母是 11px 的字形、外面还罩着 3px 的字形光晕
-    // （`paint-order:stroke`），尖点正好落在锚点上时，光晕会把箭头削掉一截 —— 用户看到的就是
-    // 「箭头被 node 字符挡住了」。上游同样不把箭头画进字里（marker 的 refX 就是干这个的）。
-    // 取 7px：够躲开最宽的字形（11px 的 `w` 半宽 ≈ 4.6px）+ 光晕（1.5px），
-    // 又不会让箭头看起来浮在半空。
-    var gap = Math.min(7, total * 0.35);
+    // 箭头尖停在「以 node 字母为圆心、半径 ARROW_CLEAR 的圆」上：字母是 11px 的字形、
+    // 外面还罩着 3px 的字形光晕（`paint-order:stroke`），尖点插进这个圆就会被光晕削掉一截 ——
+    // 用户看到的就是「箭头被 node 字符挡住」。半径取 7 ≈ 最宽字形半宽（`w` 4.6）+ 光晕 1.5 + 呼吸。
+    // 圆圈本身**不画**（只当几何模型用）：画出来是个不透明圆盘，落在总线上会挖掉一块色块。
+    var end = tipOnCircle(poly, b, ARROW_CLEAR, true), start = tipOnCircle(poly, a, ARROW_CLEAR, false);
     return {
       d: opsD(a, g.ops), kind: g.kind, mid: polyAt(poly, mk, total / 2),
-      endTip: polyAt(poly, mk, total - gap), startTip: polyAt(poly, mk, gap),
-      endDir: segDirAt(poly, mk, total - gap), startDir: segDirAt(poly, mk, gap)
+      endTip: end && end.tip, endDir: end && end.dir,
+      startTip: start && start.tip, startDir: start && { x: -start.dir.x, y: -start.dir.y }
     };
   }
   // 标签锚点：曲线取弧长中点正上方 7px；折线按拐点位置挑留白最多的那一侧
@@ -353,8 +385,8 @@ export function createShapes(ctx){
       paths.push('<path d="' + g.d + '" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>');
       // 箭头只按 `<` / `>` 画 —— 没有箭头就是「没有方向」，别替用户补一个：
       // 上游 `a~b` 是一条无箭头的曲线，我们以前无条件补末端箭头，等于凭空宣布了因果方向。
-      if (pe.end) paths.push('<path d="' + arrowTri(g.endTip, g.endDir) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
-      if (pe.start) paths.push('<path d="' + arrowTri(g.startTip, { x: -g.startDir.x, y: -g.startDir.y }) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
+      if (pe.end && g.endTip) paths.push('<path d="' + arrowTri(g.endTip, g.endDir) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
+      if (pe.start && g.startTip) paths.push('<path d="' + arrowTri(g.startTip, g.startDir) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
       // `+` 是「两端各一个横杠」的接线端子（上游用 tee marker），不是箭头
       if (g.kind === 'tee') {
         var ux = b.x - a.x, uy = b.y - a.y, ul = Math.sqrt(ux * ux + uy * uy) || 1;

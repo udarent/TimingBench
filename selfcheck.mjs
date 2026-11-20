@@ -737,8 +737,9 @@ function check() {
   // 只是一个 `z` 结尾的 path，肉眼很难发现。
   ok(/function arrowTri\(tip, dir\)/.test(read('src/editor/shapes.js')) &&
      /var ux = dir\.x, uy = dir\.y;/.test(read('src/editor/shapes.js')) &&
-     /endDir: segDirAt\(poly, mk, total - gap\)/.test(read('src/editor/shapes.js')),
-    '箭头方向退回「用另一个点算弦」的旧写法（曲线末端会让箭头歪掉），或尖点不再按 gap 回退');
+     /var end = tipOnCircle\(poly, b, ARROW_CLEAR, true\), start = tipOnCircle\(poly, a, ARROW_CLEAR, false\);/.test(read('src/editor/shapes.js')) &&
+     /var ARROW_CLEAR = 7;/.test(read('src/editor/shapes.js')),
+    '箭头尖不再落在「以 node 为圆心、半径 ARROW_CLEAR 的圆」上（会重新扎进字母的光晕里），或方向退回弦写法');
 
   // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
     // 唯独**离开 z** 是普通斜边（而且从 6px 起拐）。写成一条条判据，是因为 browser 的
@@ -1100,7 +1101,7 @@ function check() {
      /function edgePath\(/.test(shapesSrc) && /EDGE_SHAPES/.test(shapesSrc) &&
      /'-\|':\s*'hv'/.test(shapesSrc) && /'\|-':\s*'vh'/.test(shapesSrc) &&
      /parseEdge\(e\)/.test(shapesSrc) &&
-     /if \(pe\.end\)/.test(shapesSrc) && !/!explicitArrow/.test(shapesSrc),
+     /if \(pe\.end && g\.endTip\)/.test(shapesSrc) && !/!explicitArrow/.test(shapesSrc),
     'edge 形状表缺失 / 形状靠猜 / 默认补了箭头');
   // 纯 node 行（无 wave）必须保留锚点：否则引用它的 edge 找不到端点（教程 Sharp lines 样例）。
   ok(/var nn = n > 0 \? n :/.test(read('src/core/ir.js')),
