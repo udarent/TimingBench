@@ -92,6 +92,21 @@ var CHIP_W=G.CHIP_W;
   // 不同，所以共用一份几何。本格自己的电平线照常从格线铺满：过渡压在线下方向内收。
   function blockCap(ch,capCls,X,T,M,B,W,bi,br,bm){
     var r=railStart(ch,T,B), fp, ink, pts=[], k, hair='', seg;
+    // `u` / `d` 是弱驱动，收口不是 6px 的斜边而是一条 S 曲线，横跨近半格（上游 vmu-2 / vmd）。
+    // 跨度取与电平分支同一条软曲线（min(0.44W, 17)），两处才接得上；块体的填充也要一直
+    // 包到曲线的落点 —— 上游 vmu-2 的填充就是这块弧形区域。
+    var e2=X+W*0.5;                            // 与电平分支同一条跨度（半格）
+    if(/[ud]/.test(ch)&&(r===T||r===B)){
+      var from=(r===T)?B:T;
+      var c1=X+bi+Math.min(4,W*0.10), c2=e2-Math.min(10,W*0.26), midY=(from+r)/2;
+      var cv=' C'+c1+','+midY+' '+c2+','+r+' '+e2+','+r;
+      ink='M'+X+','+from+' H'+(X+bi)+cv;
+      if(capCls) return '<path class="waveBus '+capCls+'" d="M'+X+','+r+' V'+from+' H'+(X+bi)+cv+' Z" stroke="none"/>'+
+        '<path class="waveBusInk" d="'+ink+'"/>';
+      // x 的收口没有颜色可填，是一片斜线：裁剪边界只能用**弦**（曲线做不了裁剪线，
+      // 这一段弦与曲线差不到 2px，看不出）。x → u/d 本身是很罕见的组合。
+      return waveHatch(X,e2,T,B,W,[X,T,X,B],[X+bi,from,e2,r])+'<path class="waveBusInk" d="'+ink+'"/>';
+    }
     if(r===T){
       fp=[[X,T],[X,B],[X+bi,B],[X+br,T]];
       ink='M'+X+','+B+' H'+(X+bi)+' L'+(X+br)+','+T;
@@ -186,12 +201,17 @@ var CHIP_W=G.CHIP_W;
         }
         // 上一段若是总线，把它的收口（一条竖带 + 尖）补上；若是 x，补的是同一形状的**斜线**。
         // 缺了这半块，斜线带就会在格线上被平切，与下一块之间留一道白缝（上游两段是收成同一个尖对触的）。
-        if(!o2.psame){
+        // 只有 `cross` 才补 —— `mid` 的上一格是 `z`（中位线，不是块体），根本不存在「上一段的收口」。
+        // 少了这个判据，`z` 接 `x` 时会在格线左侧凭空画出一小片斜线（浮在带体外面）。
+        if(kind==='cross'&&!o2.psame){
           if(o2.pbus) o.push('<polygon class="waveBus '+(o2.pcls||'bus2')+'" points="'+
             pts([[X+bi,T],[X,T],[X,B],[X+bi,B],[X+bm,M]])+'" stroke="none"/>');
           else o.push(waveHatch(X,X+bm,T,B,W,[X,T,X,B],capEdges(X,bi,bm,T,M,B)));
         }
-        left=[X+br,T,X+br,B];
+        // 斜线的左边界是**分叉的那两条斜边**，不是 X+9 那条竖线 —— 分叉与块体左沿之间
+        // 那块楔形（宽 6px）同样要在带里，上游 `zmx` 的斜线一直填到叉口上；按竖线裁
+        // 会在叉口右侧留一个白色三角。
+        left=(kind==='mid')?[[X+bm,M,X+br,T],[X+bm,M,X+br,B]]:[X+br,T,X+br,B];
       } else if(kind==='enter'){
         // 斜边从上一格收盘的轨（ra）斜到另一条轨；那条轨的横线一直铺到格线，接缝才不露。
         fp=(ra===T)?[[X+bi,T],[x1,T],[x1,B],[X+br,B]]:[[X+br,T],[x1,T],[x1,B],[X+bi,B]];
@@ -236,9 +256,20 @@ var CHIP_W=G.CHIP_W;
       // 和上游那种「一个缓弯落到位、然后接虚线电平」完全不是一回事。
       var cy=waveLevel(ch,T,M,B); if(cy===null) cy=M;
       var py=prev?waveLevel(prev,T,M,B):null;
-      var dash=(ch==='d'||ch==='u'), soft=dash||/[ud]/.test(prev||'');
+      var dash=(ch==='d'||ch==='u');
+      // 软过渡 = 进出「无驱动」的状态。上游这几类一律「先水平 3px，再用三次贝塞尔横跨近半格」：
+      //   · 进 z（1mz / 0mz）：高/低 → 中位，软的；
+      //   · 出 z（zm1 / zm0）：普通 6px 斜边，但**从 6px 起拐**（中位线先走到叉点）；
+      //   · u / d 的来回（umd / dmu / um0）：都软。
+      // 所以判据只把 `ch === 'z'` 与 prev 的 u/d 算进来 —— 把 prev 的 z 也算进来，
+      // 离开高阻就成了慢弯，与上游正好相反。
+      var soft=dash||/[ud]/.test(prev||'')||ch==='z';
+      if(prev==='z') px=X+bm;          // 中位线先走到叉点再拐（上游 zm1 的 6px）
       var vary=(py!==null&&Math.abs(py-cy)>1);
-      var exS=soft?X+Math.min(W*0.44,17):ex, tail;
+      // 软曲线落在**半格**处：上游把这类过渡画满半个字符（砖宽 20 / 字符 40），
+      // 而虚线正是从后半格才开始的。落在 0.44 格时曲线尖端会戳进虚线的「空隙」里，
+      // 看着像半空中断掉一截。同一条跨度也给 blockCap 用，两处才对得上。
+      var exS=soft?X+W*0.5:ex, tail;
       var d;
       if(vary){
         d='M'+X+','+py+' H'+px;
@@ -248,7 +279,16 @@ var CHIP_W=G.CHIP_W;
         } else d+=' L'+exS+','+cy;
         o.push('<path class="waveInk" d="'+d+'"/>');
         tail='M'+exS+','+cy+' H'+x1;
-      } else tail='M'+X+','+cy+' H'+x1;
+      } else {
+        tail='M'+X+','+cy+' H'+x1;
+        // 块体 → 弱驱动（`=` 之后接 `u` / `d`）：收口曲线落在半格处，在此之前电平仍是**实线**
+        // —— 上游 vmu-2 的顶线整段实线、后半砖才是 `uuu` 虚线。若这里就从格线铺虚线，
+        // 曲线的尖端会正好戳进某个虚线空隙里，看着像半空中断掉一截。
+        if(dash&&o2.pblock){
+          o.push('<path class="waveInk" d="M'+X+','+cy+' H'+(X+W*0.5)+'"/>');
+          tail='M'+(X+W*0.5)+','+cy+' H'+x1;
+        }
+      }
       o.push('<path class="'+(dash?'waveDash':'waveInk')+'" d="'+tail+'"/>');
     }
     return '<g class="waveGlyph" data-w="'+esc(ch)+'" pointer-events="none">'+o.join('')+'</g>';
