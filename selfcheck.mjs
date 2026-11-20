@@ -732,7 +732,15 @@ function check() {
          /width="39" height="32"/.test(gx.slice(iBg - 40, iBg + 160)),
         '`x` 块体没有铺画布底色（斜线间会透出列网格），或遮罩排在斜线之后（会把斜线盖掉）');
     }
-    // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
+    // 箭头尖必须离开锚点（0.27.8）：`arrowTri` 现在吃**单位方向向量**，尖点由 `edgePath` 给出。
+  // 源码级只锁「不再用 from 点算方向」——方向错了会让箭头歪着插进曲线，而那条路径在指纹里
+  // 只是一个 `z` 结尾的 path，肉眼很难发现。
+  ok(/function arrowTri\(tip, dir\)/.test(read('src/editor/shapes.js')) &&
+     /var ux = dir\.x, uy = dir\.y;/.test(read('src/editor/shapes.js')) &&
+     /endDir: segDirAt\(poly, mk, total - gap\)/.test(read('src/editor/shapes.js')),
+    '箭头方向退回「用另一个点算弦」的旧写法（曲线末端会让箭头歪掉），或尖点不再按 gap 回退');
+
+  // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
     // 唯独**离开 z** 是普通斜边（而且从 6px 起拐）。写成一条条判据，是因为 browser 的
     // 波形层指纹里根本没有 z / u / d —— 指纹证不了这类改动（Step 1 的缺陷就是这么漏的）。
     const curve = (ch, prev, o) => /\bC[\d.\-]/.test(waveGlyph(ch, prev, 0, 0, 16, 32, 38, o || {}));

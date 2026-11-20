@@ -161,11 +161,11 @@ export function createShapes(ctx){
     '+': 'tee'
   };
   // 端点箭头：三角沿切线方向指到 tip（back/half 与旧实现一致，保证 a~>b 的 d 逐字节不变）
-  function arrowTri(tip, from) {
-    // 这里刻意保留 sqrt 而不用 hypot：hypot 走另一套高精度实现，末位差 1e-14，
-    // 会让箭头 `d` 逐字节变化、白白触发一次波形层指纹重算。
-    var ux = tip.x - from.x, uy = tip.y - from.y, ul = Math.sqrt(ux * ux + uy * uy) || 1;
-    ux /= ul; uy /= ul;
+  function arrowTri(tip, dir) {
+    // `dir` 是箭头指向的**单位向量**（不是「另一个点」）：早期版本传一个 8px 之外的点去算方向，
+    // 弧线末端曲率大时那条弦会明显偏离曲线末段的走向，箭头看起来是「歪着插上去」的。
+    // 现在由 `segDirAt` 直接给出包含尖点那一段折线的方向 —— 与画出来的曲线严格同向。
+    var ux = dir.x, uy = dir.y;
     var back = 7.5, half = 3.2;
     var abx = tip.x - ux * back, aby = tip.y - uy * back, apx = -uy, apy = ux;
     return 'M' + tip.x + ',' + tip.y + ' L' + (abx + apx * half) + ',' + (aby + apy * half) +
@@ -218,6 +218,22 @@ export function createShapes(ctx){
     }
     return poly[poly.length - 1];
   }
+  // 包含 `dist` 那一小段折线的**方向**（单位向量）。箭头据此对齐曲线末段 ——
+  // 曲线末端（贝塞尔 c2 与终点重合的写法）拿控制点算切线会退化成零向量，而折线采样点本身是有向的。
+  function segDirAt(poly, mk, dist) {
+    var i, l, total = mk[mk.length - 1].at;
+    if (!(dist > 0)) dist = 0;
+    if (dist > total) dist = total;
+    for (i = 1; i < poly.length; i++) {
+      if (mk[i].at >= dist) {
+        l = mk[i].len || 1;
+        return { x: (poly[i].x - poly[i - 1].x) / l, y: (poly[i].y - poly[i - 1].y) / l };
+      }
+    }
+    l = mk[mk.length - 1].len || 1;
+    return { x: (poly[poly.length - 1].x - poly[poly.length - 2].x) / l,
+             y: (poly[poly.length - 1].y - poly[poly.length - 2].y) / l };
+  }
   function opsD(a, ops) {
     var d = 'M' + a.x + ',' + a.y, i, o;
     for (i = 0; i < ops.length; i++) {
@@ -250,10 +266,16 @@ export function createShapes(ctx){
   function edgePath(a, b, shape) {
     var g = edgeSegs(a, b, shape);
     var poly = polyOf(a, g.ops), mk = polyMarks(poly), total = mk[mk.length - 1].at;
-    var back = Math.min(8, total / 2);
+    // 箭头尖要**离开 node 字母一点**：字母是 11px 的字形、外面还罩着 3px 的字形光晕
+    // （`paint-order:stroke`），尖点正好落在锚点上时，光晕会把箭头削掉一截 —— 用户看到的就是
+    // 「箭头被 node 字符挡住了」。上游同样不把箭头画进字里（marker 的 refX 就是干这个的）。
+    // 取 7px：够躲开最宽的字形（11px 的 `w` 半宽 ≈ 4.6px）+ 光晕（1.5px），
+    // 又不会让箭头看起来浮在半空。
+    var gap = Math.min(7, total * 0.35);
     return {
       d: opsD(a, g.ops), kind: g.kind, mid: polyAt(poly, mk, total / 2),
-      endFrom: polyAt(poly, mk, total - back), startFrom: polyAt(poly, mk, back)
+      endTip: polyAt(poly, mk, total - gap), startTip: polyAt(poly, mk, gap),
+      endDir: segDirAt(poly, mk, total - gap), startDir: segDirAt(poly, mk, gap)
     };
   }
   // 标签锚点：曲线取弧长中点正上方 7px；折线按拐点位置挑留白最多的那一侧
@@ -331,8 +353,8 @@ export function createShapes(ctx){
       paths.push('<path d="' + g.d + '" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".75" pointer-events="none"/>');
       // 箭头只按 `<` / `>` 画 —— 没有箭头就是「没有方向」，别替用户补一个：
       // 上游 `a~b` 是一条无箭头的曲线，我们以前无条件补末端箭头，等于凭空宣布了因果方向。
-      if (pe.end) paths.push('<path d="' + arrowTri(b, g.endFrom) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
-      if (pe.start) paths.push('<path d="' + arrowTri(a, g.startFrom) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
+      if (pe.end) paths.push('<path d="' + arrowTri(g.endTip, g.endDir) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
+      if (pe.start) paths.push('<path d="' + arrowTri(g.startTip, { x: -g.startDir.x, y: -g.startDir.y }) + '" fill="var(--accent)" opacity=".85" pointer-events="none"/>');
       // `+` 是「两端各一个横杠」的接线端子（上游用 tee marker），不是箭头
       if (g.kind === 'tee') {
         var ux = b.x - a.x, uy = b.y - a.y, ul = Math.sqrt(ux * ux + uy * uy) || 1;
