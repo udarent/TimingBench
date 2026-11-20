@@ -247,7 +247,7 @@ export function createShapes(ctx){
   }
   // 把一条边在「以 anchor 为圆心、半径 r」的圆处截断，只保留**圆外**那一段。
   //   fromEnd=true  终点在锚点上：从后往前砍，返回保留的 ops 与交点（+ 指向锚点的方向）
-  //   fromEnd=false 起点在锚点上：从前往后砍，返回新的起点与交点（+ 背离锚点的方向）
+  //   fromEnd=false 起点在锚点上：从前往后砍，返回新的起点与交点（+ 同样指向锚点的方向）
   // 交汇方式：找第一个「跨圆」的段，在该段内求根并切分；整段在圆内的直接丢掉。
   function clipAtCircle(anchor, start, ops, r, fromEnd) {
     var rr = r * r, i, seg, p0, segs = [], cross = null;
@@ -293,7 +293,9 @@ export function createShapes(ctx){
       } else {
         // 保留右半段（交点 → 原终点）
         seg2 = { t: 'C', c1: b2, c2: c3, p: seg2.p };
-        dir = { x: b2.x - hit.x, y: b2.y - hit.y };         // 背离锚点
+        // 起点端的箭头同样**指向自己的锚点**：`g<->h` 的两端都各自指向 g / h。
+        // 写成「背离锚点」时，显示出来就是「g 上的箭头朝向 h」—— 方向反了（用户报的）。
+        dir = { x: -(b2.x - hit.x), y: -(b2.y - hit.y) };
       }
     } else {
       var dx = seg2.p.x - q0.x, dy = seg2.p.y - q0.y;
@@ -306,7 +308,7 @@ export function createShapes(ctx){
       if (!(t >= 0 && t <= 1)) t = 0;
       hit = { x: q0.x + dx * t, y: q0.y + dy * t };
       seg2 = { t: 'L', p: fromEnd ? hit : seg2.p };
-      dir = { x: dx, y: dy };
+      dir = fromEnd ? { x: dx, y: dy } : { x: -dx, y: -dy };   // 两端都指向自己的锚点
     }
     var gl = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
     dir = { x: dir.x / gl, y: dir.y / gl };
@@ -364,10 +366,11 @@ export function createShapes(ctx){
   // 标签锚点：曲线取弧长中点正上方 7px；折线按拐点位置挑留白最多的那一侧
   // （L 形 / Z 形若按中点摆，字正好落在竖线或拐角上）。
   function edgeLabelAt(a, b, g) {
-    var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    if (g.kind === 'hv') return { x: b.x - 8, y: my, anchor: 'end' };
-    if (g.kind === 'vh') return { x: a.x + 8, y: my, anchor: 'start' };
-    if (g.kind === 'hvh') return { x: mx + 8, y: my, anchor: 'start' };
+    // 折线（`-` / `-|` / `|-` / `-|-` / `+`）：标签**中心压在线上**（取裁到节点圆之后的弧长中点）。
+    // 以前是「挑留白最多的一侧、贴到线旁 8px」，于是标签中心离那条线 8~30px，看起来像随手丢的 ——
+    // 上游是直接压在线上（`text-anchor:middle`）。可读性靠字形光晕兜，线不会把字吃掉。
+    if (g.kind !== 'spline' && g.kind !== 'swing1' && g.kind !== 'swing2')
+      return { x: g.mid.x, y: g.mid.y, anchor: 'middle' };
     // 曲线上：中点**正上方** 7px。试过沿法线让开，陡曲线时法线指向斜上，标签会被推进
     // 相邻的 node 字母里（t2 正好撞上 b）。固定往上抬一格宽，配字形光晕，够读了。
     return { x: g.mid.x, y: g.mid.y - 7, anchor: 'middle' };
