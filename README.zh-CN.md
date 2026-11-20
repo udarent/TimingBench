@@ -4,7 +4,7 @@
 
 **直接改波形就能改源码的时序图编辑器。** 点一下波形格，WaveJSON 源码就同步改写；改一下源码，波形立刻重画。两边都不是「附属品」。
 
-`0.27.7` · [MIT](LICENSE) · 完全跑在浏览器里 · 不上传任何内容 · [打开编辑器](https://udarent.github.io/TimingBench/editor.html)
+`0.27.8` · [MIT](LICENSE) · 完全跑在浏览器里 · 不上传任何内容 · [打开编辑器](https://udarent.github.io/TimingBench/editor.html)
 
 源码不会被悄悄重排：图形编辑以**最小补丁**写回源码（注释、缩进、键序、引号原样保留），任何无法无损往返的结果都会回滚。
 

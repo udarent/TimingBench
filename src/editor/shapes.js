@@ -167,7 +167,7 @@ export function createShapes(ctx){
   function arrowTri(tip, dir) {
     // `dir` 是箭头指向的**单位向量**（不是「另一个点」）：早期版本传一个 8px 之外的点去算方向，
     // 弧线末端曲率大时那条弦会明显偏离曲线末段的走向，箭头看起来是「歪着插上去」的。
-    // 现在由 `segDirAt` 直接给出包含尖点那一段折线的方向 —— 与画出来的曲线严格同向。
+    // 方向由 `clipAtCircle` 在求交点时一并给出（沿折线的切向），与画出来的曲线严格同向。
     var ux = dir.x, uy = dir.y;
     var back = 7.5, half = 3.2;
     var abx = tip.x - ux * back, aby = tip.y - uy * back, apx = -uy, apy = ux;
@@ -303,9 +303,11 @@ export function createShapes(ctx){
       var fx = q0.x - anchor.x, fy = q0.y - anchor.y;
       var B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - rr;
       var disc = B * B - 4 * A * C, sq = disc > 0 ? Math.sqrt(disc) : 0;
-      t = A > 1e-9 ? (-B - sq !== 0 ? (-B - sq) / (2 * A) : 0) : 0;
-      if (!(t >= 0 && t <= 1)) t = A > 1e-9 ? (-B + sq) / (2 * A) : 0;
-      if (!(t >= 0 && t <= 1)) t = 0;
+      t = 0;
+      if (A > 1e-9) {                              // 两根里取落在本段内的那个（另一个在圆外）
+        var t1 = (-B - sq) / (2 * A), t2 = (-B + sq) / (2 * A);
+        t = (t1 >= 0 && t1 <= 1) ? t1 : (t2 >= 0 && t2 <= 1 ? t2 : 0);
+      }
       hit = { x: q0.x + dx * t, y: q0.y + dy * t };
       seg2 = { t: 'L', p: fromEnd ? hit : seg2.p };
       dir = fromEnd ? { x: dx, y: dy } : { x: -dx, y: -dy };   // 两端都指向自己的锚点
@@ -314,8 +316,7 @@ export function createShapes(ctx){
     dir = { x: dir.x / gl, y: dir.y / gl };
     // 组装：保留圆外那些段 + 切分出来的那一段
     var kept = fromEnd ? segs.slice(0, cross.k) : segs.slice(cross.k + 1);
-    var out = fromEnd ? kept.concat([seg2]) : [seg2].concat(kept);
-    return { start: fromEnd ? start : hit, ops: out, at: hit, dir: dir };
+    return { start: fromEnd ? start : hit, ops: fromEnd ? kept.concat([seg2]) : [seg2].concat(kept), at: hit, dir: dir };
   }
   function opsD(a, ops) {
     var d = 'M' + a.x + ',' + a.y, i, o;
@@ -363,9 +364,8 @@ export function createShapes(ctx){
       startTip: start && start.at, startDir: start && start.dir
     };
   }
-  // 标签锚点：曲线取弧长中点正上方 7px；折线按拐点位置挑留白最多的那一侧
-  // （L 形 / Z 形若按中点摆，字正好落在竖线或拐角上）。
-  function edgeLabelAt(a, b, g) {
+  // 标签锚点：折线压在弧长中点上（与上游同口径），曲线抬到中点正上方 7px（不盖住弧线本身）。
+  function edgeLabelAt(g) {
     // 折线（`-` / `-|` / `|-` / `-|-` / `+`）：标签**中心压在线上**（取裁到节点圆之后的弧长中点）。
     // 以前是「挑留白最多的一侧、贴到线旁 8px」，于是标签中心离那条线 8~30px，看起来像随手丢的 ——
     // 上游是直接压在线上（`text-anchor:middle`）。可读性靠字形光晕兜，线不会把字吃掉。
@@ -452,7 +452,7 @@ export function createShapes(ctx){
       // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
       paths.push('<path d="' + g.d + '" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="' + (T ? 20 : 8) + '" pointer-events="' + (state.linkMode ? 'none' : 'stroke') + '"/>');
       var inner = paths.join('');
-      if (pe.label) inner += edgeLabelSvg(edgeLabelAt(a, b, g), cut(pe.label, 18), taken);
+      if (pe.label) inner += edgeLabelSvg(edgeLabelAt(g), cut(pe.label, 18), taken);
       o.push('<g class="edgeArc" data-eidx="' + i + '" role="button" aria-label="Edit edge ' + esc(String(e)) + '">' + inner + '</g>');
     });
     // 顺序：弧线 → node 字母。字母最后画，才不会被箭头盖住。
