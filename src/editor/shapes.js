@@ -228,56 +228,96 @@ export function createShapes(ctx){
   // 返回 { tip, dir }：dir 是「包含交点那一小段折线」的单位方向（箭头朝向与画出来的线严格同向，
   // 而拿贝塞尔控制点算切线，遇到 c2 与终点重合的写法会退化成零向量）。
   // 整条折线都落在圆内（极短的边）时返回 null —— 那条边画不出箭头。
-  function tipOnCircle(poly, anchor, r, fromEnd) {
-    var n = poly.length, rr = r * r, i, k = -1, dx, dy;
-    // 从**锚点那一端**往回（或往前）找第一个落在圆外的采样点：
-    //   fromEnd  —— 折线的终点是锚点，往回扫；
-    //   !fromEnd —— 折线的起点是锚点，往前扫。
-    if (fromEnd) {
-      for (i = n - 1; i >= 0; i--) {
-        dx = poly[i].x - anchor.x; dy = poly[i].y - anchor.y;
-        if (dx * dx + dy * dy >= rr) { k = i; break; }
+  // ---- 节点圆周裁剪 --------------------------------------------------------
+  // node 字母是 11px 的**固定大小字形**，外面罩一层 3px 字形光晕。于是「字符边缘」可以精确
+  // 建模成「以字符中心为圆心、半径 ARROW_CLEAR 的圆」：**任何墨迹都止于这个圆**。
+  // 这样箭头尖、线段端点、`+` 端子的位置都只由「字符中心 + 半径」决定 —— 不多一点、不少一点，
+  // 与来向角度、曲率、边的长短无关。
+  //   · 有箭头：三角的尖点就落在交点上；
+  //   · 没有箭头：线段也停在这里（不再画到字符中心去，只剩被光晕遮住的一截线头）。
+  // 圆的交点用**解析求交**（直线段）与**二分 + de Casteljau 分割**（贝塞尔段）得到，
+  // 不靠采样近似：曲线段分出来的两半仍是精确的贝塞尔。
+  function lerpP(p, q, t) { return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }; }
+  function dist2(p, q) { var dx = p.x - q.x, dy = p.y - q.y; return dx * dx + dy * dy; }
+  // 三次贝塞尔在 t 处的点
+  function bezAt(p0, c1, c2, p3, t) {
+    var a1 = lerpP(p0, c1, t), b1 = lerpP(c1, c2, t), c3 = lerpP(c2, p3, t);
+    var a2 = lerpP(a1, b1, t), b2 = lerpP(b1, c3, t);
+    return lerpP(a2, b2, t);
+  }
+  // 把一条边在「以 anchor 为圆心、半径 r」的圆处截断，只保留**圆外**那一段。
+  //   fromEnd=true  终点在锚点上：从后往前砍，返回保留的 ops 与交点（+ 指向锚点的方向）
+  //   fromEnd=false 起点在锚点上：从前往后砍，返回新的起点与交点（+ 背离锚点的方向）
+  // 交汇方式：找第一个「跨圆」的段，在该段内求根并切分；整段在圆内的直接丢掉。
+  function clipAtCircle(anchor, start, ops, r, fromEnd) {
+    var rr = r * r, i, seg, p0, segs = [], cross = null;
+    for (i = 0; i < ops.length; i++) segs.push(ops[i]);
+    if (!segs.length) return null;
+    var idxs = [];
+    for (i = 0; i < segs.length; i++) idxs.push(i);
+    if (fromEnd) idxs.reverse();
+    var startPt = start, prevPts = [start];
+    for (i = 0; i < segs.length; i++) prevPts.push(segs[i].p);      // prevPts[i] = 第 i 段的起点
+    for (var n = 0; n < idxs.length; n++) {
+      var k = idxs[n];
+      seg = segs[k];
+      p0 = prevPts[k];
+      // 判据的方向不同：往回砍时看**段起点**是否已出圆；往前砍时看**段终点**是否出圆。
+      // 两者都拿段起点判的话，起点端的第一段起点永远在圆内 → 永远找不到交点，
+      // 于是「起点那半截不会被裁、起始箭头也消失」（踩过）。
+      var probe = fromEnd ? p0 : seg.p;
+      if (dist2(probe, anchor) < rr) continue;    // 这一段整个还在圆内：丢掉，继续往前找
+      cross = { k: k, p0: p0, seg: seg };
+      break;
+    }
+    if (!cross) return null;                     // 整条边都在圆内
+    var seg2 = cross.seg, q0 = cross.p0, t, hit, dir;
+    if (seg2.t === 'C') {
+      // 二分 |B(t)-anchor|² = r²。**符号感知**：终点端是「外 → 内」，起点端是「内 → 外」，
+      // 写死 `f > 0` 判据时起点端会一路收敛到 t=1，曲线被削成一个点（踩过）。
+      var lo = 0, hi = 1, mid;
+      var flo = dist2(q0, anchor) - rr;            // 必须取 t=0 那一端的符号，不能取远端
+      for (var it = 0; it < 40; it++) {
+        mid = (lo + hi) / 2;
+        var fm = dist2(bezAt(q0, seg2.c1, seg2.c2, seg2.p, mid), anchor) - rr;
+        if ((fm > 0) === (flo > 0)) { lo = mid; flo = fm; } else hi = mid;
+      }
+      t = (lo + hi) / 2;
+      hit = bezAt(q0, seg2.c1, seg2.c2, seg2.p, t);
+      var a1 = lerpP(q0, seg2.c1, t), b1 = lerpP(seg2.c1, seg2.c2, t), c3 = lerpP(seg2.c2, seg2.p, t);
+      var a2 = lerpP(a1, b1, t), b2 = lerpP(b1, c3, t);
+      if (fromEnd) {
+        // 保留左半段（原起点 → 交点）
+        seg2 = { t: 'C', c1: a1, c2: a2, p: hit };
+        dir = { x: -(a2.x - hit.x), y: -(a2.y - hit.y) };   // 指向锚点 = 反向的末切线
+      } else {
+        // 保留右半段（交点 → 原终点）
+        seg2 = { t: 'C', c1: b2, c2: c3, p: seg2.p };
+        dir = { x: b2.x - hit.x, y: b2.y - hit.y };         // 背离锚点
       }
     } else {
-      for (i = 0; i < n; i++) {
-        dx = poly[i].x - anchor.x; dy = poly[i].y - anchor.y;
-        if (dx * dx + dy * dy >= rr) { k = i; break; }
-      }
+      var dx = seg2.p.x - q0.x, dy = seg2.p.y - q0.y;
+      var A = dx * dx + dy * dy;
+      var fx = q0.x - anchor.x, fy = q0.y - anchor.y;
+      var B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - rr;
+      var disc = B * B - 4 * A * C, sq = disc > 0 ? Math.sqrt(disc) : 0;
+      t = A > 1e-9 ? (-B - sq !== 0 ? (-B - sq) / (2 * A) : 0) : 0;
+      if (!(t >= 0 && t <= 1)) t = A > 1e-9 ? (-B + sq) / (2 * A) : 0;
+      if (!(t >= 0 && t <= 1)) t = 0;
+      hit = { x: q0.x + dx * t, y: q0.y + dy * t };
+      seg2 = { t: 'L', p: fromEnd ? hit : seg2.p };
+      dir = { x: dx, y: dy };
     }
-    if (k < 0) return null;                        // 整条折线都在圆内：这条边画不出箭头
-    // **箭头指向**：终点那端指向锚点（圆外 → 圆内），起点那端背离锚点（圆内 → 圆外）。
-    // 这两者的符号不同，弄反了箭头就会「倒着插进字母里」—— 三角整个被字形光晕吃掉，
-    // 屏幕上看到的是「箭头不见了」（踩过）。
-    var out = fromEnd ? { x: poly[k].x, y: poly[k].y } : { x: poly[k].x, y: poly[k].y };
-    var inner = fromEnd ? k + 1 : k - 1;           // 内侧相邻点（在圆内）
-    if (inner < 0 || inner > n - 1) {              // 端点本身就在圆外：直接用端点，方向取相邻段
-      var tipP = poly[fromEnd ? n - 1 : 0];
-      var nb = poly[fromEnd ? n - 2 : 1];
-      var vx = tipP.x - nb.x, vy = tipP.y - nb.y;
-      var vl = Math.sqrt(vx * vx + vy * vy) || 1;
-      return { tip: { x: tipP.x, y: tipP.y }, dir: { x: vx / vl, y: vy / vl } };
-    }
-    // 交点落在「内侧点 q（圆内）」与「外侧点 p（圆外）」之间：|q + s(p-q) - a|² = r²
-    var q = poly[inner], p = poly[k];
-    var fx = q.x - anchor.x, fy = q.y - anchor.y;
-    var gx = p.x - q.x, gy = p.y - q.y;
-    var A = gx * gx + gy * gy, B = 2 * (fx * gx + fy * gy), C = fx * fx + fy * fy - rr;
-    var disc = B * B - 4 * A * C, t, gl, ux, uy;
-    if (A > 1e-9 && disc >= 0) {
-      var sq = Math.sqrt(disc);
-      t = (-B - sq) / (2 * A);
-      if (!(t >= 0 && t <= 1)) t = (-B + sq) / (2 * A);
-    }
-    if (!(t >= 0 && t <= 1)) t = 0;                // 数值兜底：退化时取内侧点
-    gl = Math.sqrt(A) || 1;
-    ux = gx / gl; uy = gy / gl;                    // 外侧方向（圆内 → 圆外）
-    return {
-      tip: { x: q.x + gx * t, y: q.y + gy * t },
-      dir: fromEnd ? { x: -ux, y: -uy } : { x: ux, y: uy }
-    };
+    var gl = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
+    dir = { x: dir.x / gl, y: dir.y / gl };
+    // 组装：保留圆外那些段 + 切分出来的那一段
+    var kept = fromEnd ? segs.slice(0, cross.k) : segs.slice(cross.k + 1);
+    var out = fromEnd ? kept.concat([seg2]) : [seg2].concat(kept);
+    return { start: fromEnd ? start : hit, ops: out, at: hit, dir: dir };
   }
   function opsD(a, ops) {
     var d = 'M' + a.x + ',' + a.y, i, o;
+    if (!ops.length) return '';
     for (i = 0; i < ops.length; i++) {
       o = ops[i];
       d += o.t === 'C'
@@ -307,16 +347,18 @@ export function createShapes(ctx){
   }
   function edgePath(a, b, shape) {
     var g = edgeSegs(a, b, shape);
-    var poly = polyOf(a, g.ops), mk = polyMarks(poly), total = mk[mk.length - 1].at;
-    // 箭头尖停在「以 node 字母为圆心、半径 ARROW_CLEAR 的圆」上：字母是 11px 的字形、
-    // 外面还罩着 3px 的字形光晕（`paint-order:stroke`），尖点插进这个圆就会被光晕削掉一截 ——
-    // 用户看到的就是「箭头被 node 字符挡住」。半径取 7 ≈ 最宽字形半宽（`w` 4.6）+ 光晕 1.5 + 呼吸。
-    // 圆圈本身**不画**（只当几何模型用）：画出来是个不透明圆盘，落在总线上会挖掉一块色块。
-    var end = tipOnCircle(poly, b, ARROW_CLEAR, true), start = tipOnCircle(poly, a, ARROW_CLEAR, false);
+    // **两端都裁到节点圆上**：`ARROW_CLEAR` = 11px 字形的半高（≈5.5）+ 3px 光晕的外沿（1.5）。
+    // 于是「线的端点 / 箭头尖 / `+` 端子」的位置只由「字符中心 + 半径」决定，与角度和曲率无关。
+    var end = clipAtCircle(b, a, g.ops, ARROW_CLEAR, true);
+    var clipped = end || { start: a, ops: g.ops, at: b, dir: null };
+    var start = clipAtCircle(a, clipped.start, clipped.ops, ARROW_CLEAR, false);
+    var path = start || clipped;
+    var poly = polyOf(path.start, path.ops), mk = polyMarks(poly), total = mk[mk.length - 1].at;
     return {
-      d: opsD(a, g.ops), kind: g.kind, mid: polyAt(poly, mk, total / 2),
-      endTip: end && end.tip, endDir: end && end.dir,
-      startTip: start && start.tip, startDir: start && start.dir
+      d: opsD(path.start, path.ops),         // 可见线与命中带共用：两端都停在节点圆上
+      kind: g.kind, mid: polyAt(poly, mk, total / 2),
+      endTip: end && end.at, endDir: end && end.dir,
+      startTip: start && start.at, startDir: start && start.dir
     };
   }
   // 标签锚点：曲线取弧长中点正上方 7px；折线按拐点位置挑留白最多的那一侧

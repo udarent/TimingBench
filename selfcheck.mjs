@@ -737,9 +737,11 @@ function check() {
   // 只是一个 `z` 结尾的 path，肉眼很难发现。
   ok(/function arrowTri\(tip, dir\)/.test(read('src/editor/shapes.js')) &&
      /var ux = dir\.x, uy = dir\.y;/.test(read('src/editor/shapes.js')) &&
-     /var end = tipOnCircle\(poly, b, ARROW_CLEAR, true\), start = tipOnCircle\(poly, a, ARROW_CLEAR, false\);/.test(read('src/editor/shapes.js')) &&
+     /function clipAtCircle\(anchor, start, ops, r, fromEnd\)/.test(read('src/editor/shapes.js')) &&
+     /var end = clipAtCircle\(b, a, g\.ops, ARROW_CLEAR, true\);/.test(read('src/editor/shapes.js')) &&
+     /var start = clipAtCircle\(a, clipped\.start, clipped\.ops, ARROW_CLEAR, false\);/.test(read('src/editor/shapes.js')) &&
      /var ARROW_CLEAR = 7;/.test(read('src/editor/shapes.js')),
-    '箭头尖不再落在「以 node 为圆心、半径 ARROW_CLEAR 的圆」上（会重新扎进字母的光晕里），或方向退回弦写法');
+    '边没有被「以 node 为圆心、半径 ARROW_CLEAR 的圆」裁住（端点/箭头会重新扎进字母），或方向退回弦写法');
 
   // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
     // 唯独**离开 z** 是普通斜边（而且从 6px 起拐）。写成一条条判据，是因为 browser 的
