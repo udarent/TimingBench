@@ -702,7 +702,8 @@ function check() {
       'x 接半周期状态时仍画了收口（时钟字符应是竖直起沿、不收口）');
     ok(/waveHair/.test(waveGlyph('x', '0', 0, 0, 16, 32, 38, {})) &&
        /waveHair/.test(waveGlyph('x', '3', 0, 0, 16, 32, 38, { pbus: true, pblock: true, psame: false, pcls: 'bus3' })),
-      'x 的斜线填充丢失（或交叉过渡处没画）');    // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
+      'x 的斜线填充丢失（或交叉过渡处没画）');
+    // 「无驱动」三态的过渡形状（0.27.5）：上游对 z / u / d 一律用横跨半格的 S 曲线，
     // 唯独**离开 z** 是普通斜边（而且从 6px 起拐）。写成一条条判据，是因为 browser 的
     // 波形层指纹里根本没有 z / u / d —— 指纹证不了这类改动（Step 1 的缺陷就是这么漏的）。
     const curve = (ch, prev, o) => /\bC[\d.\-]/.test(waveGlyph(ch, prev, 0, 0, 16, 32, 38, o || {}));
@@ -713,6 +714,11 @@ function check() {
     ok(curve('u', '=', { pblock: true, pbus: true, pcls: 'bus2' }) &&
        /waveDash/.test(waveGlyph('u', '=', 0, 0, 16, 32, 38, { pblock: true, pbus: true, pcls: 'bus2' })),
       '块体接 u/d 的收口没走软曲线（会把虚线劈成两段）');
+    // 块体 → z（上游 vmz）：上下各一条缓弯收到中位、在半格处汇合，中位线从汇合点起。
+    // 收成直斜边（旧的 else 分支）会在尖点与中位线之间留一个小三角 —— Step 6 的 DQ 尾部。
+    const bz = waveGlyph('z', '5', 0, 0, 16, 32, 38, { pblock: true, pbus: true, pcls: 'bus5' });
+    ok((bz.match(/C/g) || []).length >= 2 && /M19,16 H38/.test(bz),
+      '块体 → z 没走两条缓弯 / 中位线没从汇合点起（上游 vmz）');
   }
   // laneShift 必须**原样**返回相位值，两条都重要：
   //   ① 不量化（出现 round / floor / ceil 就又回到「0.1 与 0 重合」的老毛病）；

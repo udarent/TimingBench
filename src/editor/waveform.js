@@ -107,6 +107,18 @@ var CHIP_W=G.CHIP_W;
       // 这一段弦与曲线差不到 2px，看不出）。x → u/d 本身是很罕见的组合。
       return waveHatch(X,e2,T,B,W,[X,T,X,B],[X+bi,from,e2,r])+'<path class="waveBusInk" d="'+ink+'"/>';
     }
+    // 块体 → z（上游 vmz）：不是收成尖，而是上下两条缓弯各自收拢到中位、在半格处汇合，
+    // 中间填成一片「梭形」。用直斜边收尖的话，尖点与中位线之间会留一个小三角（Step 6 DQ 尾部）。
+    if(ch==='z'){
+      var cu=X+bi+Math.min(4,W*0.10), cz=e2-Math.min(10,W*0.26);
+      var upC=' C'+cu+','+((T+M)/2)+' '+cz+','+M+' '+e2+','+M;
+      var dnC=' C'+cu+','+((B+M)/2)+' '+cz+','+M+' '+e2+','+M;
+      var inkZ='M'+X+','+T+' H'+(X+bi)+upC+' M'+X+','+B+' H'+(X+bi)+dnC;
+      if(capCls) return '<path class="waveBus '+capCls+'" d="M'+X+','+T+' H'+(X+bi)+upC+
+        ' C'+cz+','+M+' '+cu+','+((B+M)/2)+' '+(X+bi)+','+B+' H'+X+' Z" stroke="none"/>'+
+        '<path class="waveBusInk" d="'+inkZ+'"/>';
+      return waveHatch(X,e2,T,B,W,[X,T,X,B],[[X,T,e2,M],[X,B,e2,M]])+'<path class="waveBusInk" d="'+inkZ+'"/>';
+    }
     if(r===T){
       fp=[[X,T],[X,B],[X+bi,B],[X+br,T]];
       ink='M'+X+','+B+' H'+(X+bi)+' L'+(X+br)+','+T;
@@ -286,6 +298,9 @@ var CHIP_W=G.CHIP_W;
         // 曲线的尖端会正好戳进某个虚线空隙里，看着像半空中断掉一截。
         if(dash&&o2.pblock){
           o.push('<path class="waveInk" d="M'+X+','+cy+' H'+(X+W*0.5)+'"/>');
+          tail='M'+(X+W*0.5)+','+cy+' H'+x1;
+        } else if(ch==='z'&&o2.pblock){
+          // 块体收进 z：中位线从两条缓弯的汇合点（半格）起，否则会横穿那块梭形
           tail='M'+(X+W*0.5)+','+cy+' H'+x1;
         }
       }
