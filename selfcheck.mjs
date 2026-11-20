@@ -186,10 +186,14 @@ function check() {
     '只读预览的顶部裁边没接上：vbTop 必须由 readonly 决定（否则顶部会重新长出一条死白）');
   // 只读卡片的行距/波形带必须走紧凑口径：行高 40（编辑 48）、带 0.10~0.90（编辑 0.25~0.71）。
   // 编辑态的大行高是给点击命中与弧线留的，只读卡片用不上 —— 留着就是每行上下各 13px 空气。
+  // 分带比例 0.27.4 起只有一份（geometry.bandOf），行绘制 / edge 端点 / 连线预览都读它。
+  // 判据因此分两半：比例本身在 geometry.js，shapes.js 必须**读**而不是自己写一套。
   ok(/var RO_ROW_H = 40/.test(shapesSrc) &&
      /function rowH\(\)\{ return state\.readonly \? RO_ROW_H : ROW_H; \}/.test(shapesSrc) &&
-     /var bandT=tight\?0\.10:0\.25, bandM=tight\?0\.50:0\.48, bandB=tight\?0\.90:0\.71;/.test(shapesSrc),
-    '只读卡片的紧凑行高/波形带被改回编辑态口径（会重新长出每行上下的大段空白）');
+     /return readonly \? \{ t: 0\.10, m: 0\.50, b: 0\.90 \} : \{ t: 0\.25, m: 0\.48, b: 0\.71 \};/.test(
+       read('src/editor/geometry.js')) &&
+     /var band=bandOf\(tight\), bandT=band\.t, bandM=band\.m, bandB=band\.b;/.test(shapesSrc),
+    '只读卡片的紧凑行高/波形带被改回编辑态口径，或分带比例被复制成了第二份（端点会与中线错开）');
   const interSrc = read('src/editor/interactions.js');
   const editorSrc = read('src/editor/index.js');
   const cssSrc = read('src/styles.css');
