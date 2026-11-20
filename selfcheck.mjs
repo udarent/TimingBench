@@ -194,7 +194,7 @@ function check() {
   ok(/var RO_ROW_H = 40/.test(shapesSrc) &&
      /function rowH\(\)\{ return state\.readonly \? RO_ROW_H : ROW_H; \}/.test(shapesSrc) &&
      /export function bandOf\(rowH\)\{/.test(read('src/editor/geometry.js')) &&
-     /var h = 2 \* Math\.round\(G\.CELL \/ 4\), t = Math\.round\(\(rowH - h\) \/ 2\);/.test(read('src/editor/geometry.js')) &&
+     /var h = 2 \* Math\.round\(CELL0 \/ 4\), t = Math\.round\(\(rowH - h\) \/ 2\);/.test(read('src/editor/geometry.js')) &&
      !/bandOf\((true|false|tight|!!state\.readonly)\)/.test(shapesSrc + read('src/editor/interactions.js')) &&
      /var band=bandOf\(RH\), bandT=band\.t, bandM=band\.m, bandB=band\.b;/.test(shapesSrc),
     '波形带被拆回两套（只读 / 编辑各一份比例），或带高不再由格宽派生 —— 两态的波形形状会再次对不上');
@@ -1162,12 +1162,19 @@ function check() {
   // 就是旧实现让带宽去跟行距挂钩。这里直接量两个行距下的返回值，同时锁住「居中」与「整数坐标」。
   {
     const ed = bandOf(48), ro = bandOf(40), eh = ed.b - ed.t;
-    ok(eh === ro.b - ro.t && eh === 2 * Math.round(G.CELL / 4) && Math.abs(G.CELL / eh - 2) <= 0.2,
+    const base = G.CELL;
+    ok(eh === ro.b - ro.t && eh === 2 * Math.round(base / 4) && Math.abs(base / eh - 2) <= 0.2,
       '两态的波形带高不一致或不再由格宽派生（编辑 ' + eh + ' / 只读 ' + (ro.b - ro.t) + '）');
     ok(ed.m === 24 && ro.m === 20 && ed.t === 14 && ro.t === 10,
       '波形带没有在行内居中（编辑 t=' + ed.t + ' m=' + ed.m + ' / 只读 t=' + ro.t + ' m=' + ro.m + '）');
     ok(Number.isInteger(ed.m) && Number.isInteger(ro.m),
       '带的中线落在半像素上（标签基线会发虚）：' + ed.m + ' / ' + ro.m);
+    // 带宽必须锚在**基准**格宽：shapes.js 会按 config.hscale 改写 G.CELL（hscale 3 ⇒ 114），
+    // 带宽若跟着走会变成 56 > 行高 48，波形直接压到相邻行上（0.27.5 踩过）。
+    G.CELL = base * 3;
+    const hs = bandOf(48);
+    G.CELL = base;
+    ok(hs.b - hs.t === eh, 'hscale 放大格宽后带宽跟着变了（应恒等于基准半格宽）：' + (hs.b - hs.t));
   }
   // 数字组名（`[1, {…}]`）是合法 WaveJSON，不能被读成「没有名字的组」
   ok(Core.buildIR("{ signal: [[1, { name:'a', wave:'01' }]] }").lanes[0].groupPath[0] === '1',
