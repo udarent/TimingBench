@@ -282,15 +282,17 @@ export function createShapes(ctx){
     var RH = rowH(), bandM = bandOf(!!state.readonly).m;
     ir.lanes.forEach(function (l, li) {
       if (l.kind !== 'signal') return;
-      // 锚点落在格的**左边界**、波形带的**竖直中线**上：
-      //   · `node: '.a'` 指的是「进入第 1 格」那次跳变，跳变就画在格线上（上游同样落在边界）；
-      //     取格中点会让整条弧线右移半格。
-      //   · 中线是带的中线，不是上沿 —— 旧写法 y = 行顶 + 7，弧线于是贴着上沿走、横穿旁边的波形。
-      var ny = TOP + li * RH + Math.round(RH * bandM), chars = laneChars(l, N), t, ch, nx;
+      // 锚点落在**过渡带的中点**、波形带的**竖直中线**上：
+      //   · 横向：跳变不是一条竖线，而是一段 3..9px 的斜边；它穿过带中线的那一点正是
+      //     `格线 + 6`（= blockEdge 的 bm）。上游把 node 放在「砖块起点 + 6」，也是同一个点
+      //     —— 放在格线上会让字母整体左移 6px、看着不像压在边沿上（用户对照 WaveDrom 指出）。
+      //   · 纵向：带的中线，不是上沿。旧写法 y = 行顶 + 7，弧线于是贴着上沿走、横穿旁边的波形。
+      var ny = TOP + li * RH + Math.round(RH * bandM), chars = laneChars(l, N), t, ch, nx, cg;
       for (t = 0; t < chars && t < l.node.length; t++) {
         ch = l.node[t];
         if (!ch || ch === '.') continue;
-        nx = cellGeo(l, t).x0;
+        cg = cellGeo(l, t);
+        nx = cg.x0 + blockEdge(cg.w).bm;
         if (!map[ch]) map[ch] = { x: nx, y: ny };
         nodes.push({ x: nx, y: ny });
         // 字母留到弧线**之后**再画（见函数尾）：先画字母的话，弧线与箭头会结结实实压在
