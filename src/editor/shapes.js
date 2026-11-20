@@ -124,8 +124,9 @@ export function createShapes(ctx){
   // 一次解析 edge 字符串：<from><shape><to> [label]
   // shape 是一段**字面 token**，不是「数一数几个竖线」：`-|` 与 `|-` 是两种不同的折线
   // （先横后竖 / 先竖后横），`-~` 与 `~-` 是两种不同的渐变曲线。上游 arc-shape.js 就是一张
-  // switch 表；我们照同一套**语义**建自己的表（路径公式是自己的，只对齐「画哪种线、箭头指向
-  // 哪一端、标签贴在哪」）。`<` / `>` 只表示两端的箭头。
+  // switch 表；我们照同一套**语义**建自己的表。`<` / `>` 只表示两端的箭头。
+  // 0.27.4 起曲线的控制点也换成上游那一族（两端切线水平），形状与上游逐条对得上，
+  // 差别只剩版式尺寸（行高、带宽）。
   function parseEdge(s) {
     var m = /^([A-Za-z0-9_]+)([<>~\-|+]*)([A-Za-z0-9_]+)(?:\s+([\s\S]*))?$/.exec(String(s).trim());
     if (!m) return null;
@@ -148,6 +149,8 @@ export function createShapes(ctx){
   };
   // 端点箭头：三角沿切线方向指到 tip（back/half 与旧实现一致，保证 a~>b 的 d 逐字节不变）
   function arrowTri(tip, from) {
+    // 这里刻意保留 sqrt 而不用 hypot：hypot 走另一套高精度实现，末位差 1e-14，
+    // 会让箭头 `d` 逐字节变化、白白触发一次波形层指纹重算。
     var ux = tip.x - from.x, uy = tip.y - from.y, ul = Math.sqrt(ux * ux + uy * uy) || 1;
     ux /= ul; uy /= ul;
     var back = 7.5, half = 3.2;
@@ -178,22 +181,29 @@ export function createShapes(ctx){
     }
     return out;
   }
-  function polyLen(poly) {
-    var n = 0, i;
-    for (i = 1; i < poly.length; i++) n += Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y);
-    return n;
-  }
-  function polyAt(poly, dist) {
-    var acc = 0, i, seg;
+  // 折线的长度标尺：mk[i] = { at: 起点到第 i 点的累计长度, len: 第 i 段自身的长度 }。
+  // 弧长中点与两端切线都从它取，一次遍历够三处用。
+  // 段长单独存一份、不用 at[i]-at[i-1] 反算 —— 两次累加相减会差末位，箭头 `d` 就会变。
+  function polyMarks(poly) {
+    var mk = [{ at: 0, len: 0 }], i, l;
     for (i = 1; i < poly.length; i++) {
-      seg = Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y);
-      if (acc + seg >= dist || i === poly.length - 1) {
-        var u = seg ? Math.min(1, Math.max(0, (dist - acc) / seg)) : 0;
+      l = Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y);
+      mk.push({ at: mk[i - 1].at + l, len: l });
+    }
+    return mk;
+  }
+  // 沿折线走 dist 处的点；越界就取端点
+  function polyAt(poly, mk, dist) {
+    var total = mk[mk.length - 1].at, i, u;
+    if (!(dist > 0)) return poly[0];
+    if (dist >= total) return poly[poly.length - 1];
+    for (i = 1; i < mk.length; i++) {
+      if (mk[i].at >= dist) {
+        u = mk[i].len ? (dist - mk[i - 1].at) / mk[i].len : 0;
         return dot(poly[i - 1], poly[i], u);
       }
-      acc += seg;
     }
-    return poly[0];
+    return poly[poly.length - 1];
   }
   function opsD(a, ops) {
     var d = 'M' + a.x + ',' + a.y, i, o;
@@ -226,15 +236,15 @@ export function createShapes(ctx){
   }
   function edgePath(a, b, shape) {
     var g = edgeSegs(a, b, shape);
-    var poly = polyOf(a, g.ops), total = polyLen(poly), half = total / 2;
-    var back = Math.min(8, half);
+    var poly = polyOf(a, g.ops), mk = polyMarks(poly), total = mk[mk.length - 1].at;
+    var back = Math.min(8, total / 2);
     return {
-      d: opsD(a, g.ops), kind: g.kind, mid: polyAt(poly, half),
-      endFrom: polyAt(poly, total - back), startFrom: polyAt(poly, back)
+      d: opsD(a, g.ops), kind: g.kind, mid: polyAt(poly, mk, total / 2),
+      endFrom: polyAt(poly, mk, total - back), startFrom: polyAt(poly, mk, back)
     };
   }
-  // 标签锚点：曲线取弧线中点上方 6px（贴在线上会盖住线，光晕只能保证字看得清，
-  // 让线从字下面过还是别扭）；折线按「哪一段最长」挑留白最多的那侧。
+  // 标签锚点：曲线取弧长中点正上方 7px；折线按拐点位置挑留白最多的那一侧
+  // （L 形 / Z 形若按中点摆，字正好落在竖线或拐角上）。
   function edgeLabelAt(a, b, g) {
     var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     if (g.kind === 'hv') return { x: b.x - 8, y: my, anchor: 'end' };
@@ -246,7 +256,7 @@ export function createShapes(ctx){
   }
   // 标签：先躲 node 字母，再用「描边光晕」兜可读性。
   //   · 避让：字母是「这条弧线连的是哪两点」的唯一读法，被标签压住就白画了。只在真的相交时
-  //     挪 —— 先试原位，再上/下 13px、左/右 16px，顺序固定所以结果可预期（不会来回抖）。
+  //     挪 —— 先试原位，再上/下 15px、左/右 24px，顺序固定所以结果可预期（不会来回抖）。
   //   · 光晕：不拿不透明胶囊垫底。那块底色会把弧线和它经过的波形一起盖掉（tutorial Step 8 的
   //     `time 3` 正好压在 node c 和那条上升沿上）。`paint-order:stroke` 先描一圈底色再画字，
   //     可读性一样，但只有字形自己在挡。
@@ -276,15 +286,16 @@ export function createShapes(ctx){
       //   · `node: '.a'` 指的是「进入第 1 格」那次跳变，跳变就画在格线上（上游同样落在边界）；
       //     取格中点会让整条弧线右移半格。
       //   · 中线是带的中线，不是上沿 —— 旧写法 y = 行顶 + 7，弧线于是贴着上沿走、横穿旁边的波形。
-      var ny = TOP + li * RH + Math.round(RH * bandM), chars = laneChars(l, N), t, ch;
+      var ny = TOP + li * RH + Math.round(RH * bandM), chars = laneChars(l, N), t, ch, nx;
       for (t = 0; t < chars && t < l.node.length; t++) {
         ch = l.node[t];
         if (!ch || ch === '.') continue;
-        if (!map[ch]) map[ch] = { x: cellGeo(l, t).x0, y: ny };
-        nodes.push({ x: cellGeo(l, t).x0, y: ny });
+        nx = cellGeo(l, t).x0;
+        if (!map[ch]) map[ch] = { x: nx, y: ny };
+        nodes.push({ x: nx, y: ny });
         // 字母留到弧线**之后**再画（见函数尾）：先画字母的话，弧线与箭头会结结实实压在
         // 字母上 —— 而字母正是「这条弧线连的是哪两点」的唯一读法（上游也是先边后节点）。
-        marks.push('<text class="waveNode" x="' + cellGeo(l, t).x0 + '" y="' + ny + '" text-anchor="middle"' +
+        marks.push('<text class="waveNode" x="' + nx + '" y="' + ny + '" text-anchor="middle"' +
           ' dominant-baseline="central" font-size="10" fill="var(--accent)" stroke="var(--panel)"' +
           ' stroke-width="3" stroke-linejoin="round" paint-order="stroke">' + esc(ch) + '</text>');
       }
