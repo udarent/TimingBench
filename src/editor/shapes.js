@@ -1,7 +1,7 @@
 // 时序图 SVG 结构：HUD / 列头 / 行工具 / 数据标签徽标 / 弧线 /
 // 候选字符条 / redraw。只负责「把 state 画成图」，不处理事件、不回写源码。
 import { Core } from '../core/ir.js';
-import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, clampZoom, ZOOM_MIN } from './geometry.js';
+import { G, lanePeriod, laneShift, laneChars, cellGeo, hscaleOf, PHASE_MAX, clampZoom, ZOOM_MIN, bandOf, splineCtl } from './geometry.js';
 import { esc, cut } from '../core/util.js';
 import { TOUCH } from './mode.js';
 import * as Cap from './cap.js';
@@ -155,47 +155,139 @@ export function createShapes(ctx){
     return 'M' + tip.x + ',' + tip.y + ' L' + (abx + apx * half) + ',' + (aby + apy * half) +
       ' L' + (abx - apx * half) + ',' + (aby - apy * half) + ' z';
   }
-  // 形状 → 路径。endFrom / startFrom 是「箭头背后那一点」，给切线方向用。
-  function edgePath(a, b, shape) {
-    var kind = EDGE_SHAPES[shape] || 'spline';
-    var i, pts;
-    if (kind === 'spline' || kind === 'swing1' || kind === 'swing2') {
-      var dx = b.x - a.x, dy = b.y - a.y, c1, c2;
-      if (kind === 'spline') { c1 = { x: a.x + 10, y: a.y - 26 }; c2 = { x: b.x - 10, y: b.y - 26 }; }
-      // swing1（`-~`）：离开起点时贴水平，末尾俯冲到目标
-      else if (kind === 'swing1') { c1 = { x: a.x + 0.7 * dx, y: a.y }; c2 = { x: b.x - 0.05 * dx, y: b.y - 0.05 * dy }; }
-      // swing2（`~-`）：离开起点时直接下沉，末尾贴着目标水平收
-      else { c1 = { x: a.x + 0.05 * dx, y: a.y + 0.05 * dy }; c2 = { x: a.x + 0.3 * dx, y: b.y }; }
-      return {
-        d: 'M' + a.x + ',' + a.y + ' C' + c1.x + ',' + c1.y + ' ' + c2.x + ',' + c2.y + ' ' + b.x + ',' + b.y,
-        endFrom: c2, startFrom: c1, kind: kind
-      };
-    }
-    pts = [{ x: a.x, y: a.y }];
-    if (kind === 'line' || kind === 'tee') pts.push({ x: b.x, y: b.y });
-    else if (kind === 'hv') { pts.push({ x: b.x, y: a.y }); pts.push({ x: b.x, y: b.y }); }
-    else if (kind === 'vh') { pts.push({ x: a.x, y: b.y }); pts.push({ x: b.x, y: b.y }); }
-    else { var mx = (a.x + b.x) / 2; pts.push({ x: mx, y: a.y }); pts.push({ x: mx, y: b.y }); pts.push({ x: b.x, y: b.y }); }
-    var d = 'M' + pts[0].x + ',' + pts[0].y;
-    for (i = 1; i < pts.length; i++) d += ' L' + pts[i].x + ',' + pts[i].y;
-    return { d: d, endFrom: pts[pts.length - 2], startFrom: pts[1], kind: kind };
+  // ---- 路径管线 ------------------------------------------------------------
+  // 一条弧线先拆成「段」（直线 L / 三次贝塞尔 C），再由段统一算出三样东西：
+  //   d    交给 <path>
+  //   中点 标签落点 —— 取**弧长一半处**，不是弦的中点。`-~` 这类一头贴着水平的线，
+  //        弦中点根本不在线上，标签会飘到旁边一行的波形里。
+  //   两端切线 箭头朝向 —— 取「沿折线回退 8px」的那一点，永远有定义。直接拿贝塞尔控制点
+  //        当切线，遇到 c₂ 与终点重合的写法（`-~` 就是这样）会退化成零向量，箭头缩成一个点。
+  function dot(p, q, u) { return { x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u }; }
+  function bez(p, o, u) {
+    var a = dot(p, o.c1, u), b = dot(o.c1, o.c2, u), c = dot(o.c2, o.p, u);
+    return dot(dot(a, b, u), dot(b, c, u), u);
   }
-  // 标签锚点：贴着这条线的**留白处**，而不是一律「中点上方 22px」——
-  // L 形 / Z 形的中点落在竖线或拐角上，压在线上就看不清了。
-  function edgeLabelAt(a, b, kind) {
+  // 曲线段采样 12 段：算弧长与切线够用，又不至于让每次重绘多做几百次浮点。
+  function polyOf(a, ops) {
+    var out = [a], cur = a, i, k;
+    for (i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      if (o.t === 'C') for (k = 1; k <= 12; k++) out.push(bez(cur, o, k / 12));
+      else out.push(o.p);
+      cur = o.p;
+    }
+    return out;
+  }
+  function polyLen(poly) {
+    var n = 0, i;
+    for (i = 1; i < poly.length; i++) n += Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y);
+    return n;
+  }
+  function polyAt(poly, dist) {
+    var acc = 0, i, seg;
+    for (i = 1; i < poly.length; i++) {
+      seg = Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y);
+      if (acc + seg >= dist || i === poly.length - 1) {
+        var u = seg ? Math.min(1, Math.max(0, (dist - acc) / seg)) : 0;
+        return dot(poly[i - 1], poly[i], u);
+      }
+      acc += seg;
+    }
+    return poly[0];
+  }
+  function opsD(a, ops) {
+    var d = 'M' + a.x + ',' + a.y, i, o;
+    for (i = 0; i < ops.length; i++) {
+      o = ops[i];
+      d += o.t === 'C'
+        ? ' C' + o.c1.x + ',' + o.c1.y + ' ' + o.c2.x + ',' + o.c2.y + ' ' + o.p.x + ',' + o.p.y
+        : ' L' + o.p.x + ',' + o.p.y;
+    }
+    return d;
+  }
+  // 形状 → 段。三种曲线共用「两端切线水平」这一族（上游 arc 也是如此）：
+  //   spline  两个控制点各退 0.7dx —— 离开与到达都贴水平；dy=0 时四点同高，天然是一条直线
+  //   swing1 (`-~`) 先水平再拐过去：起点控制点照样贴水平，终点控制点直接压在目标上
+  //   swing2 (`~-`) 反过来：起点控制点压在起点，终点控制点贴目标水平
+  function edgeSegs(a, b, shape) {
+    var kind = EDGE_SHAPES[shape] || 'spline';
+    if (kind === 'spline') { var c = splineCtl(a, b); return { kind: kind, ops: [{ t: 'C', c1: c.c1, c2: c.c2, p: b }] }; }
+    if (kind === 'swing1') { return { kind: kind, ops: [{ t: 'C', c1: splineCtl(a, b).c1, c2: b, p: b }] }; }
+    if (kind === 'swing2') { return { kind: kind, ops: [{ t: 'C', c1: a, c2: { x: a.x + (b.x - a.x) * 0.3, y: b.y }, p: b }] }; }
+    var ops = [];
+    if (kind === 'line' || kind === 'tee') ops.push({ t: 'L', p: b });
+    else if (kind === 'hv') ops.push({ t: 'L', p: { x: b.x, y: a.y } }, { t: 'L', p: b });
+    else if (kind === 'vh') ops.push({ t: 'L', p: { x: a.x, y: b.y } }, { t: 'L', p: b });
+    else {
+      var mx = (a.x + b.x) / 2;
+      ops.push({ t: 'L', p: { x: mx, y: a.y } }, { t: 'L', p: { x: mx, y: b.y } }, { t: 'L', p: b });
+    }
+    return { kind: kind, ops: ops };
+  }
+  function edgePath(a, b, shape) {
+    var g = edgeSegs(a, b, shape);
+    var poly = polyOf(a, g.ops), total = polyLen(poly), half = total / 2;
+    var back = Math.min(8, half);
+    return {
+      d: opsD(a, g.ops), kind: g.kind, mid: polyAt(poly, half),
+      endFrom: polyAt(poly, total - back), startFrom: polyAt(poly, back)
+    };
+  }
+  // 标签锚点：曲线取弧线中点上方 6px（贴在线上会盖住线，光晕只能保证字看得清，
+  // 让线从字下面过还是别扭）；折线按「哪一段最长」挑留白最多的那侧。
+  function edgeLabelAt(a, b, g) {
     var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    if (kind === 'hv') return { x: b.x - 8, y: my, anchor: 'end' };
-    if (kind === 'vh') return { x: a.x + 8, y: my, anchor: 'start' };
-    if (kind === 'hvh') return { x: mx + 8, y: my, anchor: 'start' };
-    if (kind === 'line' || kind === 'tee') return { x: mx, y: my - 12, anchor: 'middle' };
-    return { x: mx, y: my - 22, anchor: 'middle' };
+    if (g.kind === 'hv') return { x: b.x - 8, y: my, anchor: 'end' };
+    if (g.kind === 'vh') return { x: a.x + 8, y: my, anchor: 'start' };
+    if (g.kind === 'hvh') return { x: mx + 8, y: my, anchor: 'start' };
+    // 曲线上：中点**正上方** 7px。试过沿法线让开，陡曲线时法线指向斜上，标签会被推进
+    // 相邻的 node 字母里（t2 正好撞上 b）。固定往上抬一格宽，配字形光晕，够读了。
+    return { x: g.mid.x, y: g.mid.y - 7, anchor: 'middle' };
+  }
+  // 标签：先躲 node 字母，再用「描边光晕」兜可读性。
+  //   · 避让：字母是「这条弧线连的是哪两点」的唯一读法，被标签压住就白画了。只在真的相交时
+  //     挪 —— 先试原位，再上/下 13px、左/右 16px，顺序固定所以结果可预期（不会来回抖）。
+  //   · 光晕：不拿不透明胶囊垫底。那块底色会把弧线和它经过的波形一起盖掉（tutorial Step 8 的
+  //     `time 3` 正好压在 node c 和那条上升沿上）。`paint-order:stroke` 先描一圈底色再画字，
+  //     可读性一样，但只有字形自己在挡。
+  function edgeLabelSvg(at, text, nodes) {
+    var w = Math.max(12, text.length * 5.4), h = 9;
+    var cxOf = function (dx) { return at.anchor === 'end' ? at.x + dx - w / 2 : at.anchor === 'start' ? at.x + dx + w / 2 : at.x + dx; };
+    var hit = function (dx, dy) {
+      var cx = cxOf(dx), cy = at.y + dy, j;
+      for (j = 0; j < nodes.length; j++)
+        if (Math.abs(nodes[j].x - cx) < w / 2 + 8 && Math.abs(nodes[j].y - cy) < h / 2 + 7) return true;
+      return false;
+    };
+    var NUDGE = [[0, 0], [0, -15], [0, 15], [-24, 0], [24, 0]], pick = NUDGE[0], i;
+    for (i = 0; i < NUDGE.length; i++) if (!hit(NUDGE[i][0], NUDGE[i][1])) { pick = NUDGE[i]; break; }
+    return '<text x="' + (at.x + pick[0]) + '" y="' + (at.y + pick[1]) + '" text-anchor="' + at.anchor +
+      '" dominant-baseline="central" font-size="9" fill="var(--accent)" stroke="var(--panel)"' +
+      ' stroke-width="3" stroke-linejoin="round" paint-order="stroke" pointer-events="none">' +
+      esc(text) + '</text>';
   }
   // 弧线：唯一「编辑 / 删除 edge」入口是双击弧线本体；清空字符串即删除
-  function edgeArcs(ir) {
-    var map = {};
+  function edgeArcs(ir, N) {
+    var map = {}, marks = [], nodes = [];
+    var RH = rowH(), bandM = bandOf(!!state.readonly).m;
     ir.lanes.forEach(function (l, li) {
       if (l.kind !== 'signal') return;
-      l.node.forEach(function (ch, t) { if (ch && ch !== '.' && !map[ch]) map[ch] = { x: cellGeo(l, t).cx, y: TOP + li * rowH() + 7 }; });
+      // 锚点落在格的**左边界**、波形带的**竖直中线**上：
+      //   · `node: '.a'` 指的是「进入第 1 格」那次跳变，跳变就画在格线上（上游同样落在边界）；
+      //     取格中点会让整条弧线右移半格。
+      //   · 中线是带的中线，不是上沿 —— 旧写法 y = 行顶 + 7，弧线于是贴着上沿走、横穿旁边的波形。
+      var ny = TOP + li * RH + Math.round(RH * bandM), chars = laneChars(l, N), t, ch;
+      for (t = 0; t < chars && t < l.node.length; t++) {
+        ch = l.node[t];
+        if (!ch || ch === '.') continue;
+        if (!map[ch]) map[ch] = { x: cellGeo(l, t).x0, y: ny };
+        nodes.push({ x: cellGeo(l, t).x0, y: ny });
+        // 字母留到弧线**之后**再画（见函数尾）：先画字母的话，弧线与箭头会结结实实压在
+        // 字母上 —— 而字母正是「这条弧线连的是哪两点」的唯一读法（上游也是先边后节点）。
+        marks.push('<text class="waveNode" x="' + cellGeo(l, t).x0 + '" y="' + ny + '" text-anchor="middle"' +
+          ' dominant-baseline="central" font-size="10" fill="var(--accent)" stroke="var(--panel)"' +
+          ' stroke-width="3" stroke-linejoin="round" paint-order="stroke">' + esc(ch) + '</text>');
+      }
     });
     var o = [];
     ir.edges.forEach(function (e, i) {
@@ -220,15 +312,11 @@ export function createShapes(ctx){
       // 连线模式下弧线命中带让位给同一区域的波形格：端点由 rect.cell 统一接收
       paths.push('<path d="' + g.d + '" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="' + (T ? 20 : 8) + '" pointer-events="' + (state.linkMode ? 'none' : 'stroke') + '"/>');
       var inner = paths.join('');
-      if (pe.label) {
-        var la = edgeLabelAt(a, b, g.kind), lw = Math.max(22, pe.label.length * 6 + 10);
-        var lx = la.anchor === 'end' ? la.x - lw : la.anchor === 'start' ? la.x : la.x - lw / 2;
-        inner += '<rect x="' + lx + '" y="' + (la.y - 9) + '" width="' + lw + '" height="16" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="0.5" pointer-events="none"/>' +
-          '<text x="' + la.x + '" y="' + (la.y + 1) + '" text-anchor="' + la.anchor + '" dominant-baseline="central" font-size="9" fill="var(--accent)" pointer-events="none">' + esc(cut(pe.label, 18)) + '</text>';
-      }
+      if (pe.label) inner += edgeLabelSvg(edgeLabelAt(a, b, g), cut(pe.label, 18), nodes);
       o.push('<g class="edgeArc" data-eidx="' + i + '" role="button" aria-label="Edit edge ' + esc(String(e)) + '">' + inner + '</g>');
     });
-    return o.join('');
+    // 顺序：弧线 → node 字母。字母最后画，才不会被箭头盖住。
+    return o.join('') + marks.join('');
   }
 
   // 零行空态：没有信号行时画一块可点的虚线占位行（加号 + 淡方波），
@@ -336,7 +424,7 @@ export function createShapes(ctx){
     // 行距与波形带：只读预览用紧凑口径（见文件顶 rowH()），编辑态不变。
     var RH=rowH();
     var tight=!!state.readonly;
-    var bandT=tight?0.10:0.25, bandM=tight?0.50:0.48, bandB=tight?0.90:0.71;
+    var band=bandOf(tight), bandT=band.t, bandM=band.m, bandB=band.b;
     // 只读态不画末尾的追加列，所以右侧只需容下最后一个真实格子的右边缘（= ACT_X - 1）。
     var roW=Math.max(ACT_X+PAD, 360);
     var roBottomY=(function(){
@@ -623,14 +711,6 @@ export function createShapes(ctx){
       }
       o.push('<line x1="'+XS+'" y1="'+(y+RH)+'" x2="'+ACT_X+'" y2="'+(y+RH)+'" stroke="var(--line)" stroke-width="0.5"/>');
       o.push('<rect class="waveZone" data-lane="'+l.id+'" x="'+XS+'" y="'+(y+Math.round(RH*bandT))+'" width="'+(chars*P*CELL)+'" height="'+Math.round(RH*(bandB-bandT))+'" fill="none" stroke="none" pointer-events="none"/>');
-      // node 字母：上游会把 `node: '..a...'` 的 a / b 画成小字母标在锚点处，
-      // 它是 edge 的可读锚点 —— 不画的话读者只看到一条曲线，不知道连的是哪两点。
-      // 这属于「图的内容」，与 data 标签同类，不受零常驻文字约束。
-      for(i=0;i<chars&&i<l.node.length;i++){
-        var nc=l.node[i];
-        if(!nc||nc==='.') continue;
-        o.push('<text class="waveNode" x="'+(cellGeo(l,i).cx+8)+'" y="'+(yT-2)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+esc(nc)+'</text>');
-      }
       if(clipId) o.push('</g>');
       // 相位模式（0.14.5）：**波形本身就是抓手**，不再画一条尺子 + 滑块。
       // 打开相位模式后，在这一行的波形上横向拖动就直接改 phase —— 手指往右拖，波形往右移。
@@ -685,7 +765,7 @@ export function createShapes(ctx){
         ' font-size="12" fill="var(--accent)"'+(gEdit?' style="cursor:text"':'')+'>'+esc(g.name)+'</text>'+
         '</g>');
     });
-    o.push(edgeArcs(ir));
+    o.push(edgeArcs(ir, N));
     // 选中框 / 连线端点光标：框的是「一个字符格」，几何必须跟该行自己的标尺走
     // （period 行的格子更宽、phase 行整体左移）。helper 只在这里用，就放在用它的地方。
     function selBox(l, tick){

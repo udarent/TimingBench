@@ -3,7 +3,7 @@
 // 键盘另有独立的 linkCursor 端点光标，保证不用鼠标也能完成全部编辑。
 // 只产生 EditOp 交给 ctx.commit()，不直接改源码、不画辅助 UI。
 import { Core } from '../core/ir.js';
-import { G, cellGeo, PHASE_STEP, PHASE_MAX, PHASE_MIN, clampZoom } from './geometry.js';
+import { G, cellGeo, PHASE_STEP, PHASE_MAX, PHASE_MIN, clampZoom, bandOf, splineCtl } from './geometry.js';
 import { TOUCH } from './mode.js';
 
 // 格宽受 config.hscale 影响，是每帧重算的运行时值 —— 这里一律现读 G.CELL，不缓存。
@@ -825,8 +825,11 @@ export function attachInteractions(ctx){
     var p=svg.querySelector('path.connectPreview');
     if(!p){ p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('class','connectPreview'); svg.appendChild(p); }
     var a=state.connect, ln=findLane(a.lane);
-    var ax=ln?cellGeo(ln,a.tick).cx:G.XS+a.tick*G.CELL+G.CELL/2, ay=TOP+a.li*ROW_H+7;
-    p.setAttribute('d','M'+ax+','+ay+' C'+(ax+10)+','+(ay-26)+' '+(mx-10)+','+(my-26)+' '+mx+','+my);
+    // 起点与真正的 edge 端点同一口径（格左边界 + 带中线），预览线才不会一松手就跳一下；
+    // 控制点也走 splineCtl，曲率与落笔后的那条弧线一致。
+    var ax=ln?cellGeo(ln,a.tick).x0:G.XS+a.tick*G.CELL, ay=TOP+a.li*ROW_H+Math.round(ROW_H*bandOf(false).m);
+    var c=splineCtl({x:ax,y:ay},{x:mx,y:my});
+    p.setAttribute('d','M'+ax+','+ay+' C'+c.c1.x+','+c.c1.y+' '+c.c2.x+','+c.c2.y+' '+mx+','+my);
   }
 
   // 触摸后浏览器会补发一套兼容鼠标事件。只靠 800ms 时间窗挡不住长按：按住 1.2 秒再抬手，
